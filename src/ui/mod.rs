@@ -1,3 +1,3 @@
-pub mod tab;
-pub mod modal;
 pub mod component;
+pub mod modal;
+pub mod tab;

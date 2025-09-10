@@ -1,15 +1,17 @@
-use gtk4::prelude::*;
-use gtk4::{Box, Label, Orientation, ScrolledWindow, Entry};
-use libadwaita::StatusPage;
+use crate::service::{SshServer, load_ssh_servers};
 use crate::ui::component::create_server_card;
 use crate::ui::component::icon_button::create_icon_button;
-use crate::service::{load_ssh_servers, SshServer};
-use std::rc::Rc;
+use gtk4::prelude::*;
+use gtk4::{Box, Entry, Label, Orientation, ScrolledWindow};
+use libadwaita::StatusPage;
 use std::cell::RefCell;
+use std::rc::Rc;
 
-pub fn create_server_tab(parent_window: Option<&libadwaita::ApplicationWindow>) -> (Box, Rc<dyn Fn()>) {
+pub fn create_server_tab(
+    parent_window: Option<&libadwaita::ApplicationWindow>,
+) -> (Box, Rc<dyn Fn()>) {
     let container = Box::new(Orientation::Vertical, 0);
-    
+
     // Header avec input de recherche et boutons
     let header_container = Box::new(Orientation::Vertical, 20);
     header_container.set_margin_top(20);
@@ -25,7 +27,7 @@ pub fn create_server_tab(parent_window: Option<&libadwaita::ApplicationWindow>) 
         .hexpand(true)
         .height_request(35)
         .build();
-    
+
     search_entry.add_css_class("search-entry");
     header_container.append(&search_entry);
 
@@ -33,30 +35,20 @@ pub fn create_server_tab(parent_window: Option<&libadwaita::ApplicationWindow>) 
     buttons_container.set_halign(gtk4::Align::Start);
     buttons_container.set_hexpand(true);
 
-    let new_host_button = create_icon_button(
-        "New Host",
-        "network-server-symbolic",
-        100,
-        30,
-        || println!("Nouveau serveur demandé"),
-    );
+    let new_host_button =
+        create_icon_button("New Host", "network-server-symbolic", 100, 30, || {
+            println!("Nouveau serveur demandé")
+        });
 
-    let terminal_button = create_icon_button(
-        "Terminal",
-        "utilities-terminal-symbolic",
-        100,
-        30,
-        || println!("Terminal demandé"),
-    );
+    let terminal_button =
+        create_icon_button("Terminal", "utilities-terminal-symbolic", 100, 30, || {
+            println!("Terminal demandé")
+        });
     terminal_button.set_sensitive(false);
 
-    let serial_button = create_icon_button(
-        "Serial",
-        "network-wired-symbolic",
-        100,
-        30,
-        || println!("Connexion série demandée"),
-    );
+    let serial_button = create_icon_button("Serial", "network-wired-symbolic", 100, 30, || {
+        println!("Connexion série demandée")
+    });
     serial_button.set_sensitive(false);
 
     buttons_container.append(&new_host_button);
@@ -123,7 +115,7 @@ pub fn create_server_tab(parent_window: Option<&libadwaita::ApplicationWindow>) 
                 Ok(servers) => {
                     println!("Loaded {} servers from config", servers.len());
                     servers
-                },
+                }
                 Err(e) => {
                     eprintln!("Erreur lors du rechargement des serveurs: {}", e);
                     servers_data.borrow().clone()
@@ -135,19 +127,22 @@ pub fn create_server_tab(parent_window: Option<&libadwaita::ApplicationWindow>) 
             let filtered_servers: Vec<&SshServer> = if filter.is_empty() {
                 servers.iter().collect()
             } else {
-                servers.iter().filter(|server| {
-                    server.name.to_lowercase().contains(&filter.to_lowercase()) ||
-                    server.hostname.as_ref().map_or(false, |hostname| 
-                        hostname.to_lowercase().contains(&filter.to_lowercase())
-                    )
-                }).collect()
+                servers
+                    .iter()
+                    .filter(|server| {
+                        server.name.to_lowercase().contains(&filter.to_lowercase())
+                            || server.hostname.as_ref().map_or(false, |hostname| {
+                                hostname.to_lowercase().contains(&filter.to_lowercase())
+                            })
+                    })
+                    .collect()
             };
 
             if filtered_servers.is_empty() {
                 // Centrer la grille quand il n'y a pas de serveurs
                 servers_grid.set_halign(gtk4::Align::Center);
                 servers_grid.set_valign(gtk4::Align::Center);
-                
+
                 // Message si aucun serveur ne correspond à la recherche
                 let status_page = if filter.is_empty() {
                     StatusPage::builder()
@@ -160,13 +155,12 @@ pub fn create_server_tab(parent_window: Option<&libadwaita::ApplicationWindow>) 
                         .title(&format!("No servers found matching '{}'", filter))
                         .build()
                 };
-                
+
                 servers_grid.append(&status_page);
             } else {
                 // Remettre l'alignement à gauche quand il y a des serveurs
                 servers_grid.set_halign(gtk4::Align::Start);
                 servers_grid.set_valign(gtk4::Align::Start);
-                
                 // Organiser les cartes en lignes de 3 cartes maximum
                 let cards_per_row = 3;
                 let mut current_row = Box::new(Orientation::Horizontal, 12);
@@ -174,8 +168,10 @@ pub fn create_server_tab(parent_window: Option<&libadwaita::ApplicationWindow>) 
                 current_row.set_hexpand(true);
 
                 for (i, server) in filtered_servers.iter().enumerate() {
-                    let refresh_callback = refresh_fn_storage.borrow().as_ref().map(|f| Rc::clone(f));
-                    let server_card = create_server_card(server, parent_window_clone.as_ref(), refresh_callback);
+                    let refresh_callback =
+                        refresh_fn_storage.borrow().as_ref().map(|f| Rc::clone(f));
+                    let server_card =
+                        create_server_card(server, parent_window_clone.as_ref(), refresh_callback);
                     server_cards.borrow_mut().push(server_card.clone());
                     current_row.append(&server_card);
 
@@ -207,7 +203,6 @@ pub fn create_server_tab(parent_window: Option<&libadwaita::ApplicationWindow>) 
 
     // Stocker la fonction de rafraîchissement
     *refresh_fn_storage.borrow_mut() = Some(Rc::clone(&refresh_fn));
-    
     // Créer les cartes initiales
     create_server_cards("", Some(&refresh_fn));
 

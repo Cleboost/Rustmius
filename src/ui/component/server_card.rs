@@ -1,12 +1,16 @@
-use gtk4::prelude::*;
-use gtk4::{Box, Label, Image, Orientation, Frame, Button};
-use libadwaita::prelude::AdwDialogExt;
 use crate::service::SshServer;
 use crate::ui::modal::edit_server::create_edit_server_dialog;
+use gtk4::prelude::*;
+use gtk4::{Box, Button, Frame, Image, Label, Orientation};
+use libadwaita::prelude::AdwDialogExt;
 use std::process::Command;
 use std::rc::Rc;
 
-pub fn create_server_card(server: &SshServer, parent_window: Option<&libadwaita::ApplicationWindow>, on_save: Option<std::rc::Rc<dyn Fn() + 'static>>) -> Frame {
+pub fn create_server_card(
+    server: &SshServer,
+    parent_window: Option<&libadwaita::ApplicationWindow>,
+    on_save: Option<std::rc::Rc<dyn Fn() + 'static>>,
+) -> Frame {
     let card = Frame::new(None);
     card.add_css_class("server-card");
     card.add_css_class("hoverable");
@@ -69,7 +73,7 @@ pub fn create_server_card(server: &SshServer, parent_window: Option<&libadwaita:
         .label("Connect")
         .css_classes(vec!["suggested-action"])
         .build();
-    
+
     if is_special_host {
         connect_button.set_sensitive(false);
     } else {
@@ -82,7 +86,7 @@ pub fn create_server_card(server: &SshServer, parent_window: Option<&libadwaita:
         .icon_name("edit-symbolic")
         .css_classes(vec!["circular", "flat"])
         .build();
-    
+
     if is_special_host {
         edit_button.set_sensitive(false);
         edit_button.set_tooltip_text(Some("This host is special and can't be edited"));
@@ -98,15 +102,14 @@ pub fn create_server_card(server: &SshServer, parent_window: Option<&libadwaita:
     if let Some(port) = server.port {
         let details_container = Box::new(Orientation::Vertical, 6);
         details_container.set_margin_top(8);
-        
+
         let port_label = Label::new(Some(&format!("Port: {}", port)));
         port_label.add_css_class("caption");
         port_label.set_halign(gtk4::Align::Start);
         details_container.append(&port_label);
-        
+
         main_container.append(&details_container);
     }
-
 
     // Connecter les événements
     let server_name_clone = server.name.clone();
@@ -127,13 +130,14 @@ pub fn create_server_card(server: &SshServer, parent_window: Option<&libadwaita:
 
         let mut success = false;
         for (terminal, args) in terminal_commands {
-            let result = Command::new(terminal)
-                .args(&args)
-                .spawn();
-            
+            let result = Command::new(terminal).args(&args).spawn();
+
             match result {
                 Ok(_) => {
-                    println!("Opening SSH connection to {} in {}", server_name_clone, terminal);
+                    println!(
+                        "Opening SSH connection to {} in {}",
+                        server_name_clone, terminal
+                    );
                     success = true;
                     break;
                 }
@@ -150,10 +154,13 @@ pub fn create_server_card(server: &SshServer, parent_window: Option<&libadwaita:
                 .arg("-c")
                 .arg(&format!("${{TERM:-xterm}} -e ssh {}", server_name_clone))
                 .spawn();
-            
+
             match fallback_result {
                 Ok(_) => {
-                    println!("Opening SSH connection to {} using fallback method", server_name_clone);
+                    println!(
+                        "Opening SSH connection to {} using fallback method",
+                        server_name_clone
+                    );
                 }
                 Err(e) => {
                     eprintln!("Failed to open any terminal for SSH connection: {}", e);
@@ -168,10 +175,13 @@ pub fn create_server_card(server: &SshServer, parent_window: Option<&libadwaita:
     edit_button.connect_clicked(move |_| {
         println!("Edit button clicked for server: {}", server_clone.name);
         println!("on_save_clone is: {:?}", on_save_clone.is_some());
-        let edit_dialog = create_edit_server_dialog(&server_clone, on_save_clone.as_ref().map(|f| {
-            let f_clone = Rc::clone(f);
-            std::boxed::Box::new(move || f_clone()) as std::boxed::Box<dyn Fn() + 'static>
-        }));
+        let edit_dialog = create_edit_server_dialog(
+            &server_clone,
+            on_save_clone.as_ref().map(|f| {
+                let f_clone = Rc::clone(f);
+                std::boxed::Box::new(move || f_clone()) as std::boxed::Box<dyn Fn() + 'static>
+            }),
+        );
         if let Some(parent) = &parent_window_clone {
             edit_dialog.present(Some(parent));
         } else {

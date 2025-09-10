@@ -1,10 +1,10 @@
+use gtk4::gdk::Display;
+use gtk4::prelude::*;
+use gtk4::{Box, Button, Label, Orientation, PolicyType, ScrolledWindow, TextBuffer, TextView};
 use libadwaita::prelude::AdwDialogExt;
 use libadwaita::{Dialog, Toast, ToastOverlay};
-use gtk4::{Box, Orientation, Label, TextView, TextBuffer, ScrolledWindow, PolicyType, Button};
-use gtk4::prelude::*;
-use gtk4::gdk::Display;
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 pub fn create_info_key_dialog(
     key_name: &str,
@@ -13,9 +13,7 @@ pub fn create_info_key_dialog(
     private_content: Option<&str>,
     toast_overlay: Rc<ToastOverlay>,
 ) -> Dialog {
-    let dialog = Dialog::builder()
-        .title("SSH Key Information")
-        .build();
+    let dialog = Dialog::builder().title("SSH Key Information").build();
 
     let close_button = Button::builder()
         .icon_name("window-close-symbolic")

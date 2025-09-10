@@ -1,5 +1,5 @@
-pub mod ssh_keys;
 pub mod ssh_config;
+pub mod ssh_keys;
 
-pub use ssh_keys::{load_ssh_keys, regenerate_public_key, delete_key_pair, read_key_content};
 pub use ssh_config::{SshServer, load_ssh_servers};
+pub use ssh_keys::{delete_key_pair, load_ssh_keys, read_key_content, regenerate_public_key};

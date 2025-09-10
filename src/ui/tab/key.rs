@@ -1,15 +1,15 @@
+use crate::service::load_ssh_keys;
+use crate::ui::component::icon_button::create_icon_button;
+use crate::ui::component::ssh_key_card::create_ssh_key_card;
 use gtk4::prelude::*;
 use gtk4::{Box, Label, Orientation, ScrolledWindow};
 use libadwaita::ToastOverlay;
-use crate::ui::component::ssh_key_card::create_ssh_key_card;
-use crate::ui::component::icon_button::create_icon_button;
-use crate::service::load_ssh_keys;
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 fn create_keys_content(refresh_callback: Rc<dyn Fn()>, toast_overlay: Rc<ToastOverlay>) -> Box {
     let container = Box::new(Orientation::Vertical, 0);
-    
+
     let header_container = Box::new(Orientation::Vertical, 20);
     header_container.set_margin_top(20);
     header_container.set_margin_bottom(20);
@@ -32,13 +32,10 @@ fn create_keys_content(refresh_callback: Rc<dyn Fn()>, toast_overlay: Rc<ToastOv
     buttons_container.set_halign(gtk4::Align::Start);
     buttons_container.set_hexpand(true);
 
-    let generate_button = create_icon_button(
-        "Generate a new SSH key",
-        "key-symbolic",
-        120,
-        30,
-        || println!("Generate a new SSH key"),
-    );
+    let generate_button =
+        create_icon_button("Generate a new SSH key", "key-symbolic", 120, 30, || {
+            println!("Generate a new SSH key")
+        });
     generate_button.set_sensitive(false);
 
     // Bouton d'import de clé
@@ -76,9 +73,19 @@ fn create_keys_content(refresh_callback: Rc<dyn Fn()>, toast_overlay: Rc<ToastOv
     keys_grid.set_hexpand(true);
 
     let keys_data = match load_ssh_keys() {
-        Ok(keys) => keys.into_iter().map(|key| {
-            (key.name, key.key_type, key.fingerprint, key.has_public, key.has_private, key.file_path)
-        }).collect::<Vec<_>>(),
+        Ok(keys) => keys
+            .into_iter()
+            .map(|key| {
+                (
+                    key.name,
+                    key.key_type,
+                    key.fingerprint,
+                    key.has_public,
+                    key.has_private,
+                    key.file_path,
+                )
+            })
+            .collect::<Vec<_>>(),
         Err(e) => {
             eprintln!("Error loading SSH keys: {}", e);
             vec![]
@@ -86,7 +93,9 @@ fn create_keys_content(refresh_callback: Rc<dyn Fn()>, toast_overlay: Rc<ToastOv
     };
 
     if keys_data.is_empty() {
-        let no_keys_label = Label::new(Some("No SSH keys found in ~/.ssh/\n\nGenerate a new key or import an existing key."));
+        let no_keys_label = Label::new(Some(
+            "No SSH keys found in ~/.ssh/\n\nGenerate a new key or import an existing key.",
+        ));
         no_keys_label.add_css_class("dim-label");
         no_keys_label.set_halign(gtk4::Align::Center);
         no_keys_label.set_valign(gtk4::Align::Center);
@@ -99,9 +108,19 @@ fn create_keys_content(refresh_callback: Rc<dyn Fn()>, toast_overlay: Rc<ToastOv
         current_row.set_halign(gtk4::Align::Start);
         current_row.set_hexpand(true);
 
-
-        for (i, (name, key_type, fingerprint, has_public, has_private, file_path)) in keys_data.iter().enumerate() {
-            let ssh_key_card = create_ssh_key_card(name, key_type, fingerprint, *has_public, *has_private, file_path, Rc::clone(&refresh_callback), Rc::clone(&toast_overlay));
+        for (i, (name, key_type, fingerprint, has_public, has_private, file_path)) in
+            keys_data.iter().enumerate()
+        {
+            let ssh_key_card = create_ssh_key_card(
+                name,
+                key_type,
+                fingerprint,
+                *has_public,
+                *has_private,
+                file_path,
+                Rc::clone(&refresh_callback),
+                Rc::clone(&toast_overlay),
+            );
             current_row.append(&ssh_key_card);
 
             if (i + 1) % cards_per_row == 0 || i == keys_data.len() - 1 {
@@ -124,7 +143,7 @@ fn create_keys_content(refresh_callback: Rc<dyn Fn()>, toast_overlay: Rc<ToastOv
 pub fn create_key_tab(toast_overlay: Rc<ToastOverlay>) -> (Box, Rc<dyn Fn()>) {
     let main_container = Box::new(Orientation::Vertical, 0);
     let refresh_fn_cell = Rc::new(RefCell::new(None::<Rc<dyn Fn()>>));
-    
+
     let refresh_fn: Rc<dyn Fn()> = Rc::new({
         let main_container = main_container.clone();
         let refresh_fn_cell = Rc::clone(&refresh_fn_cell);
@@ -133,16 +152,19 @@ pub fn create_key_tab(toast_overlay: Rc<ToastOverlay>) -> (Box, Rc<dyn Fn()>) {
             if let Some(child) = main_container.first_child() {
                 main_container.remove(&child);
             }
-            
-            let new_keys_content = create_keys_content(Rc::clone(&refresh_fn_cell.borrow().as_ref().unwrap()), Rc::clone(&toast_overlay));
+
+            let new_keys_content = create_keys_content(
+                Rc::clone(&refresh_fn_cell.borrow().as_ref().unwrap()),
+                Rc::clone(&toast_overlay),
+            );
             main_container.append(&new_keys_content);
         }
     });
-    
+
     *refresh_fn_cell.borrow_mut() = Some(Rc::clone(&refresh_fn));
-    
+
     let keys_content = create_keys_content(Rc::clone(&refresh_fn), Rc::clone(&toast_overlay));
     main_container.append(&keys_content);
-    
+
     (main_container, refresh_fn)
 }
