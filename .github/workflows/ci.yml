@@ -29,8 +29,7 @@ jobs:
           libgdk-pixbuf-2.0-dev \
           libpango1.0-dev \
           libcairo2-dev \
-          libgraphene-1.0-dev \
-          libgsk4-dev
+          libgraphene-1.0-dev
           
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
