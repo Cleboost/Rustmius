@@ -21,8 +21,8 @@ jobs:
       
     - name: Install system dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
+        sudo apt update
+        sudo apt install -y \
           libgtk-4-dev \
           libadwaita-1-dev \
           libglib2.0-dev \

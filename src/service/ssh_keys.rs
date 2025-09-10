@@ -10,19 +10,17 @@ pub struct SshKey {
     pub key_type: String,
     pub fingerprint: String,
     pub file_path: String,
-    pub is_public: bool,
     pub has_public: bool,
     pub has_private: bool,
 }
 
 impl SshKey {
-    pub fn new(name: String, key_type: String, fingerprint: String, file_path: String, is_public: bool, has_public: bool, has_private: bool) -> Self {
+    pub fn new(name: String, key_type: String, fingerprint: String, file_path: String, has_public: bool, has_private: bool) -> Self {
         Self {
             name,
             key_type,
             fingerprint,
             file_path,
-            is_public,
             has_public,
             has_private,
         }
@@ -96,7 +94,6 @@ pub fn load_ssh_keys() -> Result<Vec<SshKey>, Box<dyn std::error::Error>> {
                     key_info.key_type,
                     key_info.fingerprint,
                     key_path.to_string_lossy().to_string(),
-                    has_public,
                     has_public,
                     has_private,
                 ));
