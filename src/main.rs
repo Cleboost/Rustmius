@@ -67,7 +67,6 @@ fn build_ui(app: &Application) {
         .default_height(600)
         .build();
 
-    // Créer un ToastOverlay pour l'application
     let toast_overlay = Rc::new(ToastOverlay::new());
 
     let stack = ViewStack::new();

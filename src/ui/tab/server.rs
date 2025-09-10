@@ -12,7 +12,6 @@ pub fn create_server_tab(
 ) -> (Box, Rc<dyn Fn()>) {
     let container = Box::new(Orientation::Vertical, 0);
 
-    // Header avec input de recherche et boutons
     let header_container = Box::new(Orientation::Vertical, 20);
     header_container.set_margin_top(20);
     header_container.set_margin_bottom(20);
@@ -58,7 +57,6 @@ pub fn create_server_tab(
     header_container.append(&buttons_container);
     container.append(&header_container);
 
-    // Titre "Servers"
     let servers_title = Label::new(Some("Servers"));
     servers_title.add_css_class("title-2");
     servers_title.set_margin_top(20);
@@ -66,7 +64,6 @@ pub fn create_server_tab(
     servers_title.set_halign(gtk4::Align::Start);
     container.append(&servers_title);
 
-    // Container scrollable pour les cartes de serveurs
     let scrolled = ScrolledWindow::new();
     scrolled.set_hexpand(true);
     scrolled.set_vexpand(true);
@@ -75,12 +72,10 @@ pub fn create_server_tab(
     scrolled.set_margin_top(20);
     scrolled.set_margin_bottom(20);
 
-    // Container pour la grille des cartes
     let servers_grid = Box::new(Orientation::Vertical, 12);
     servers_grid.set_halign(gtk4::Align::Start);
     servers_grid.set_hexpand(true);
 
-    // Charger les serveurs SSH depuis le fichier config
     let all_servers = match load_ssh_servers() {
         Ok(servers) => servers,
         Err(e) => {
@@ -89,12 +84,10 @@ pub fn create_server_tab(
         }
     };
 
-    // Stocker les serveurs et les cartes pour la recherche
     let servers_data = Rc::new(RefCell::new(all_servers));
     let server_cards = Rc::new(RefCell::new(Vec::new()));
     let refresh_fn_storage = Rc::new(RefCell::new(None::<Rc<dyn Fn()>>));
 
-    // Fonction pour créer les cartes de serveurs
     let create_server_cards = {
         let servers_data = Rc::clone(&servers_data);
         let server_cards = Rc::clone(&server_cards);
@@ -103,13 +96,11 @@ pub fn create_server_tab(
         let refresh_fn_storage = Rc::clone(&refresh_fn_storage);
         Rc::new(move |filter: &str, _refresh_fn: Option<&Rc<dyn Fn()>>| {
             println!("create_server_cards called with filter: '{}'", filter);
-            // Nettoyer la grille existante
             while let Some(child) = servers_grid.first_child() {
                 servers_grid.remove(&child);
             }
             server_cards.borrow_mut().clear();
 
-            // Recharger les données depuis le fichier SSH config
             println!("Reloading SSH servers from config...");
             let updated_servers = match crate::service::load_ssh_servers() {
                 Ok(servers) => {
@@ -139,11 +130,9 @@ pub fn create_server_tab(
             };
 
             if filtered_servers.is_empty() {
-                // Centrer la grille quand il n'y a pas de serveurs
                 servers_grid.set_halign(gtk4::Align::Center);
                 servers_grid.set_valign(gtk4::Align::Center);
 
-                // Message si aucun serveur ne correspond à la recherche
                 let status_page = if filter.is_empty() {
                     StatusPage::builder()
                         .icon_name("network-server-symbolic")
@@ -158,10 +147,8 @@ pub fn create_server_tab(
 
                 servers_grid.append(&status_page);
             } else {
-                // Remettre l'alignement à gauche quand il y a des serveurs
                 servers_grid.set_halign(gtk4::Align::Start);
                 servers_grid.set_valign(gtk4::Align::Start);
-                // Organiser les cartes en lignes de 3 cartes maximum
                 let cards_per_row = 3;
                 let mut current_row = Box::new(Orientation::Horizontal, 12);
                 current_row.set_halign(gtk4::Align::Start);
@@ -175,7 +162,6 @@ pub fn create_server_tab(
                     server_cards.borrow_mut().push(server_card.clone());
                     current_row.append(&server_card);
 
-                    // Si on a atteint le nombre de cartes par ligne ou si c'est la dernière carte
                     if (i + 1) % cards_per_row == 0 || i == filtered_servers.len() - 1 {
                         servers_grid.append(&current_row);
                         if i < filtered_servers.len() - 1 {
@@ -189,7 +175,6 @@ pub fn create_server_tab(
         })
     };
 
-    // Fonction de rafraîchissement
     let refresh_fn: Rc<dyn Fn()> = Rc::new({
         let search_entry = search_entry.clone();
         let create_server_cards = Rc::clone(&create_server_cards);
@@ -201,12 +186,9 @@ pub fn create_server_tab(
         }
     });
 
-    // Stocker la fonction de rafraîchissement
     *refresh_fn_storage.borrow_mut() = Some(Rc::clone(&refresh_fn));
-    // Créer les cartes initiales
     create_server_cards("", Some(&refresh_fn));
 
-    // Connecter la barre de recherche
     let create_server_cards_clone = Rc::clone(&create_server_cards);
     search_entry.connect_changed(move |entry| {
         let text = entry.text();

@@ -38,7 +38,6 @@ fn create_keys_content(refresh_callback: Rc<dyn Fn()>, toast_overlay: Rc<ToastOv
         });
     generate_button.set_sensitive(false);
 
-    // Bouton d'import de clé
     let import_button = create_icon_button(
         "Import a SSH key",
         "document-open-symbolic",

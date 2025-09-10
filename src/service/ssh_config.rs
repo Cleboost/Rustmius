@@ -29,19 +29,15 @@ fn parse_ssh_config(content: &str) -> Result<Vec<SshServer>, Box<dyn std::error:
     for line in content.lines() {
         let line = line.trim();
 
-        // Ignorer les lignes vides et les commentaires
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
 
-        // Nouveau Host
         if line.to_lowercase().starts_with("host ") {
-            // Sauvegarder le serveur précédent s'il existe
             if let Some(server) = current_server.take() {
                 servers.push(server);
             }
 
-            // Créer un nouveau serveur
             let host_name = line[5..].trim().to_string();
             current_server = Some(SshServer {
                 name: host_name,
@@ -51,7 +47,6 @@ fn parse_ssh_config(content: &str) -> Result<Vec<SshServer>, Box<dyn std::error:
                 port: None,
             });
         } else if let Some(ref mut server) = current_server {
-            // Parser les directives du serveur actuel
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 2 {
                 let directive = parts[0].to_lowercase();
@@ -66,13 +61,12 @@ fn parse_ssh_config(content: &str) -> Result<Vec<SshServer>, Box<dyn std::error:
                             server.port = Some(port);
                         }
                     }
-                    _ => {} // Ignorer les autres directives
+                    _ => {}
                 }
             }
         }
     }
 
-    // Ajouter le dernier serveur s'il existe
     if let Some(server) = current_server {
         servers.push(server);
     }
@@ -106,7 +100,6 @@ Host aur.archlinux.org
 
         assert_eq!(servers.len(), 3);
 
-        // Vérifier le premier serveur
         assert_eq!(servers[0].name, "condat-basket");
         assert_eq!(servers[0].hostname, Some("82.165.91.168".to_string()));
         assert_eq!(servers[0].user, Some("root".to_string()));
@@ -115,7 +108,6 @@ Host aur.archlinux.org
             Some("~/.ssh/cleboost".to_string())
         );
 
-        // Vérifier le deuxième serveur
         assert_eq!(servers[1].name, "snipy");
         assert_eq!(servers[1].hostname, Some("217.154.7.198".to_string()));
         assert_eq!(servers[1].user, Some("root".to_string()));
@@ -124,7 +116,6 @@ Host aur.archlinux.org
             Some("~/.ssh/cleboost".to_string())
         );
 
-        // Vérifier le troisième serveur
         assert_eq!(servers[2].name, "aur.archlinux.org");
         assert_eq!(servers[2].hostname, None);
         assert_eq!(servers[2].user, Some("aur".to_string()));

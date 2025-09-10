@@ -100,10 +100,8 @@ pub fn create_ssh_key_card(
             name_clone_info, type_clone_info
         );
 
-        // Lire le contenu des clés
         match read_key_content(&name_clone_info) {
             Ok((private_content, public_content)) => {
-                // Créer le modal d'informations
                 let dialog = create_info_key_dialog(
                     &name_clone_info,
                     &type_clone_info,
@@ -112,14 +110,12 @@ pub fn create_ssh_key_card(
                     Rc::clone(&toast_overlay),
                 );
 
-                // Afficher le modal
                 if let Some(parent) = button.root() {
                     dialog.present(Some(&parent));
                 }
             }
             Err(e) => {
                 eprintln!("Erreur lors de la lecture des clés SSH: {}", e);
-                // Ici on pourrait afficher un dialog d'erreur
             }
         }
     });
@@ -152,12 +148,10 @@ pub fn create_ssh_key_card(
             match regenerate_public_key(&private_path_clone) {
                 Ok(public_key_path) => {
                     println!("Clé publique régénérée avec succès: {}", public_key_path);
-                    // Actualiser l'interface
                     refresh_callback_clone();
                 }
                 Err(e) => {
                     eprintln!("Erreur lors de la régénération de la clé publique: {}", e);
-                    // Ici on pourrait afficher un dialog d'erreur
                 }
             }
         });
@@ -165,7 +159,6 @@ pub fn create_ssh_key_card(
         regenerate_button = Some(regen_btn);
     }
 
-    // Bouton de suppression
     let delete_button = Button::builder()
         .icon_name("user-trash-symbolic")
         .tooltip_text("Supprimer")
@@ -178,21 +171,17 @@ pub fn create_ssh_key_card(
         .height_request(40)
         .build();
 
-    // Connecter le clic du bouton de suppression
     let name_clone_delete = name.to_string();
     let type_clone_delete = key_type.to_string();
     let refresh_callback_delete = Rc::clone(&refresh_callback);
 
     delete_button.connect_clicked(move |button| {
-        // Créer le dialog de confirmation
         let dialog = create_delete_key_dialog(&name_clone_delete, &type_clone_delete);
 
-        // Cloner les variables pour le closure
         let name_for_dialog = name_clone_delete.clone();
         let type_for_dialog = type_clone_delete.clone();
         let refresh_callback_for_dialog = Rc::clone(&refresh_callback_delete);
 
-        // Connecter la réponse du dialog
         dialog.connect_response(None, move |_, response| {
             match response {
                 "delete" => {
@@ -204,12 +193,10 @@ pub fn create_ssh_key_card(
                     match delete_key_pair(&name_for_dialog) {
                         Ok(_) => {
                             println!("Clé SSH supprimée avec succès");
-                            // Rafraîchir l'interface
                             refresh_callback_for_dialog();
                         }
                         Err(e) => {
                             eprintln!("Erreur lors de la suppression de la clé SSH: {}", e);
-                            // Ici on pourrait afficher un dialog d'erreur
                         }
                     }
                 }
@@ -222,16 +209,13 @@ pub fn create_ssh_key_card(
             }
         });
 
-        // Afficher le dialog
         if let Some(parent) = button.root() {
             dialog.present(Some(&parent));
         }
     });
 
-    // Ajouter les boutons au container
     buttons_container.append(&info_button);
 
-    // Ajouter le bouton de régénération si nécessaire
     if let Some(ref regen_btn) = regenerate_button {
         buttons_container.append(regen_btn);
     }
@@ -240,10 +224,8 @@ pub fn create_ssh_key_card(
 
     card_content.append(&buttons_container);
 
-    // Définir le contenu de la carte
     card.set_child(Some(&card_content));
 
-    // Ajouter un gestionnaire de clic
     let name_clone = name.to_string();
     let type_clone = key_type.to_string();
     let gesture = GestureClick::new();

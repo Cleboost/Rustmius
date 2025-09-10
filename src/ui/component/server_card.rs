@@ -23,35 +23,29 @@ pub fn create_server_card(
     card.set_margin_bottom(8);
     card.set_width_request(300);
 
-    // Container principal de la carte
     let main_container = Box::new(Orientation::Vertical, 12);
     main_container.set_margin_top(16);
     main_container.set_margin_bottom(16);
     main_container.set_margin_start(16);
     main_container.set_margin_end(16);
 
-    // Header avec icône, titre et boutons
     let header_container = Box::new(Orientation::Horizontal, 12);
     header_container.set_halign(gtk4::Align::Start);
 
-    // Icône du serveur
     let server_icon = Image::from_icon_name("network-server-symbolic");
     server_icon.set_icon_size(gtk4::IconSize::Large);
     header_container.append(&server_icon);
 
-    // Container pour le titre et sous-titre
     let title_container = Box::new(Orientation::Vertical, 4);
     title_container.set_halign(gtk4::Align::Start);
     title_container.set_hexpand(true);
     title_container.set_margin_end(16);
 
-    // Nom du serveur (titre)
     let server_name = Label::new(Some(&server.name));
     server_name.add_css_class("title-3");
     server_name.set_halign(gtk4::Align::Start);
     title_container.append(&server_name);
 
-    // Hostname/IP (sous-titre)
     let hostname_text = server.hostname.as_deref().unwrap_or("No hostname");
     let hostname_label = Label::new(Some(hostname_text));
     hostname_label.add_css_class("dim-label");
@@ -60,15 +54,12 @@ pub fn create_server_card(
 
     header_container.append(&title_container);
 
-    // Vérifier si c'est un host spécial (aur.archlinux.org)
     let is_special_host = server.name == "aur.archlinux.org";
 
-    // Boutons d'action
     let actions_container = Box::new(Orientation::Horizontal, 8);
     actions_container.set_halign(gtk4::Align::End);
     actions_container.set_valign(gtk4::Align::Center);
 
-    // Bouton de connexion
     let connect_button = Button::builder()
         .label("Connect")
         .css_classes(vec!["suggested-action"])
@@ -81,7 +72,6 @@ pub fn create_server_card(
     }
     actions_container.append(&connect_button);
 
-    // Bouton d'édition
     let edit_button = Button::builder()
         .icon_name("edit-symbolic")
         .css_classes(vec!["circular", "flat"])
@@ -98,7 +88,6 @@ pub fn create_server_card(
     header_container.append(&actions_container);
     main_container.append(&header_container);
 
-    // Informations détaillées (seulement le port si spécifié)
     if let Some(port) = server.port {
         let details_container = Box::new(Orientation::Vertical, 6);
         details_container.set_margin_top(8);
@@ -111,10 +100,8 @@ pub fn create_server_card(
         main_container.append(&details_container);
     }
 
-    // Connecter les événements
     let server_name_clone = server.name.clone();
     connect_button.connect_clicked(move |_| {
-        // Détecter et ouvrir le terminal par défaut avec SSH
         let terminal_commands = vec![
             ("foot", vec!["-e", "ssh", &server_name_clone]),
             ("gnome-terminal", vec!["--", "ssh", &server_name_clone]),
@@ -142,14 +129,12 @@ pub fn create_server_card(
                     break;
                 }
                 Err(_) => {
-                    // Continue to next terminal if this one fails
                     continue;
                 }
             }
         }
 
         if !success {
-            // Fallback: try to use $TERM or default shell
             let fallback_result = Command::new("sh")
                 .arg("-c")
                 .arg(&format!("${{TERM:-xterm}} -e ssh {}", server_name_clone))
@@ -189,10 +174,8 @@ pub fn create_server_card(
         }
     });
 
-    // Ajouter le conteneur principal à la carte
     card.set_child(Some(&main_container));
 
-    // Ajouter le tooltip sur toute la carte pour les hosts spéciaux
     if is_special_host {
         card.set_tooltip_text(Some("This host is special host and can't be edit"));
     }
