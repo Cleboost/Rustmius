@@ -58,7 +58,7 @@ jobs:
       run: cargo build --release
       
     - name: Create Release
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      if: github.ref == 'refs/heads/master' && github.event_name == 'push'
       uses: softprops/action-gh-release@v1
       with:
         tag_name: v${{ github.run_number }}
