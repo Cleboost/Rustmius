@@ -182,30 +182,28 @@ pub fn create_ssh_key_card(
         let type_for_dialog = type_clone_delete.clone();
         let refresh_callback_for_dialog = Rc::clone(&refresh_callback_delete);
 
-        dialog.connect_response(None, move |_, response| {
-            match response {
-                "delete" => {
-                    println!(
-                        "Suppression de la clé SSH {} ({})",
-                        name_for_dialog, type_for_dialog
-                    );
+        dialog.connect_response(None, move |_, response| match response {
+            "delete" => {
+                println!(
+                    "Suppression de la clé SSH {} ({})",
+                    name_for_dialog, type_for_dialog
+                );
 
-                    match delete_key_pair(&name_for_dialog) {
-                        Ok(_) => {
-                            println!("Clé SSH supprimée avec succès");
-                            refresh_callback_for_dialog();
-                        }
-                        Err(e) => {
-                            eprintln!("Erreur lors de la suppression de la clé SSH: {}", e);
-                        }
+                match delete_key_pair(&name_for_dialog) {
+                    Ok(_) => {
+                        println!("Clé SSH supprimée avec succès");
+                        refresh_callback_for_dialog();
+                    }
+                    Err(e) => {
+                        eprintln!("Erreur lors de la suppression de la clé SSH: {}", e);
                     }
                 }
-                "cancel" | _ => {
-                    println!(
-                        "Annulation de la suppression de la clé SSH {} ({})",
-                        name_for_dialog, type_for_dialog
-                    );
-                }
+            }
+            "cancel" | _ => {
+                println!(
+                    "Annulation de la suppression de la clé SSH {} ({})",
+                    name_for_dialog, type_for_dialog
+                );
             }
         });
 
