@@ -61,7 +61,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Publish AUR package
-      uses: KSXGitHub/github-actions-deploy-aur@4.1.1
+      uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
       with:
         pkgname: rustmius
         pkgbuild: ./PKGBUILD
