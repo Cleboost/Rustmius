@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Rustmius
+Comment=Full local Termius alternative for Linux
+Exec=rustmius
+Icon=Rustmius
+Terminal=false
+Type=Application
+Categories=Utility;
