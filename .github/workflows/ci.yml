@@ -16,8 +16,7 @@ jobs:
       image: archlinux:latest
 
     permissions: 
-      contents: read
-      packages: write
+      contents: write
     
     steps:
     - name: Checkout code
@@ -55,7 +54,7 @@ jobs:
 
         generate_release_notes: true
         append_body: true
-        files: target/release/Rustmius
+        files: target/release/rustmius
         draft: false
         prerelease: false
       env:
