@@ -2,10 +2,8 @@ name: Continuous Release Build
 
 on:
   push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
-  workflow_dispatch:
+    tags:
+      - 'v*'
 
 env:
   CARGO_TERM_COLOR: always
@@ -14,8 +12,6 @@ jobs:
   build:
     name: Build Linux
     runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
     
     steps:
     - name: Checkout code
@@ -43,22 +39,16 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: v${{ github.run_number }}
-        name: Release v${{ github.run_number }}
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
         body: |
-          ## Rustmius - Build ${{ github.run_number }}
+          ## Rustmius - Build ${{ github.ref_name }}
           
           **Build Date:** ${{ github.event.head_commit.timestamp }}
-          **Commit:** ${{ github.sha }}
-          **Commit Message:** ${{ github.event.head_commit.message }}
-          
-          ### Download
-          - `Rustmius` - Linux x64 binary
-          
-          ### Installation
-          1. Download the `Rustmius` binary
-          2. Make it executable: `chmod +x Rustmius`
-          3. Run: `./Rustmius`
+
+
+        generate_release_notes: true
+        append_body: true
         files: target/release/Rustmius
         draft: false
         prerelease: false
