@@ -1,4 +1,5 @@
 use crate::service::ssh_config::{export_ssh_config_to_file, load_ssh_servers};
+use crate::service::notifications::{update_notification_settings, get_notification_settings};
 use libadwaita::{
     ActionRow, ComboRow, PreferencesDialog, PreferencesGroup, PreferencesPage, SpinRow, SwitchRow,
     prelude::*,
@@ -32,8 +33,16 @@ pub fn create_preference_dialog() -> PreferencesDialog {
     let notifications = SwitchRow::builder()
         .title("Notifications")
         .subtitle("Afficher les notifications de connexion")
-        .sensitive(false)
         .build();
+
+    let current_settings = get_notification_settings();
+    notifications.set_active(current_settings.enabled);
+
+    notifications.connect_active_notify(move |switch| {
+        let mut settings = get_notification_settings();
+        settings.enabled = switch.is_active();
+        update_notification_settings(settings);
+    });
 
     general_group.add(&auto_connect);
     general_group.add(&remember_servers);
@@ -128,6 +137,10 @@ pub fn create_preference_dialog() -> PreferencesDialog {
     let export_button = gtk4::Button::builder()
         .label("Exporter")
         .css_classes(vec!["suggested-action".to_string()])
+        .margin_start(8)
+        .margin_end(8)
+        .margin_top(4)
+        .margin_bottom(4)
         .build();
 
     export_button.connect_clicked(move |_| {

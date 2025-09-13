@@ -1,4 +1,5 @@
 use crate::service::SshServer;
+use crate::service::notifications::{notify_connection_started, notify_connection_success, notify_connection_failed};
 use crate::ui::modal::{
     delete_server::create_delete_server_dialog, edit_server::create_edit_server_dialog,
 };
@@ -117,6 +118,8 @@ pub fn create_server_card(
 
     let server_name_clone = server.name.clone();
     connect_button.connect_clicked(move |_| {
+        notify_connection_started(&server_name_clone);
+
         let terminal_commands = vec![
             ("foot", vec!["-e", "ssh", &server_name_clone]),
             ("gnome-terminal", vec!["--", "ssh", &server_name_clone]),
@@ -137,6 +140,7 @@ pub fn create_server_card(
             match result {
                 Ok(_) => {
                     success = true;
+                    notify_connection_success(&server_name_clone);
                     break;
                 }
                 Err(_) => {
@@ -152,9 +156,12 @@ pub fn create_server_card(
                 .spawn();
 
             match fallback_result {
-                Ok(_) => {}
+                Ok(_) => {
+                    notify_connection_success(&server_name_clone);
+                }
                 Err(e) => {
                     eprintln!("Failed to open any terminal for SSH connection: {}", e);
+                    notify_connection_failed(&server_name_clone, &format!("Unable to open terminal: {}", e));
                 }
             }
         }
