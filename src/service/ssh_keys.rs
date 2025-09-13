@@ -349,7 +349,7 @@ pub fn generate_ssh_key(
     if !private_key_path.exists() {
         return Err("La clé privée n'a pas été créée".into());
     }
-    
+
     if !public_key_path.exists() {
         return Err("La clé publique n'a pas été créée".into());
     }
@@ -360,7 +360,7 @@ pub fn generate_ssh_key(
         let mut perms = fs::metadata(&private_key_path)?.permissions();
         perms.set_mode(0o600);
         fs::set_permissions(&private_key_path, perms)?;
-        
+
         let mut perms = fs::metadata(&public_key_path)?.permissions();
         perms.set_mode(0o644);
         fs::set_permissions(&public_key_path, perms)?;
