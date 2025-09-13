@@ -29,7 +29,7 @@
 
 ## 🛠️ Development Roadmap
 
-### 🎯 Current Version (v0.1.0)
+### 🎯 Current Version (v0.2.0)
 - ✅ Basic server management (add, edit, delete)
 - ✅ SSH key visualization and management
 - ✅ Server connection with terminal integration
@@ -37,13 +37,13 @@
 
 ### 🚀 Upcoming Features
 
-#### Phase 1 - Enhanced Management (v0.2.0)
+#### Phase 1 - Enhanced Management (v0.3.0)
 - [ ] 🔄 **Server Groups & Tags**: Organize servers by project or environment
 - [ ] 📊 **Connection History**: Track and manage recent connections
 - [ ] 🔐 **Key Generation Wizard**: Guided SSH key creation with best practices
 - [ ] 📋 **Import/Export**: Backup and restore SSH configurations
 
-#### Phase 2 - Advanced Features (v0.3.0)
+#### Phase 2 - Advanced Features (v0.4.0)
 - [ ] 🌐 **Remote Config Sync**: Sync configurations across multiple machines (not sure)
 - [ ] 🎨 **Custom Themes**: Dark/light mode and custom color schemes
 
