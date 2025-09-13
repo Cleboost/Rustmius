@@ -2,7 +2,10 @@ name: Check PR
 
 on:
   pull_request:
-
+  push:
+    branches:
+      - master
+    
 env:
   CARGO_TERM_COLOR: always
 
@@ -13,6 +16,11 @@ jobs:
     concurrency:
       group: pr-${{ github.event.pull_request.number }}
       cancel-in-progress: true
+    if: |
+      !(
+        github.event_name == 'push' &&
+        startsWith(github.ref, 'refs/tags/')
+      )
       
     container:
       image: archlinux:latest
