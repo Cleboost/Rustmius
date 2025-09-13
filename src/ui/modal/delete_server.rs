@@ -1,12 +1,18 @@
 use crate::service::delete_ssh_server;
-use std::rc::Rc;
 use libadwaita::prelude::*;
 use libadwaita::{AlertDialog, ResponseAppearance};
+use std::rc::Rc;
 
-pub fn create_delete_server_dialog(server_name: &str, on_delete: Option<Rc<dyn Fn() + 'static>>) -> AlertDialog {
+pub fn create_delete_server_dialog(
+    server_name: &str,
+    on_delete: Option<Rc<dyn Fn() + 'static>>,
+) -> AlertDialog {
     let dialog = AlertDialog::builder()
         .heading("Delete Server")
-        .body(&format!("Are you sure you want to delete the server \"{}\" ?\n\nThis action is irreversible.", server_name))
+        .body(&format!(
+            "Are you sure you want to delete the server \"{}\" ?\n\nThis action is irreversible.",
+            server_name
+        ))
         .build();
 
     dialog.add_response("cancel", "Cancel");

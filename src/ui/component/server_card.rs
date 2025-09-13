@@ -1,5 +1,7 @@
 use crate::service::SshServer;
-use crate::ui::modal::{edit_server::create_edit_server_dialog, delete_server::create_delete_server_dialog};
+use crate::ui::modal::{
+    delete_server::create_delete_server_dialog, edit_server::create_edit_server_dialog,
+};
 use gtk4::prelude::*;
 use gtk4::{Box as GtkBox, Button, Frame, Image, Label, Orientation};
 use libadwaita::prelude::AdwDialogExt;
@@ -150,8 +152,7 @@ pub fn create_server_card(
                 .spawn();
 
             match fallback_result {
-                Ok(_) => {
-                }
+                Ok(_) => {}
                 Err(e) => {
                     eprintln!("Failed to open any terminal for SSH connection: {}", e);
                 }
@@ -181,7 +182,10 @@ pub fn create_server_card(
     let parent_window_clone_for_delete = parent_window.cloned();
     let on_save_clone_for_delete = on_save.clone();
     delete_button.connect_clicked(move |_| {
-        let delete_dialog = create_delete_server_dialog(&server_clone_for_delete.name, on_save_clone_for_delete.clone());
+        let delete_dialog = create_delete_server_dialog(
+            &server_clone_for_delete.name,
+            on_save_clone_for_delete.clone(),
+        );
         if let Some(parent) = &parent_window_clone_for_delete {
             delete_dialog.present(Some(parent));
         } else {
