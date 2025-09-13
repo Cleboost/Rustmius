@@ -95,7 +95,7 @@ fn format_release_notes(release: &Release) -> String {
             } else {
                 if in_list {
                     html.push_str("</ul>");
-                    
+
                     in_list = false;
                 }
                 html.push_str("<p>");
