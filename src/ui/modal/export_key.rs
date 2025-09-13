@@ -1,7 +1,7 @@
 use gtk4::glib::{self, ControlFlow};
-use gtk4::{prelude::*, Box, Button, Dialog, Entry, HeaderBar, Label, Orientation, Spinner};
+use gtk4::{Box, Button, Dialog, Entry, HeaderBar, Label, Orientation, Spinner, prelude::*};
 use std::process::Command;
-use std::sync::mpsc::{channel, TryRecvError};
+use std::sync::mpsc::{TryRecvError, channel};
 use std::thread;
 
 pub fn create_export_key_dialog(
