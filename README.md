@@ -3,8 +3,8 @@
   <h1>🔐 Rustmius</h1>
 
   <p>
-    <img src="https://img.shields.io/aur/version/rustmius?label=AUR%20Rustmius" alt="AUR Version"/>
-    <img src="https://img.shields.io/aur/version/rustmius-bin?label=AUR%20Rustmius%20Bin" alt="AUR Version Bin"/>
+    <img src="https://img.shields.io/aur/version/rustmius?label=AUR%20Rustmius&logo=arch-linux&logoColor=white&labelColor=1793d1" alt="AUR Version"/>
+    <img src="https://img.shields.io/aur/version/rustmius-bin?label=AUR%20Rustmius%20Bin&logo=arch-linux&logoColor=white&labelColor=1793d1" alt="AUR Version Bin"/>
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/>
     <img src="https://img.shields.io/badge/rust-1.70+-orange.svg" alt="Rust"/>
   </p>
