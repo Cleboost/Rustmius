@@ -1,7 +1,8 @@
 use crate::service::ssh_keys::load_ssh_keys;
 use dirs;
 use gtk4::{
-    Box, Button, Dialog, DropDown, Entry, HeaderBar, Label, Orientation, StringList, StringObject, prelude::*,
+    Box, Button, Dialog, DropDown, Entry, HeaderBar, Label, Orientation, StringList, StringObject, 
+    prelude::*,
 };
 use std::fs;
 use std::path::PathBuf;
