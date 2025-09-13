@@ -1,10 +1,15 @@
-use gtk4::{prelude::*, Box, Button, Dialog, Entry, HeaderBar, Label, Orientation, Spinner};
 use gtk4::glib::{self, ControlFlow};
+use gtk4::{prelude::*, Box, Button, Dialog, Entry, HeaderBar, Label, Orientation, Spinner};
 use std::process::Command;
-use std::thread;
 use std::sync::mpsc::{channel, TryRecvError};
+use std::thread;
 
-pub fn create_export_key_dialog(parent: &Dialog, user: &str, host: &str, pub_key_path: &str) -> Dialog {
+pub fn create_export_key_dialog(
+    parent: &Dialog,
+    user: &str,
+    host: &str,
+    pub_key_path: &str,
+) -> Dialog {
     let dialog = Dialog::builder()
         .transient_for(parent)
         .modal(true)
@@ -61,10 +66,12 @@ pub fn create_export_key_dialog(parent: &Dialog, user: &str, host: &str, pub_key
     let status_label_clone = status_label.clone();
     let spinner_clone = spinner.clone();
     let dialog_final = dialog.clone();
-    
+
     export_btn.connect_clicked(move |_| {
         let password = pass_entry_clone.text().to_string();
-        if password.is_empty() { return; }
+        if password.is_empty() {
+            return;
+        }
 
         pass_entry_clone.set_sensitive(false);
         export_btn_clone.set_sensitive(false);
@@ -103,49 +110,47 @@ pub fn create_export_key_dialog(parent: &Dialog, user: &str, host: &str, pub_key
         let spinner_ui = spinner_clone.clone();
         let export_btn_ui = export_btn_clone.clone();
         let dialog_ui = dialog_final.clone();
-        glib::idle_add_local(move || {
-            match rx.try_recv() {
-                Ok(result) => {
-                    spinner_ui.stop();
-                    spinner_ui.set_visible(false);
+        glib::idle_add_local(move || match rx.try_recv() {
+            Ok(result) => {
+                spinner_ui.stop();
+                spinner_ui.set_visible(false);
 
-                    match result {
-                        Ok(()) => {
-                            status_label_ui.set_text("✓ SSH key exported successfully!");
-                            status_label_ui.add_css_class("success");
-                        }
-                        Err(msg) => {
-                            status_label_ui.set_text(&format!("✗ {}", msg));
-                            status_label_ui.add_css_class("error");
-                        }
+                match result {
+                    Ok(()) => {
+                        status_label_ui.set_text("✓ SSH key exported successfully!");
+                        status_label_ui.add_css_class("success");
                     }
-
-                    export_btn_ui.set_label("Close");
-                    export_btn_ui.set_sensitive(true);
-
-                    let dialog_close = dialog_ui.clone();
-                    export_btn_ui.connect_clicked(move |_| {
-                        dialog_close.close();
-                    });
-
-                    ControlFlow::Break
+                    Err(msg) => {
+                        status_label_ui.set_text(&format!("✗ {}", msg));
+                        status_label_ui.add_css_class("error");
+                    }
                 }
-                Err(TryRecvError::Empty) => ControlFlow::Continue,
-                Err(TryRecvError::Disconnected) => {
-                    spinner_ui.stop();
-                    spinner_ui.set_visible(false);
-                    status_label_ui.set_text("✗ Internal error - worker disconnected");
-                    status_label_ui.add_css_class("error");
-                    export_btn_ui.set_label("Close");
-                    export_btn_ui.set_sensitive(true);
 
-                    let dialog_close = dialog_ui.clone();
-                    export_btn_ui.connect_clicked(move |_| {
-                        dialog_close.close();
-                    });
+                export_btn_ui.set_label("Close");
+                export_btn_ui.set_sensitive(true);
 
-                    ControlFlow::Break
-                }
+                let dialog_close = dialog_ui.clone();
+                export_btn_ui.connect_clicked(move |_| {
+                    dialog_close.close();
+                });
+
+                ControlFlow::Break
+            }
+            Err(TryRecvError::Empty) => ControlFlow::Continue,
+            Err(TryRecvError::Disconnected) => {
+                spinner_ui.stop();
+                spinner_ui.set_visible(false);
+                status_label_ui.set_text("✗ Internal error - worker disconnected");
+                status_label_ui.add_css_class("error");
+                export_btn_ui.set_label("Close");
+                export_btn_ui.set_sensitive(true);
+
+                let dialog_close = dialog_ui.clone();
+                export_btn_ui.connect_clicked(move |_| {
+                    dialog_close.close();
+                });
+
+                ControlFlow::Break
             }
         });
     });
