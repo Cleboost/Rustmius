@@ -1,13 +1,18 @@
 use crate::service::load_ssh_keys;
 use crate::ui::component::icon_button::create_icon_button;
 use crate::ui::component::ssh_key_card::create_ssh_key_card;
+use crate::ui::modal::generate_key::create_generate_key_dialog;
 use gtk4::prelude::*;
 use gtk4::{Box, Label, Orientation, ScrolledWindow};
 use libadwaita::ToastOverlay;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-fn create_keys_content(refresh_callback: Rc<dyn Fn()>, toast_overlay: Rc<ToastOverlay>) -> Box {
+fn create_keys_content(
+    refresh_callback: Rc<dyn Fn()>,
+    toast_overlay: Rc<ToastOverlay>,
+    parent_window: Option<&libadwaita::ApplicationWindow>,
+) -> Box {
     let container = Box::new(Orientation::Vertical, 0);
 
     let header_container = Box::new(Orientation::Vertical, 20);
@@ -32,11 +37,19 @@ fn create_keys_content(refresh_callback: Rc<dyn Fn()>, toast_overlay: Rc<ToastOv
     buttons_container.set_halign(gtk4::Align::Start);
     buttons_container.set_hexpand(true);
 
-    let generate_button =
-        create_icon_button("Generate a new SSH key", "key-symbolic", 120, 30, || {
-            println!("Generate a new SSH key")
-        });
-    generate_button.set_sensitive(false);
+    let generate_button = create_icon_button("Generate a new SSH key", "key-symbolic", 120, 30, {
+        let refresh_callback = Rc::clone(&refresh_callback);
+        let toast_overlay = Rc::clone(&toast_overlay);
+        let parent_window = parent_window.cloned();
+        move || {
+            let dialog = create_generate_key_dialog(
+                Rc::clone(&refresh_callback),
+                Rc::clone(&toast_overlay),
+                parent_window.as_ref().map(|w| w.as_ref()),
+            );
+            dialog.present();
+        }
+    });
 
     let import_button = create_icon_button(
         "Import a SSH key",
@@ -139,14 +152,19 @@ fn create_keys_content(refresh_callback: Rc<dyn Fn()>, toast_overlay: Rc<ToastOv
     container
 }
 
-pub fn create_key_tab(toast_overlay: Rc<ToastOverlay>) -> (Box, Rc<dyn Fn()>) {
+pub fn create_key_tab(
+    toast_overlay: Rc<ToastOverlay>,
+    parent_window: Option<&libadwaita::ApplicationWindow>,
+) -> (Box, Rc<dyn Fn()>) {
     let main_container = Box::new(Orientation::Vertical, 0);
     let refresh_fn_cell = Rc::new(RefCell::new(None::<Rc<dyn Fn()>>));
 
+    let parent_window_clone = parent_window.cloned();
     let refresh_fn: Rc<dyn Fn()> = Rc::new({
         let main_container = main_container.clone();
         let refresh_fn_cell = Rc::clone(&refresh_fn_cell);
         let toast_overlay = Rc::clone(&toast_overlay);
+        let parent_window = parent_window_clone.clone();
         move || {
             if let Some(child) = main_container.first_child() {
                 main_container.remove(&child);
@@ -155,6 +173,7 @@ pub fn create_key_tab(toast_overlay: Rc<ToastOverlay>) -> (Box, Rc<dyn Fn()>) {
             let new_keys_content = create_keys_content(
                 Rc::clone(&refresh_fn_cell.borrow().as_ref().unwrap()),
                 Rc::clone(&toast_overlay),
+                parent_window.as_ref().map(|w| w.as_ref()),
             );
             main_container.append(&new_keys_content);
         }
@@ -162,7 +181,11 @@ pub fn create_key_tab(toast_overlay: Rc<ToastOverlay>) -> (Box, Rc<dyn Fn()>) {
 
     *refresh_fn_cell.borrow_mut() = Some(Rc::clone(&refresh_fn));
 
-    let keys_content = create_keys_content(Rc::clone(&refresh_fn), Rc::clone(&toast_overlay));
+    let keys_content = create_keys_content(
+        Rc::clone(&refresh_fn),
+        Rc::clone(&toast_overlay),
+        parent_window,
+    );
     main_container.append(&keys_content);
 
     (main_container, refresh_fn)
