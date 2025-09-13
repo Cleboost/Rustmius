@@ -1,4 +1,4 @@
-use libadwaita::{prelude::*, PreferencesDialog, PreferencesGroup, PreferencesPage, SwitchRow};
+use libadwaita::{PreferencesDialog, PreferencesGroup, PreferencesPage, SwitchRow, prelude::*};
 
 pub fn create_preference_dialog() -> PreferencesDialog {
     let dialog = PreferencesDialog::builder()
