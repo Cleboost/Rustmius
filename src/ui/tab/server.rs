@@ -1,4 +1,4 @@
-use crate::service::{load_ssh_servers, SshServer};
+use crate::service::{SshServer, load_ssh_servers};
 use crate::ui::component::create_server_card;
 use crate::ui::component::icon_button::create_icon_button;
 use gtk4::prelude::*;
