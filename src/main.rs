@@ -11,12 +11,22 @@ mod ui;
 use ui::modal::about::create_about_dialog;
 use ui::tab::{create_key_tab, create_server_tab};
 
+use crate::ui::modal::preference::create_preference_dialog;
+
 fn create_point_menu_model(window: &ApplicationWindow) -> Menu {
     let point_menu = Menu::new();
 
+    point_menu.append(Some("Paramètres"), Some("app.settings"));
     point_menu.append(Some("À propos"), Some("app.about"));
     point_menu.append(Some("Aide"), Some("app.help"));
     point_menu.append(Some("Quitter"), Some("app.quit"));
+
+    let settings_action = SimpleAction::new("settings", None);
+    let window_clone = window.clone();
+    settings_action.connect_activate(move |_, _| {
+        let settings_dialog = create_preference_dialog();
+        settings_dialog.present(Some(&window_clone));
+    });
 
     let about_action = SimpleAction::new("about", None);
     let window_clone = window.clone();
@@ -37,6 +47,7 @@ fn create_point_menu_model(window: &ApplicationWindow) -> Menu {
     });
 
     if let Some(app) = window.application() {
+        app.add_action(&settings_action);
         app.add_action(&about_action);
         app.add_action(&help_action);
         app.add_action(&quit_action);
