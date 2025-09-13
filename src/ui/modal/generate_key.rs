@@ -1,12 +1,12 @@
 use crate::service::ssh_keys::generate_ssh_key;
+use gtk4::glib::{self, ControlFlow};
 use gtk4::{
     Adjustment, Box, Button, Dialog, DropDown, Entry, HeaderBar, Label, Orientation, Scale,
     Spinner, StringList, prelude::*,
 };
-use gtk4::glib::{self, ControlFlow};
 use std::rc::Rc;
-use std::thread;
 use std::sync::mpsc;
+use std::thread;
 
 enum GenerationMsg {
     Success(String),
@@ -62,36 +62,37 @@ pub fn create_generate_key_dialog(
     let key_length = Scale::new(Orientation::Horizontal, Some(&adjustment));
     key_length.set_digits(0);
     key_length.set_tooltip_text(Some("Key length in bits (2048/4096/6144/8192)"));
-    
+
     key_length.add_mark(2048.0, gtk4::PositionType::Top, Some("2048"));
     key_length.add_mark(4096.0, gtk4::PositionType::Top, Some("4096"));
     key_length.add_mark(6144.0, gtk4::PositionType::Top, Some("6144"));
     key_length.add_mark(8192.0, gtk4::PositionType::Top, Some("8192"));
-    
+
     content_box.append(&key_length);
-    
+
     let value_label = Label::new(Some("4096 bits"));
     value_label.set_halign(gtk4::Align::Start);
     value_label.add_css_class("dim-label");
-    
+
     let allowed_values = vec![2048, 4096, 6144, 8192];
-    
+
     let value_label_clone = value_label.clone();
     key_length.connect_value_changed(move |scale| {
         let current_value = scale.value() as u32;
-        
-        let closest_value = allowed_values.iter()
+
+        let closest_value = allowed_values
+            .iter()
             .min_by_key(|&&x| (x as i32 - current_value as i32).abs())
             .unwrap();
-        
+
         if !allowed_values.contains(&current_value) {
             scale.set_value(*closest_value as f64);
             return;
         }
-        
+
         value_label_clone.set_text(&format!("{} bits", closest_value));
     });
-    
+
     content_box.append(&value_label);
 
     let email_input = Entry::builder()
@@ -129,7 +130,7 @@ pub fn create_generate_key_dialog(
     buttons_container.append(&status_label);
     buttons_container.append(&cancel_button);
     buttons_container.append(&generate_button);
-    
+
     content_box.append(&buttons_container);
     dialog.set_child(Some(&content_box));
 
@@ -175,7 +176,13 @@ pub fn create_generate_key_dialog(
         let email_bg = email.clone();
         let passphrase_bg = passphrase.clone();
         thread::spawn(move || {
-            let result = generate_ssh_key(&name_bg, key_type, key_length_value, &email_bg, &passphrase_bg);
+            let result = generate_ssh_key(
+                &name_bg,
+                key_type,
+                key_length_value,
+                &email_bg,
+                &passphrase_bg,
+            );
             let _ = match result {
                 Ok(_) => sender.send(GenerationMsg::Success(name_bg)),
                 Err(e) => sender.send(GenerationMsg::Error(e.to_string())),
@@ -189,37 +196,38 @@ pub fn create_generate_key_dialog(
         let toast_overlay_main = Rc::clone(&toast_overlay_clone);
         let refresh_callback_main = Rc::clone(&refresh_callback_clone);
         let dialog_main = dialog_clone.clone();
-        glib::idle_add_local(move || {
-            match receiver.try_recv() {
-                Ok(msg) => {
-                    spinner_for_idle.hide();
-                    spinner_for_idle.stop();
-                    status_for_idle.hide();
-                    button_for_idle.set_sensitive(true);
-                    button_for_idle.set_label("Generate & Save Key");
+        glib::idle_add_local(move || match receiver.try_recv() {
+            Ok(msg) => {
+                spinner_for_idle.hide();
+                spinner_for_idle.stop();
+                status_for_idle.hide();
+                button_for_idle.set_sensitive(true);
+                button_for_idle.set_label("Generate & Save Key");
 
-                    match msg {
-                        GenerationMsg::Success(name_val) => {
-                            let toast = libadwaita::Toast::builder()
-                                .title(&format!("SSH key '{}' generated and saved to ~/.ssh/", name_val))
-                                .build();
-                            toast_overlay_main.add_toast(toast);
-                            refresh_callback_main();
-                            dialog_main.close();
-                        }
-                        GenerationMsg::Error(err) => {
-                            let toast = libadwaita::Toast::builder()
-                                .title(&format!("Failed to generate SSH key: {}", err))
-                                .build();
-                            toast_overlay_main.add_toast(toast);
-                        }
+                match msg {
+                    GenerationMsg::Success(name_val) => {
+                        let toast = libadwaita::Toast::builder()
+                            .title(&format!(
+                                "SSH key '{}' generated and saved to ~/.ssh/",
+                                name_val
+                            ))
+                            .build();
+                        toast_overlay_main.add_toast(toast);
+                        refresh_callback_main();
+                        dialog_main.close();
                     }
-
-                    ControlFlow::Break
+                    GenerationMsg::Error(err) => {
+                        let toast = libadwaita::Toast::builder()
+                            .title(&format!("Failed to generate SSH key: {}", err))
+                            .build();
+                        toast_overlay_main.add_toast(toast);
+                    }
                 }
-                Err(mpsc::TryRecvError::Empty) => ControlFlow::Continue,
-                Err(mpsc::TryRecvError::Disconnected) => ControlFlow::Break,
+
+                ControlFlow::Break
             }
+            Err(mpsc::TryRecvError::Empty) => ControlFlow::Continue,
+            Err(mpsc::TryRecvError::Disconnected) => ControlFlow::Break,
         });
     });
 

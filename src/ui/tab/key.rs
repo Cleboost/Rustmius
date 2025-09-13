@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 fn create_keys_content(
-    refresh_callback: Rc<dyn Fn()>, 
+    refresh_callback: Rc<dyn Fn()>,
     toast_overlay: Rc<ToastOverlay>,
     parent_window: Option<&libadwaita::ApplicationWindow>,
 ) -> Box {
@@ -37,25 +37,19 @@ fn create_keys_content(
     buttons_container.set_halign(gtk4::Align::Start);
     buttons_container.set_hexpand(true);
 
-    let generate_button = create_icon_button(
-        "Generate a new SSH key",
-        "key-symbolic",
-        120,
-        30,
-        {
-            let refresh_callback = Rc::clone(&refresh_callback);
-            let toast_overlay = Rc::clone(&toast_overlay);
-            let parent_window = parent_window.cloned();
-            move || {
-                let dialog = create_generate_key_dialog(
-                    Rc::clone(&refresh_callback), 
-                    Rc::clone(&toast_overlay),
-                    parent_window.as_ref().map(|w| w.as_ref()),
-                );
-                dialog.present();
-            }
-        },
-    );
+    let generate_button = create_icon_button("Generate a new SSH key", "key-symbolic", 120, 30, {
+        let refresh_callback = Rc::clone(&refresh_callback);
+        let toast_overlay = Rc::clone(&toast_overlay);
+        let parent_window = parent_window.cloned();
+        move || {
+            let dialog = create_generate_key_dialog(
+                Rc::clone(&refresh_callback),
+                Rc::clone(&toast_overlay),
+                parent_window.as_ref().map(|w| w.as_ref()),
+            );
+            dialog.present();
+        }
+    });
 
     let import_button = create_icon_button(
         "Import a SSH key",
@@ -187,7 +181,11 @@ pub fn create_key_tab(
 
     *refresh_fn_cell.borrow_mut() = Some(Rc::clone(&refresh_fn));
 
-    let keys_content = create_keys_content(Rc::clone(&refresh_fn), Rc::clone(&toast_overlay), parent_window);
+    let keys_content = create_keys_content(
+        Rc::clone(&refresh_fn),
+        Rc::clone(&toast_overlay),
+        parent_window,
+    );
     main_container.append(&keys_content);
 
     (main_container, refresh_fn)
