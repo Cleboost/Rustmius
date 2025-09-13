@@ -1,16 +1,15 @@
-use gtk4::{prelude::*, Box, Button, Dialog, DropDown, Entry, HeaderBar, Label, Orientation, StringList, StringObject};
 use crate::service::ssh_keys::load_ssh_keys;
 use dirs;
+use gtk4::{
+    prelude::*, Box, Button, Dialog, DropDown, Entry, HeaderBar, Label, Orientation, StringList,
+    StringObject,
+};
 use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-pub fn create_add_server_dialog(
-    on_save: Option<std::boxed::Box<dyn Fn() + 'static>>,
-) -> Dialog {
-    let dialog = Dialog::builder()
-        .title("Add Server")
-        .build();
+pub fn create_add_server_dialog(on_save: Option<std::boxed::Box<dyn Fn() + 'static>>) -> Dialog {
+    let dialog = Dialog::builder().title("Add Server").build();
 
     let content_box = Box::new(Orientation::Vertical, 12);
     content_box.set_margin_top(20);
@@ -50,9 +49,9 @@ pub fn create_add_server_dialog(
     let ssh_key_label = Label::new(Some("SSH Key:"));
     ssh_key_label.set_halign(gtk4::Align::Start);
     content_box.append(&ssh_key_label);
-    
+
     let ssh_key_dropdown = DropDown::new(None::<StringList>, None::<&gtk4::Expression>);
-    
+
     let ssh_keys = match load_ssh_keys() {
         Ok(keys) => keys,
         Err(_e) => {
@@ -62,28 +61,26 @@ pub fn create_add_server_dialog(
 
     let key_list = StringList::new(&[]);
     let mut key_names = vec!["None".to_string()];
-    
+
     key_list.append("None");
     for key in &ssh_keys {
         key_list.append(&key.name);
         key_names.push(key.name.clone());
     }
-    
+
     ssh_key_dropdown.set_model(Some(&key_list));
     ssh_key_dropdown.set_selected(0);
-    
+
     ssh_key_dropdown.connect_selected_notify({
         let _ssh_key_dropdown = ssh_key_dropdown.clone();
         move |_| {}
     });
-    
+
     content_box.append(&ssh_key_dropdown);
 
-        let cancel_button = Button::builder()
+    let cancel_button = Button::builder()
         .label("Cancel")
-        .css_classes(
-            vec!["destructive-action"]
-        )
+        .css_classes(vec!["destructive-action"])
         .build();
 
     let export_key_button = Button::builder()
@@ -203,12 +200,18 @@ pub fn create_add_server_dialog(
             let user = user_input.text().trim().to_string();
             let port = port_input.text().trim().to_string();
 
-            if name.is_empty() || hostname.is_empty() || user.is_empty() { return; }
+            if name.is_empty() || hostname.is_empty() || user.is_empty() {
+                return;
+            }
 
             let selected_index = ssh_key_dropdown.selected();
             let selected_key_name = if selected_index > 0 {
                 let key_index = (selected_index - 1) as usize;
-                if key_index < ssh_keys.len() { Some(ssh_keys[key_index].name.clone()) } else { None }
+                if key_index < ssh_keys.len() {
+                    Some(ssh_keys[key_index].name.clone())
+                } else {
+                    None
+                }
             } else {
                 None
             };
@@ -244,7 +247,9 @@ pub fn create_add_server_dialog(
             new_section.push(format!("Host {}", name));
             new_section.push(format!("  HostName {}", hostname));
             new_section.push(format!("  User {}", user));
-            if !port.is_empty() && port != "22" { new_section.push(format!("  Port {}", port)); }
+            if !port.is_empty() && port != "22" {
+                new_section.push(format!("  Port {}", port));
+            }
             if let Some(key_name) = selected_key_name.as_ref() {
                 new_section.push(format!("  IdentityFile ~/.ssh/{}", key_name));
             }
@@ -279,7 +284,6 @@ pub fn create_add_server_dialog(
                 eprintln!("Failed to write ~/.ssh/config: {}", e);
                 return;
             }
-
 
             if let Some(cb) = &on_save {
                 cb();
