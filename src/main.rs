@@ -60,7 +60,7 @@ fn main() {
     libadwaita::init().expect("Failed to initialize libadwaita");
 
     let app = Application::builder()
-        .application_id("com.example.ssh-config-manager")
+        .application_id("com.com.rustmius")
         .build();
 
     app.connect_activate(build_ui);
@@ -73,7 +73,7 @@ fn build_ui(app: &Application) {
 
     let window = ApplicationWindow::builder()
         .application(app)
-        .title("SSH Config Manager")
+        .title("Rustmius")
         .default_width(800)
         .default_height(600)
         .build();
@@ -82,7 +82,7 @@ fn build_ui(app: &Application) {
 
     let stack = ViewStack::new();
 
-    let (key_tab, _key_refresh_fn) = create_key_tab(Rc::clone(&toast_overlay));
+    let (key_tab, _key_refresh_fn) = create_key_tab(Rc::clone(&toast_overlay), Some(&window));
     let (server_tab, _server_refresh_fn) = create_server_tab(Some(&window));
 
     let server_page = stack.add_titled(&server_tab, Some("server"), "Serveurs");
