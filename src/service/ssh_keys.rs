@@ -290,3 +290,85 @@ fn get_key_info(key_path: &Path) -> Result<KeyInfo, Box<dyn std::error::Error>> 
         fingerprint,
     })
 }
+
+pub fn generate_ssh_key(
+    name: &str,
+    key_type: &str,
+    key_length: u32,
+    email: &str,
+    passphrase: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let ssh_dir = dirs::home_dir()
+        .ok_or("Impossible de trouver le répertoire home")?
+        .join(".ssh");
+
+    if !ssh_dir.exists() {
+        fs::create_dir_all(&ssh_dir)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&ssh_dir)?.permissions();
+            perms.set_mode(0o700);
+            fs::set_permissions(&ssh_dir, perms)?;
+        }
+    }
+
+    let private_key_path = ssh_dir.join(name);
+    let public_key_path = ssh_dir.join(format!("{}.pub", name));
+
+    if private_key_path.exists() || public_key_path.exists() {
+        return Err(format!("A key with name '{}' already exists", name).into());
+    }
+
+    let mut cmd = Command::new("ssh-keygen");
+    cmd.arg("-t").arg(key_type.to_lowercase());
+
+    if key_type == "RSA" || key_type == "ECDSA" {
+        cmd.arg("-b").arg(&key_length.to_string());
+    }
+
+    cmd.arg("-f").arg(&private_key_path);
+
+    if !email.is_empty() {
+        cmd.arg("-C").arg(email);
+    }
+
+    if !passphrase.is_empty() {
+        cmd.arg("-N").arg(passphrase);
+    } else {
+        cmd.arg("-N").arg("");
+    }
+
+    let output = cmd.output()?;
+
+    if !output.status.success() {
+        let error_msg = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Erreur lors de la génération de la clé SSH: {}", error_msg).into());
+    }
+
+    if !private_key_path.exists() {
+        return Err("La clé privée n'a pas été créée".into());
+    }
+
+    if !public_key_path.exists() {
+        return Err("La clé publique n'a pas été créée".into());
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&private_key_path)?.permissions();
+        perms.set_mode(0o600);
+        fs::set_permissions(&private_key_path, perms)?;
+
+        let mut perms = fs::metadata(&public_key_path)?.permissions();
+        perms.set_mode(0o644);
+        fs::set_permissions(&public_key_path, perms)?;
+    }
+
+    println!("Clé SSH générée avec succès:");
+    println!("  - Clé privée: {}", private_key_path.display());
+    println!("  - Clé publique: {}", public_key_path.display());
+
+    Ok(private_key_path.to_string_lossy().to_string())
+}

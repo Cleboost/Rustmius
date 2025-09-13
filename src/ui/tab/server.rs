@@ -34,20 +34,32 @@ pub fn create_server_tab(
     buttons_container.set_halign(gtk4::Align::Start);
     buttons_container.set_hexpand(true);
 
-    let new_host_button =
-        create_icon_button("New Host", "network-server-symbolic", 100, 30, || {
-            println!("Nouveau serveur demandé")
-        });
+    let refresh_fn_storage = Rc::new(RefCell::new(None::<Rc<dyn Fn()>>));
+
+    let new_host_button = {
+        let parent_window_clone = parent_window.cloned();
+        let refresh_fn_storage_btn = Rc::clone(&refresh_fn_storage);
+        create_icon_button("New Host", "network-server-symbolic", 100, 30, move || {
+            if let Some(window) = &parent_window_clone {
+                let cb_storage = Rc::clone(&refresh_fn_storage_btn);
+                let add_server_dialog = crate::ui::modal::add_server::create_add_server_dialog(
+                    Some(std::boxed::Box::new(move || {
+                        if let Some(cb) = &*cb_storage.borrow() {
+                            cb();
+                        }
+                    })),
+                );
+                add_server_dialog.set_transient_for(Some(window));
+                add_server_dialog.show();
+            }
+        })
+    };
 
     let terminal_button =
-        create_icon_button("Terminal", "utilities-terminal-symbolic", 100, 30, || {
-            println!("Terminal demandé")
-        });
+        create_icon_button("Terminal", "utilities-terminal-symbolic", 100, 30, || {});
     terminal_button.set_sensitive(false);
 
-    let serial_button = create_icon_button("Serial", "network-wired-symbolic", 100, 30, || {
-        println!("Connexion série demandée")
-    });
+    let serial_button = create_icon_button("Serial", "network-wired-symbolic", 100, 30, || {});
     serial_button.set_sensitive(false);
 
     buttons_container.append(&new_host_button);
@@ -86,7 +98,6 @@ pub fn create_server_tab(
 
     let servers_data = Rc::new(RefCell::new(all_servers));
     let server_cards = Rc::new(RefCell::new(Vec::new()));
-    let refresh_fn_storage = Rc::new(RefCell::new(None::<Rc<dyn Fn()>>));
 
     let create_server_cards = {
         let servers_data = Rc::clone(&servers_data);
@@ -95,18 +106,13 @@ pub fn create_server_tab(
         let parent_window_clone = parent_window.cloned();
         let refresh_fn_storage = Rc::clone(&refresh_fn_storage);
         Rc::new(move |filter: &str, _refresh_fn: Option<&Rc<dyn Fn()>>| {
-            println!("create_server_cards called with filter: '{}'", filter);
             while let Some(child) = servers_grid.first_child() {
                 servers_grid.remove(&child);
             }
             server_cards.borrow_mut().clear();
 
-            println!("Reloading SSH servers from config...");
             let updated_servers = match crate::service::load_ssh_servers() {
-                Ok(servers) => {
-                    println!("Loaded {} servers from config", servers.len());
-                    servers
-                }
+                Ok(servers) => servers,
                 Err(e) => {
                     eprintln!("Erreur lors du rechargement des serveurs: {}", e);
                     servers_data.borrow().clone()
@@ -179,9 +185,7 @@ pub fn create_server_tab(
         let search_entry = search_entry.clone();
         let create_server_cards = Rc::clone(&create_server_cards);
         move || {
-            println!("Refresh function called!");
             let text = search_entry.text();
-            println!("Current search text: '{}'", text);
             create_server_cards(&text, None);
         }
     });

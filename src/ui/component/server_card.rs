@@ -1,7 +1,9 @@
 use crate::service::SshServer;
-use crate::ui::modal::edit_server::create_edit_server_dialog;
+use crate::ui::modal::{
+    delete_server::create_delete_server_dialog, edit_server::create_edit_server_dialog,
+};
 use gtk4::prelude::*;
-use gtk4::{Box, Button, Frame, Image, Label, Orientation};
+use gtk4::{Box as GtkBox, Button, Frame, Image, Label, Orientation};
 use libadwaita::prelude::AdwDialogExt;
 use std::process::Command;
 use std::rc::Rc;
@@ -23,20 +25,20 @@ pub fn create_server_card(
     card.set_margin_bottom(8);
     card.set_width_request(300);
 
-    let main_container = Box::new(Orientation::Vertical, 12);
+    let main_container = GtkBox::new(Orientation::Vertical, 12);
     main_container.set_margin_top(16);
     main_container.set_margin_bottom(16);
     main_container.set_margin_start(16);
     main_container.set_margin_end(16);
 
-    let header_container = Box::new(Orientation::Horizontal, 12);
+    let header_container = GtkBox::new(Orientation::Horizontal, 12);
     header_container.set_halign(gtk4::Align::Start);
 
     let server_icon = Image::from_icon_name("network-server-symbolic");
     server_icon.set_icon_size(gtk4::IconSize::Large);
     header_container.append(&server_icon);
 
-    let title_container = Box::new(Orientation::Vertical, 4);
+    let title_container = GtkBox::new(Orientation::Vertical, 4);
     title_container.set_halign(gtk4::Align::Start);
     title_container.set_hexpand(true);
     title_container.set_margin_end(16);
@@ -56,7 +58,7 @@ pub fn create_server_card(
 
     let is_special_host = server.name == "aur.archlinux.org";
 
-    let actions_container = Box::new(Orientation::Horizontal, 8);
+    let actions_container = GtkBox::new(Orientation::Horizontal, 8);
     actions_container.set_halign(gtk4::Align::End);
     actions_container.set_valign(gtk4::Align::Center);
 
@@ -85,11 +87,24 @@ pub fn create_server_card(
     }
     actions_container.append(&edit_button);
 
+    let delete_button = Button::builder()
+        .icon_name("user-trash-symbolic")
+        .css_classes(vec!["circular", "flat", "destructive-action"])
+        .build();
+
+    if is_special_host {
+        delete_button.set_sensitive(false);
+        delete_button.set_tooltip_text(Some("This host is special and can't be deleted"));
+    } else {
+        delete_button.set_tooltip_text(Some("Delete server"));
+    }
+    actions_container.append(&delete_button);
+
     header_container.append(&actions_container);
     main_container.append(&header_container);
 
     if let Some(port) = server.port {
-        let details_container = Box::new(Orientation::Vertical, 6);
+        let details_container = GtkBox::new(Orientation::Vertical, 6);
         details_container.set_margin_top(8);
 
         let port_label = Label::new(Some(&format!("Port: {}", port)));
@@ -121,10 +136,6 @@ pub fn create_server_card(
 
             match result {
                 Ok(_) => {
-                    println!(
-                        "Opening SSH connection to {} in {}",
-                        server_name_clone, terminal
-                    );
                     success = true;
                     break;
                 }
@@ -141,12 +152,7 @@ pub fn create_server_card(
                 .spawn();
 
             match fallback_result {
-                Ok(_) => {
-                    println!(
-                        "Opening SSH connection to {} using fallback method",
-                        server_name_clone
-                    );
-                }
+                Ok(_) => {}
                 Err(e) => {
                     eprintln!("Failed to open any terminal for SSH connection: {}", e);
                 }
@@ -158,8 +164,6 @@ pub fn create_server_card(
     let parent_window_clone = parent_window.cloned();
     let on_save_clone = on_save.clone();
     edit_button.connect_clicked(move |_| {
-        println!("Edit button clicked for server: {}", server_clone.name);
-        println!("on_save_clone is: {:?}", on_save_clone.is_some());
         let edit_dialog = create_edit_server_dialog(
             &server_clone,
             on_save_clone.as_ref().map(|f| {
@@ -171,6 +175,21 @@ pub fn create_server_card(
             edit_dialog.present(Some(parent));
         } else {
             edit_dialog.show();
+        }
+    });
+
+    let server_clone_for_delete = server.clone();
+    let parent_window_clone_for_delete = parent_window.cloned();
+    let on_save_clone_for_delete = on_save.clone();
+    delete_button.connect_clicked(move |_| {
+        let delete_dialog = create_delete_server_dialog(
+            &server_clone_for_delete.name,
+            on_save_clone_for_delete.clone(),
+        );
+        if let Some(parent) = &parent_window_clone_for_delete {
+            delete_dialog.present(Some(parent));
+        } else {
+            delete_dialog.show();
         }
     });
 
