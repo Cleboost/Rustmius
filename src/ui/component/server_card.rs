@@ -1,4 +1,6 @@
 use crate::service::SshServer;
+use crate::service::{append_history, load_settings};
+use crate::ui::bus::emit_history_refresh;
 use crate::ui::modal::{
     delete_server::create_delete_server_dialog, edit_server::create_edit_server_dialog,
 };
@@ -8,8 +10,6 @@ use gtk4::prelude::*;
 use gtk4::{Box as GtkBox, Button, DragSource, Frame, Image, Label, Orientation};
 use libadwaita::prelude::AdwDialogExt;
 use std::process::Command;
-use crate::service::{append_history, load_settings};
-use crate::ui::bus::emit_history_refresh;
 use std::rc::Rc;
 
 pub fn create_server_card(
