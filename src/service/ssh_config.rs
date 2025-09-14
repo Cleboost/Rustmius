@@ -132,3 +132,35 @@ fn remove_server_from_config(
 
     Ok(new_lines.join("\n"))
 }
+
+pub fn export_ssh_config_to_file(
+    servers: &[SshServer],
+    file_path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut config_content = String::new();
+
+    for server in servers {
+        config_content.push_str(&format!("Host {}\n", server.name));
+
+        if let Some(ref hostname) = server.hostname {
+            config_content.push_str(&format!("    HostName {}\n", hostname));
+        }
+
+        if let Some(ref user) = server.user {
+            config_content.push_str(&format!("    User {}\n", user));
+        }
+
+        if let Some(ref identity_file) = server.identity_file {
+            config_content.push_str(&format!("    IdentityFile {}\n", identity_file));
+        }
+
+        if let Some(port) = server.port {
+            config_content.push_str(&format!("    Port {}\n", port));
+        }
+
+        config_content.push('\n');
+    }
+
+    fs::write(file_path, config_content)?;
+    Ok(())
+}
