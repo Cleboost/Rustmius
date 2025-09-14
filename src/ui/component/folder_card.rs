@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 pub struct FolderCardConfig<'a> {
     pub folder_id: &'a str,
-    pub folder_name: &'a str
+    pub folder_name: &'a str,
 }
 
 pub fn create_folder_card(
