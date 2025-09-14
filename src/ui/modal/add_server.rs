@@ -195,12 +195,26 @@ pub fn create_add_server_dialog(on_save: Option<std::boxed::Box<dyn Fn() + 'stat
         let ssh_key_dropdown = ssh_key_dropdown.clone();
         let ssh_keys = ssh_keys.clone();
         move |_| {
-            let name = name_input.text().trim().to_string();
+            // Allow users to enter a friendly/display name after the real host token.
+            // Example: "Domoticz [PAPA]" -> host_token = "Domoticz", display_name = "[PAPA]"
+            let name_raw = name_input.text().trim().to_string();
+            let mut name_parts = name_raw.split_whitespace();
+            let host_token = name_parts.next().unwrap_or("").to_string();
+            let display_name = {
+                let rest: Vec<&str> = name_parts.collect();
+                if rest.is_empty() {
+                    None
+                } else {
+                    Some(rest.join(" "))
+                }
+            };
+
             let hostname = ip_input.text().trim().to_string();
             let user = user_input.text().trim().to_string();
             let port = port_input.text().trim().to_string();
 
-            if name.is_empty() || hostname.is_empty() || user.is_empty() {
+            // Validate using host_token (the actual SSH Host token) rather than the full display string
+            if host_token.is_empty() || hostname.is_empty() || user.is_empty() {
                 return;
             }
 
@@ -244,7 +258,14 @@ pub fn create_add_server_dialog(on_save: Option<std::boxed::Box<dyn Fn() + 'stat
             let mut lines: Vec<String> = existing.lines().map(|s| s.to_string()).collect();
 
             let mut new_section: Vec<String> = Vec::new();
-            new_section.push(format!("Host {}", name));
+            // Use the actual SSH token as Host (no spaces)
+            new_section.push(format!("Host {}", host_token));
+            // Persist the user-friendly display name as a directive for the app to use
+            if let Some(ref disp) = display_name {
+                if !disp.is_empty() {
+                    new_section.push(format!("  DisplayName {}", disp));
+                }
+            }
             new_section.push(format!("  HostName {}", hostname));
             new_section.push(format!("  User {}", user));
             if !port.is_empty() && port != "22" {
@@ -260,7 +281,9 @@ pub fn create_add_server_dialog(on_save: Option<std::boxed::Box<dyn Fn() + 'stat
                 let trimmed = line.trim();
                 if trimmed.starts_with("Host ") {
                     let host_val = trimmed.strip_prefix("Host ").unwrap_or("");
-                    if section_start.is_none() && host_val == name {
+                    // Compare only the first token of the existing Host line (the real ssh host token)
+                    let existing_token = host_val.split_whitespace().next().unwrap_or("");
+                    if section_start.is_none() && existing_token == host_token {
                         section_start = Some(i);
                     } else if section_start.is_some() {
                         section_end = i;

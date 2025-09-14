@@ -221,26 +221,63 @@ fn save_server_config(
     let content = fs::read_to_string(&ssh_config_path)?;
     let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
 
-    let mut in_target_section = false;
-    let mut section_start = 0;
-    let mut section_end = 0;
+    // Find the section by comparing the first token of the Host line (the real SSH token).
+    let mut section_start: Option<usize> = None;
+    let mut section_end: usize = lines.len();
+    let mut existing_display: Option<String> = None;
 
     for (i, line) in lines.iter().enumerate() {
-        if line.trim().starts_with("Host ") && line.trim().ends_with(&old_name) {
-            in_target_section = true;
-            section_start = i;
-        } else if in_target_section && line.trim().starts_with("Host ") {
-            section_end = i;
-            break;
+        let trimmed = line.trim();
+        if trimmed.starts_with("Host ") {
+            let host_val = trimmed.strip_prefix("Host ").unwrap_or("");
+            let existing_token = host_val.split_whitespace().next().unwrap_or("");
+            if existing_token == old_name {
+                section_start = Some(i);
+
+                // scan section for an existing DisplayName and determine its end
+                let mut j = i + 1;
+                while j < lines.len() {
+                    let t = lines[j].trim();
+                    if t.starts_with("Host ") {
+                        section_end = j;
+                        break;
+                    }
+                    let t_lower = t.to_lowercase();
+                    if t_lower.starts_with("displayname ") {
+                        // preserve existing DisplayName value
+                        existing_display = Some(t["DisplayName ".len()..].trim().to_string());
+                    }
+                    j += 1;
+                }
+                // if we didn't find another Host, section_end remains lines.len()
+                break;
+            }
         }
     }
 
-    if in_target_section {
-        if section_end == 0 {
-            section_end = lines.len();
-        }
+    if let Some(start) = section_start {
+        // Parse new_name to extract token and optional display name entered by user
+        let name_raw = new_name.trim();
+        let mut parts = name_raw.split_whitespace();
+        let new_token = parts.next().unwrap_or("").to_string();
+        let rest: Vec<&str> = parts.collect();
+        let new_display = if rest.is_empty() {
+            None
+        } else {
+            Some(rest.join(" "))
+        };
 
-        let mut new_section = vec![format!("Host {}", new_name)];
+        // If user didn't provide a new display name, keep the existing one (if any)
+        let final_display = new_display.or(existing_display);
+
+        let mut new_section: Vec<String> = Vec::new();
+        new_section.push(format!("Host {}", new_token));
+
+        if let Some(ref d) = final_display {
+            if !d.trim().is_empty() {
+                new_section.push(format!("  DisplayName {}", d));
+            }
+        }
 
         if !new_hostname.is_empty() {
             new_section.push(format!("  HostName {}", new_hostname));
@@ -258,7 +295,8 @@ fn save_server_config(
             new_section.push(format!("  IdentityFile ~/.ssh/{}", new_ssh_key));
         }
 
-        lines.splice(section_start..section_end, new_section);
+        // Replace the old section with the new one
+        lines.splice(start..section_end, new_section);
 
         let new_content = lines.join("\n");
         fs::write(&ssh_config_path, new_content)?;

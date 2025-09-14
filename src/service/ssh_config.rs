@@ -3,7 +3,12 @@ use std::path::Path;
 
 #[derive(Debug, Clone)]
 pub struct SshServer {
+    // `name` is the real SSH Host token (no spaces, used by ssh)
     pub name: String,
+    // `display_name` is optional and used by the UI to show a friendly name
+    // This allows storing a host like: Host Domoticz [PAPA]
+    // where `name` will be `Domoticz` and `display_name` will be `[PAPA]`
+    pub display_name: Option<String>,
     pub hostname: Option<String>,
     pub user: Option<String>,
     pub identity_file: Option<String>,
@@ -38,9 +43,20 @@ fn parse_ssh_config(content: &str) -> Result<Vec<SshServer>, Box<dyn std::error:
                 servers.push(server);
             }
 
-            let host_name = line[5..].trim().to_string();
+            // Support a Host line with a friendly display name after the actual host token.
+            // Example: "Host Domoticz [PAPA]" -> name = "Domoticz", display_name = Some("[PAPA]")
+            let host_args = line[5..].trim();
+            let tokens: Vec<&str> = host_args.split_whitespace().collect();
+            let host_name = tokens.get(0).unwrap_or(&"").to_string();
+            let display_name = if tokens.len() > 1 {
+                Some(tokens[1..].join(" "))
+            } else {
+                None
+            };
+
             current_server = Some(SshServer {
                 name: host_name,
+                display_name,
                 hostname: None,
                 user: None,
                 identity_file: None,
@@ -50,7 +66,8 @@ fn parse_ssh_config(content: &str) -> Result<Vec<SshServer>, Box<dyn std::error:
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 2 {
                 let directive = parts[0].to_lowercase();
-                let value = parts[1].to_string();
+                // Use the full remainder of the line as the value (allows spaces in values)
+                let value = parts[1..].join(" ");
 
                 match directive.as_str() {
                     "hostname" => server.hostname = Some(value),
@@ -61,6 +78,8 @@ fn parse_ssh_config(content: &str) -> Result<Vec<SshServer>, Box<dyn std::error:
                             server.port = Some(port);
                         }
                     }
+                    // New directive to preserve display name when reading an existing config
+                    "displayname" => server.display_name = Some(value),
                     _ => {}
                 }
             }
@@ -141,6 +160,11 @@ pub fn export_ssh_config_to_file(
 
     for server in servers {
         config_content.push_str(&format!("Host {}\n", server.name));
+
+        // If a display name is present, export it as a directive that the app understands
+        if let Some(ref display) = server.display_name {
+            config_content.push_str(&format!("    DisplayName {}\n", display));
+        }
 
         if let Some(ref hostname) = server.hostname {
             config_content.push_str(&format!("    HostName {}\n", hostname));
