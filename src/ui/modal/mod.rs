@@ -7,3 +7,4 @@ pub mod export_key;
 pub mod generate_key;
 pub mod info_key;
 pub mod preference;
+pub mod rename;
