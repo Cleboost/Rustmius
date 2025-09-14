@@ -20,6 +20,13 @@ pub enum LayoutItem {
     },
 }
 
+fn is_folder_by_id_or_name(item: &LayoutItem, key: &str) -> bool {
+    matches!(
+        item,
+        LayoutItem::Folder { id, name, .. } if id == key || name == key
+    )
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Layout {
     pub items: Vec<LayoutItem>,
@@ -539,7 +546,7 @@ pub fn drop_folder_onto_folder(
     let source_item = find_and_remove_folder(layout, source_folder)
         .ok_or_else(|| format!("Source folder '{}' not found", source_folder))?;
 
-    let target_index = find_item_index(layout, |item| matches!(item, LayoutItem::Folder { id, name, .. } if id == target_folder || name == target_folder))
+    let target_index = find_item_index(layout, |item| is_folder_by_id_or_name(item, target_folder))
         .ok_or_else(|| format!("Target folder '{}' not found", target_folder))?;
 
     if let LayoutItem::Folder { name: _, items, .. } = &mut layout.items[target_index] {
@@ -551,10 +558,7 @@ pub fn drop_folder_onto_folder(
 }
 
 fn find_and_remove_folder(layout: &mut Layout, folder_id_or_name: &str) -> Option<LayoutItem> {
-    let index = find_item_index(
-        layout,
-        |item| matches!(item, LayoutItem::Folder { id, name, .. } if id == folder_id_or_name || name == folder_id_or_name),
-    )?;
+    let index = find_item_index(layout, |item| is_folder_by_id_or_name(item, folder_id_or_name))?;
     Some(layout.items.remove(index))
 }
 
