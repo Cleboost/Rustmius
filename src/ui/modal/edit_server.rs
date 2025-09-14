@@ -1,4 +1,5 @@
-use crate::service::{SshServer, load_ssh_keys};
+use crate::service::ssh_config::generate_valid_hostname;
+use crate::service::{SshServer, load_ssh_keys, load_ssh_servers};
 use gtk4::{Box as GtkBox, Button, DropDown, Orientation, StringList};
 use libadwaita::{ComboRow, EntryRow};
 use libadwaita::{Dialog, prelude::*};
@@ -25,9 +26,38 @@ pub fn create_edit_server_dialog(
     content_box.set_margin_start(24);
     content_box.set_margin_end(24);
 
+    let display_name = {
+        if let Ok(existing_servers) = crate::service::load_ssh_servers() {
+            let layout = crate::service::load_layout(&existing_servers);
+            fn find_display(
+                items: &[crate::service::layout::LayoutItem],
+                token: &str,
+            ) -> Option<String> {
+                for item in items {
+                    match item {
+                        crate::service::layout::LayoutItem::Server { name, display_name } => {
+                            if name == token {
+                                return display_name.clone();
+                            }
+                        }
+                        crate::service::layout::LayoutItem::Folder { items, .. } => {
+                            if let Some(d) = find_display(items, token) {
+                                return Some(d);
+                            }
+                        }
+                    }
+                }
+                None
+            }
+            find_display(&layout.items, &server.name).unwrap_or_else(|| server.name.clone())
+        } else {
+            server.name.clone()
+        }
+    };
+
     let name_row = EntryRow::builder()
         .title("Server Name")
-        .text(&server.name)
+        .text(&display_name)
         .build();
     content_box.append(&name_row);
 
@@ -202,13 +232,21 @@ pub fn create_edit_server_dialog(
 
 fn save_server_config(
     old_name: &str,
-    new_name: &str,
+    new_display_name: &str,
     new_hostname: &str,
     new_user: &str,
     new_port: &str,
     new_ssh_key: &str,
 ) -> Result<(), std::boxed::Box<dyn std::error::Error>> {
     use std::fs;
+
+    let existing_servers = match load_ssh_servers() {
+        Ok(servers) => servers,
+        Err(_) => vec![],
+    };
+
+    let (new_ssh_host_name, final_display_name) =
+        generate_valid_hostname(new_display_name, &existing_servers);
 
     let ssh_config_path = dirs::home_dir()
         .ok_or("Impossible de trouver le répertoire home")?
@@ -221,7 +259,6 @@ fn save_server_config(
     let content = fs::read_to_string(&ssh_config_path)?;
     let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
 
-    // Find the section by comparing the first token of the Host line (the real SSH token).
     let mut section_start: Option<usize> = None;
     let mut section_end: usize = lines.len();
     let mut existing_display: Option<String> = None;
@@ -234,7 +271,6 @@ fn save_server_config(
             if existing_token == old_name {
                 section_start = Some(i);
 
-                // scan section for an existing DisplayName and determine its end
                 let mut j = i + 1;
                 while j < lines.len() {
                     let t = lines[j].trim();
@@ -244,19 +280,16 @@ fn save_server_config(
                     }
                     let t_lower = t.to_lowercase();
                     if t_lower.starts_with("displayname ") {
-                        // preserve existing DisplayName value
                         existing_display = Some(t["DisplayName ".len()..].trim().to_string());
                     }
                     j += 1;
                 }
-                // if we didn't find another Host, section_end remains lines.len()
                 break;
             }
         }
     }
 
     if let Some(start) = section_start {
-        // Parse new_name to extract token and optional display name entered by user
         let name_raw = new_name.trim();
         let mut parts = name_raw.split_whitespace();
         let new_token = parts.next().unwrap_or("").to_string();
@@ -267,17 +300,7 @@ fn save_server_config(
             Some(rest.join(" "))
         };
 
-        // If user didn't provide a new display name, keep the existing one (if any)
-        let final_display = new_display.or(existing_display);
-
-        let mut new_section: Vec<String> = Vec::new();
-        new_section.push(format!("Host {}", new_token));
-
-        if let Some(ref d) = final_display {
-            if !d.trim().is_empty() {
-                new_section.push(format!("  DisplayName {}", d));
-            }
-        }
+        let mut new_section = vec![format!("Host {}", new_ssh_host_name)];
 
         if !new_hostname.is_empty() {
             new_section.push(format!("  HostName {}", new_hostname));
@@ -295,11 +318,37 @@ fn save_server_config(
             new_section.push(format!("  IdentityFile ~/.ssh/{}", new_ssh_key));
         }
 
-        // Replace the old section with the new one
         lines.splice(start..section_end, new_section);
 
         let new_content = lines.join("\n");
         fs::write(&ssh_config_path, new_content)?;
+
+        match crate::service::load_ssh_servers() {
+            Ok(servers2) => {
+                let mut layout = crate::service::load_layout(&servers2);
+
+                crate::service::remove_server_from_anywhere(&mut layout, old_name);
+
+                crate::service::remove_server_from_anywhere(&mut layout, &new_ssh_host_name);
+
+                layout
+                    .items
+                    .push(crate::service::layout::LayoutItem::Server {
+                        name: new_ssh_host_name.clone(),
+                        display_name: Some(final_display_name.clone()),
+                    });
+
+                println!(
+                    "Serveur '{}' remplacé par '{}' avec le nom d'affichage '{}'",
+                    old_name, new_ssh_host_name, final_display_name
+                );
+
+                let _ = crate::service::save_layout(&layout);
+            }
+            Err(e) => {
+                eprintln!("Failed to update layout: {}", e);
+            }
+        }
 
         println!("Fichier SSH config mis à jour avec succès");
     } else {
