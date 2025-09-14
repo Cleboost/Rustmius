@@ -6,3 +6,4 @@ pub mod edit_server;
 pub mod export_key;
 pub mod generate_key;
 pub mod info_key;
+pub mod preference;
