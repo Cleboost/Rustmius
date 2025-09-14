@@ -15,7 +15,10 @@ fn find_server_display_name_in_layout(layout: &Layout, server_name: &str) -> Opt
                         return display_name.clone();
                     }
                 }
-                LayoutItem::Folder { items: folder_items, .. } => {
+                LayoutItem::Folder {
+                    items: folder_items,
+                    ..
+                } => {
                     if let Some(display_name) = search_in_items(folder_items, target_name) {
                         return Some(display_name);
                     }
@@ -24,7 +27,7 @@ fn find_server_display_name_in_layout(layout: &Layout, server_name: &str) -> Opt
         }
         None
     }
-    
+
     search_in_items(&layout.items, server_name)
 }
 
@@ -430,9 +433,9 @@ pub fn move_into_folder(
     if source == folder_id_or_name {
         return Ok(());
     }
-    
+
     let display_name = find_server_display_name_in_layout(layout, source);
-    
+
     remove_server_from_anywhere(layout, source);
     if let Some(items) = find_folder_mut(layout, folder_id_or_name) {
         if !items
@@ -504,21 +507,21 @@ pub fn drop_onto_server_into(
         // Récupérer les display_name des deux serveurs avant de les supprimer
         let source_display_name = find_server_display_name_in_layout(layout, source);
         let target_display_name = find_server_display_name_in_layout(layout, target_server);
-        
+
         // Supprimer d'abord le serveur source
         remove_server_from_anywhere(layout, source);
-        
+
         // Trouver et supprimer le serveur cible après la suppression du source
         let target_index = find_item_index(
             layout,
             |item| matches!(item, LayoutItem::Server { name, .. } if name == target_server),
         )
         .ok_or_else(|| format!("Target server '{}' not found", target_server))?;
-        
+
         layout.items.remove(target_index);
 
         let folder_name = unique_folder_name(layout, &format!("Group: {}", target_server));
-        
+
         let mut items = vec![LayoutItem::Server {
             name: target_server.to_string(),
             display_name: target_display_name,
