@@ -48,7 +48,13 @@ pub fn create_server_card(
     title_container.set_hexpand(true);
     title_container.set_margin_end(16);
 
-    let server_name = Label::new(Some(&server.name));
+    // Show the internal host token and, if present, the user-friendly DisplayName
+    let display_label_text = if let Some(ref d) = server.display_name {
+        format!("{} {}", server.name, d)
+    } else {
+        server.name.clone()
+    };
+    let server_name = Label::new(Some(&display_label_text));
     server_name.add_css_class("title-3");
     server_name.set_halign(gtk4::Align::Start);
     title_container.append(&server_name);
