@@ -1,6 +1,6 @@
+use std::collections::{HashMap, hash_map};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
-use std::collections::{HashMap, hash_map};
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
@@ -40,7 +40,10 @@ impl NotificationManager {
     }
 
     pub fn get_settings(&self) -> NotificationSettings {
-        self.settings.lock().map(|settings| settings.clone()).unwrap_or_default()
+        self.settings
+            .lock()
+            .map(|settings| settings.clone())
+            .unwrap_or_default()
     }
 
     pub fn notify_connection_started(&self, server_name: &str) {
@@ -111,23 +114,25 @@ impl NotificationManager {
         }
 
         let message = if let Some(duration) = duration {
-            format!("Disconnected from {} (session: {:.1}s)", server_name, duration.as_secs_f64())
+            format!(
+                "Disconnected from {} (session: {:.1}s)",
+                server_name,
+                duration.as_secs_f64()
+            )
         } else {
             format!("Disconnected from {}", server_name)
         };
 
-        self.send_notification(
-            "SSH Disconnection",
-            &message,
-            "network-offline",
-        );
+        self.send_notification("SSH Disconnection", &message, "network-offline");
     }
 
     fn send_notification(&self, title: &str, body: &str, icon: &str) {
         let _ = Command::new("notify-send")
             .args(&[
-                "--icon", icon,
-                "--app-name", "SSH Config Manager",
+                "--icon",
+                icon,
+                "--app-name",
+                "SSH Config Manager",
                 title,
                 body,
             ])
