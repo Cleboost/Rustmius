@@ -1,5 +1,6 @@
-use crate::service::ssh_config::{
-    export_ssh_config_to_file, import_ssh_config_from_file, load_ssh_servers,
+use crate::service::{
+    load_settings, save_settings,
+    ssh_config::{export_ssh_config_to_file, import_ssh_config_from_file, load_ssh_servers},
 };
 use libadwaita::{
     ActionRow, ComboRow, PreferencesDialog, PreferencesGroup, PreferencesPage, SpinRow, SwitchRow,
