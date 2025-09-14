@@ -1,5 +1,4 @@
 use crate::service::ssh_config::{generate_valid_hostname, load_ssh_servers};
-use crate::service::ssh_config::{generate_valid_hostname, load_ssh_servers};
 use crate::service::ssh_keys::load_ssh_keys;
 use dirs;
 use gtk4::{

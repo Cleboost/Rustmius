@@ -6,6 +6,28 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
+fn find_server_display_name_in_layout(layout: &Layout, server_name: &str) -> Option<String> {
+    fn search_in_items(items: &[LayoutItem], target_name: &str) -> Option<String> {
+        for item in items {
+            match item {
+                LayoutItem::Server { name, display_name } => {
+                    if name == target_name {
+                        return display_name.clone();
+                    }
+                }
+                LayoutItem::Folder { items: folder_items, .. } => {
+                    if let Some(display_name) = search_in_items(folder_items, target_name) {
+                        return Some(display_name);
+                    }
+                }
+            }
+        }
+        None
+    }
+    
+    search_in_items(&layout.items, server_name)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum LayoutItem {
@@ -408,6 +430,9 @@ pub fn move_into_folder(
     if source == folder_id_or_name {
         return Ok(());
     }
+    
+    let display_name = find_server_display_name_in_layout(layout, source);
+    
     remove_server_from_anywhere(layout, source);
     if let Some(items) = find_folder_mut(layout, folder_id_or_name) {
         if !items
@@ -416,7 +441,7 @@ pub fn move_into_folder(
         {
             items.push(LayoutItem::Server {
                 name: source.to_string(),
-                display_name: None,
+                display_name,
             });
         }
         Ok(())
@@ -476,19 +501,27 @@ pub fn drop_onto_server_into(
     if let Some(folder_name) = target_folder_name {
         move_into_folder(layout, source, &folder_name)
     } else {
+        // Récupérer les display_name des deux serveurs avant de les supprimer
+        let source_display_name = find_server_display_name_in_layout(layout, source);
+        let target_display_name = find_server_display_name_in_layout(layout, target_server);
+        
+        // Supprimer d'abord le serveur source
+        remove_server_from_anywhere(layout, source);
+        
+        // Trouver et supprimer le serveur cible après la suppression du source
         let target_index = find_item_index(
             layout,
             |item| matches!(item, LayoutItem::Server { name, .. } if name == target_server),
         )
         .ok_or_else(|| format!("Target server '{}' not found", target_server))?;
-
-        remove_server_from_anywhere(layout, source);
+        
         layout.items.remove(target_index);
 
         let folder_name = unique_folder_name(layout, &format!("Group: {}", target_server));
+        
         let mut items = vec![LayoutItem::Server {
             name: target_server.to_string(),
-            display_name: None,
+            display_name: target_display_name,
         }];
         if !items
             .iter()
@@ -496,7 +529,7 @@ pub fn drop_onto_server_into(
         {
             items.push(LayoutItem::Server {
                 name: source.to_string(),
-                display_name: None,
+                display_name: source_display_name,
             });
         }
         layout.items.insert(
