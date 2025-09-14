@@ -1,10 +1,10 @@
 use crate::service::ssh_config::{export_ssh_config_to_file, load_ssh_servers};
 use crate::service::{load_settings, save_settings};
-use std::rc::Rc;
 use libadwaita::{
     ActionRow, ComboRow, PreferencesDialog, PreferencesGroup, PreferencesPage, SpinRow, SwitchRow,
     prelude::*,
 };
+use std::rc::Rc;
 
 pub fn create_preference_dialog(on_settings_changed: Option<Rc<dyn Fn()>>) -> PreferencesDialog {
     let dialog = PreferencesDialog::builder()
