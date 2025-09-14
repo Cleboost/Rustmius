@@ -1,4 +1,6 @@
 use crate::service::SshServer;
+use crate::service::{append_history, load_settings};
+use crate::ui::bus::emit_history_refresh;
 use crate::ui::modal::{
     delete_server::create_delete_server_dialog, edit_server::create_edit_server_dialog,
 };
@@ -120,6 +122,16 @@ pub fn create_server_card(
 
     let server_name_clone = server.name.clone();
     connect_button.connect_clicked(move |_| {
+        // Record history once per click if enabled
+        let settings = load_settings();
+        if settings.remember_servers {
+            if let Err(e) = append_history(&server_name_clone) {
+                eprintln!("Failed to append history: {}", e);
+            } else {
+                emit_history_refresh();
+            }
+        }
+
         let terminal_commands = vec![
             ("foot", vec!["-e", "ssh", &server_name_clone]),
             ("gnome-terminal", vec!["--", "ssh", &server_name_clone]),

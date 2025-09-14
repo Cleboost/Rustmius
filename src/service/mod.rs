@@ -1,4 +1,6 @@
+pub mod history;
 pub mod layout;
+pub mod settings;
 pub mod ssh_config;
 pub mod ssh_keys;
 
@@ -8,5 +10,7 @@ pub use layout::{
     load_layout, remove_server_from_anywhere, rename_folder, save_layout, server_exists_anywhere,
 };
 
+pub use history::{append_history, load_history};
+pub use settings::{load_settings, save_settings};
 pub use ssh_config::{SshServer, delete_ssh_server, load_ssh_servers};
 pub use ssh_keys::{delete_key_pair, load_ssh_keys, read_key_content, regenerate_public_key};
