@@ -11,6 +11,8 @@ use uuid::Uuid;
 pub enum LayoutItem {
     Server {
         name: String,
+        #[serde(default)]
+        display_name: Option<String>,
     },
     Folder {
         #[serde(default)]
@@ -53,7 +55,41 @@ pub fn load_layout(existing_servers: &[SshServer]) -> Layout {
         Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
         Err(_) => Layout::default(),
     };
+
     ensure_folder_ids(&mut layout);
+
+    fn migrate_server_names(items: &mut Vec<LayoutItem>) {
+        for item in items.iter_mut() {
+            match item {
+                LayoutItem::Server { name, display_name } => {
+                    if name.contains(char::is_whitespace) {
+                        let mut parts = name.split_whitespace();
+                        let token = parts.next().unwrap_or("").to_string();
+                        let rest: Vec<&str> = parts.collect();
+                        if !rest.is_empty() {
+                            let derived = rest.join(" ");
+                            if display_name
+                                .as_ref()
+                                .map(|s| s.trim().is_empty())
+                                .unwrap_or(true)
+                            {
+                                *display_name = Some(derived);
+                            }
+                        }
+                        *name = token;
+                    }
+                }
+                LayoutItem::Folder {
+                    items: sub_items, ..
+                } => {
+                    migrate_server_names(sub_items);
+                }
+            }
+        }
+    }
+
+    migrate_server_names(&mut layout.items);
+
     sync_layout_with_servers(&mut layout, existing_servers);
     layout
 }
@@ -82,7 +118,7 @@ pub fn save_layout(layout: &Layout) -> Result<(), Box<dyn Error>> {
 
 fn collect_server_names(item: &LayoutItem) -> Vec<String> {
     match item {
-        LayoutItem::Server { name } => vec![name.clone()],
+        LayoutItem::Server { name, .. } => vec![name.clone()],
         LayoutItem::Folder { items, .. } => {
             let mut names = Vec::new();
             for sub_item in items {
@@ -103,6 +139,7 @@ pub fn sync_layout_with_servers(layout: &mut Layout, existing_servers: &[SshServ
         if !known.iter().any(|n| n == &s.name) {
             layout.items.push(LayoutItem::Server {
                 name: s.name.clone(),
+                display_name: None,
             });
         }
     }
@@ -117,7 +154,7 @@ pub fn sync_layout_with_servers(layout: &mut Layout, existing_servers: &[SshServ
 
 fn clean_layout_item(item: &LayoutItem, existing_names: &[String]) -> Option<LayoutItem> {
     match item {
-        LayoutItem::Server { name } => {
+        LayoutItem::Server { name, .. } => {
             if existing_names.contains(name) {
                 Some(item.clone())
             } else {
@@ -146,7 +183,7 @@ fn clean_layout_item(item: &LayoutItem, existing_names: &[String]) -> Option<Lay
 pub fn server_exists_anywhere(layout: &Layout, server_name: &str) -> bool {
     for item in &layout.items {
         match item {
-            LayoutItem::Server { name } => {
+            LayoutItem::Server { name, .. } => {
                 if name == server_name {
                     return true;
                 }
@@ -164,7 +201,7 @@ pub fn server_exists_anywhere(layout: &Layout, server_name: &str) -> bool {
 fn server_exists_in_folder_items(items: &[LayoutItem], server_name: &str) -> bool {
     for item in items {
         match item {
-            LayoutItem::Server { name } => {
+            LayoutItem::Server { name, .. } => {
                 if name == server_name {
                     return true;
                 }
@@ -197,7 +234,7 @@ pub fn remove_server_from_anywhere_except_folder(
         items
             .iter()
             .filter_map(|item| match item {
-                LayoutItem::Server { name } => {
+                LayoutItem::Server { name, .. } => {
                     if name == server_name {
                         *removed = true;
                         None
@@ -293,7 +330,7 @@ pub fn remove_server_from_anywhere(layout: &mut Layout, server_name: &str) -> bo
 
 fn clean_item_remove_server(item: &LayoutItem, server_name: &str) -> Option<(LayoutItem, bool)> {
     match item {
-        LayoutItem::Server { name } => {
+        LayoutItem::Server { name, .. } => {
             if name == server_name {
                 None
             } else {
@@ -375,10 +412,11 @@ pub fn move_into_folder(
     if let Some(items) = find_folder_mut(layout, folder_id_or_name) {
         if !items
             .iter()
-            .any(|item| matches!(item, LayoutItem::Server { name } if name == source))
+            .any(|item| matches!(item, LayoutItem::Server { name, .. } if name == source))
         {
             items.push(LayoutItem::Server {
                 name: source.to_string(),
+                display_name: None,
             });
         }
         Ok(())
@@ -440,7 +478,7 @@ pub fn drop_onto_server_into(
     } else {
         let target_index = find_item_index(
             layout,
-            |item| matches!(item, LayoutItem::Server { name } if name == target_server),
+            |item| matches!(item, LayoutItem::Server { name, .. } if name == target_server),
         )
         .ok_or_else(|| format!("Target server '{}' not found", target_server))?;
 
@@ -450,13 +488,15 @@ pub fn drop_onto_server_into(
         let folder_name = unique_folder_name(layout, &format!("Group: {}", target_server));
         let mut items = vec![LayoutItem::Server {
             name: target_server.to_string(),
+            display_name: None,
         }];
         if !items
             .iter()
-            .any(|item| matches!(item, LayoutItem::Server { name } if name == source))
+            .any(|item| matches!(item, LayoutItem::Server { name, .. } if name == source))
         {
             items.push(LayoutItem::Server {
                 name: source.to_string(),
+                display_name: None,
             });
         }
         layout.items.insert(
@@ -497,7 +537,7 @@ pub fn drop_onto_server_into_folder(
 
     let target_index = find_item_index_in_vec(
         parent_items,
-        |item| matches!(item, LayoutItem::Server { name } if name == target_server),
+        |item| matches!(item, LayoutItem::Server { name, display_name: _ } if name == target_server),
     )
     .ok_or_else(|| {
         format!(
@@ -520,13 +560,15 @@ pub fn drop_onto_server_into_folder(
 
     let mut subfolder_items = vec![LayoutItem::Server {
         name: target_server.to_string(),
+        display_name: None,
     }];
     if !subfolder_items
         .iter()
-        .any(|item| matches!(item, LayoutItem::Server { name } if name == source))
+        .any(|item| matches!(item, LayoutItem::Server { name, .. } if name == source))
     {
         subfolder_items.push(LayoutItem::Server {
             name: source.to_string(),
+            display_name: None,
         });
     }
 
@@ -637,7 +679,7 @@ pub fn get_servers_in_folder(layout: &Layout, folder_name: &str) -> Vec<String> 
     fn collect_all_servers_from_items(items: &[LayoutItem], servers: &mut Vec<String>) {
         for item in items {
             match item {
-                LayoutItem::Server { name } => {
+                LayoutItem::Server { name, .. } => {
                     servers.push(name.clone());
                 }
                 LayoutItem::Folder {

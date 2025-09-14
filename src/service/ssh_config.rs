@@ -1,13 +1,10 @@
+use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
 #[derive(Debug, Clone)]
 pub struct SshServer {
-    // `name` is the real SSH Host token (no spaces, used by ssh)
     pub name: String,
-    // `display_name` is optional and used by the UI to show a friendly name
-    // This allows storing a host like: Host Domoticz [PAPA]
-    // where `name` will be `Domoticz` and `display_name` will be `[PAPA]`
     pub display_name: Option<String>,
     pub hostname: Option<String>,
     pub user: Option<String>,
@@ -24,7 +21,27 @@ pub fn load_ssh_servers() -> Result<Vec<SshServer>, Box<dyn std::error::Error>> 
     }
 
     let content = fs::read_to_string(&config_path)?;
-    parse_ssh_config(&content)
+    let cleaned_content = clean_ssh_config(&content);
+
+    if cleaned_content != content {
+        fs::write(&config_path, &cleaned_content)?;
+    }
+
+    parse_ssh_config(&cleaned_content)
+}
+
+fn clean_ssh_config(content: &str) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut cleaned_lines = Vec::new();
+
+    for line in lines {
+        let trimmed = line.trim();
+        if !trimmed.to_lowercase().starts_with("displayname") {
+            cleaned_lines.push(line);
+        }
+    }
+
+    cleaned_lines.join("\n")
 }
 
 fn parse_ssh_config(content: &str) -> Result<Vec<SshServer>, Box<dyn std::error::Error>> {
@@ -43,8 +60,6 @@ fn parse_ssh_config(content: &str) -> Result<Vec<SshServer>, Box<dyn std::error:
                 servers.push(server);
             }
 
-            // Support a Host line with a friendly display name after the actual host token.
-            // Example: "Host Domoticz [PAPA]" -> name = "Domoticz", display_name = Some("[PAPA]")
             let host_args = line[5..].trim();
             let tokens: Vec<&str> = host_args.split_whitespace().collect();
             let host_name = tokens.get(0).unwrap_or(&"").to_string();
@@ -66,7 +81,6 @@ fn parse_ssh_config(content: &str) -> Result<Vec<SshServer>, Box<dyn std::error:
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 2 {
                 let directive = parts[0].to_lowercase();
-                // Use the full remainder of the line as the value (allows spaces in values)
                 let value = parts[1..].join(" ");
 
                 match directive.as_str() {
@@ -78,7 +92,6 @@ fn parse_ssh_config(content: &str) -> Result<Vec<SshServer>, Box<dyn std::error:
                             server.port = Some(port);
                         }
                     }
-                    // New directive to preserve display name when reading an existing config
                     "displayname" => server.display_name = Some(value),
                     _ => {}
                 }
@@ -161,7 +174,6 @@ pub fn export_ssh_config_to_file(
     for server in servers {
         config_content.push_str(&format!("Host {}\n", server.name));
 
-        // If a display name is present, export it as a directive that the app understands
         if let Some(ref display) = server.display_name {
             config_content.push_str(&format!("    DisplayName {}\n", display));
         }
@@ -251,4 +263,62 @@ fn is_valid_ssh_config(content: &str) -> bool {
     }
 
     has_host_directive && has_valid_directives
+}
+
+pub fn generate_valid_hostname(
+    display_name: &str,
+    existing_servers: &[SshServer],
+) -> (String, String) {
+    let clean_name = display_name
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+        .collect::<String>()
+        .to_lowercase();
+
+    if clean_name.is_empty()
+        || display_name.contains(char::is_whitespace)
+        || display_name
+            .chars()
+            .any(|c| !c.is_alphanumeric() && c != '-' && c != '_')
+    {
+        let random_name = generate_random_hostname(existing_servers);
+        (random_name, display_name.to_string())
+    } else {
+        let existing_names: HashSet<String> =
+            existing_servers.iter().map(|s| s.name.clone()).collect();
+
+        if existing_names.contains(&clean_name) {
+            let random_name = generate_random_hostname(existing_servers);
+            (random_name, display_name.to_string())
+        } else {
+            (clean_name, display_name.to_string())
+        }
+    }
+}
+
+fn generate_random_hostname(existing_servers: &[SshServer]) -> String {
+    use rand::Rng;
+    use std::collections::HashSet;
+
+    let existing_names: HashSet<String> = existing_servers.iter().map(|s| s.name.clone()).collect();
+
+    let mut rng = rand::thread_rng();
+    let adjectives = [
+        "fast", "quick", "smart", "cool", "nice", "good", "best", "top", "new", "old",
+    ];
+    let nouns = [
+        "host", "server", "node", "box", "machine", "system", "unit", "core", "hub", "gate",
+    ];
+
+    loop {
+        let adj = adjectives[rng.gen_range(0..adjectives.len())];
+        let noun = nouns[rng.gen_range(0..nouns.len())];
+        let num = rng.gen_range(1..1000);
+
+        let candidate = format!("{}-{}-{}", adj, noun, num);
+
+        if !existing_names.contains(&candidate) {
+            return candidate;
+        }
+    }
 }
