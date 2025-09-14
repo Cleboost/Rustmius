@@ -564,7 +564,6 @@ pub fn create_server_tab(
                                         }
                                     });
 
-
                                     let folder_card = create_folder_card(
                                         FolderCardConfig {
                                             folder_id: id,
