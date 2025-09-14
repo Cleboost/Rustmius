@@ -1,10 +1,12 @@
 use crate::service::ssh_config::{export_ssh_config_to_file, load_ssh_servers};
+use crate::service::{load_settings, save_settings};
+use std::rc::Rc;
 use libadwaita::{
     ActionRow, ComboRow, PreferencesDialog, PreferencesGroup, PreferencesPage, SpinRow, SwitchRow,
     prelude::*,
 };
 
-pub fn create_preference_dialog() -> PreferencesDialog {
+pub fn create_preference_dialog(on_settings_changed: Option<Rc<dyn Fn()>>) -> PreferencesDialog {
     let dialog = PreferencesDialog::builder()
         .title("Paramètres")
         .search_enabled(true)
@@ -24,10 +26,24 @@ pub fn create_preference_dialog() -> PreferencesDialog {
         .build();
 
     let remember_servers = SwitchRow::builder()
-        .title("Mémoriser les serveurs")
-        .subtitle("Conserver l'historique des connexions")
-        .sensitive(false)
+        .title("Historique des connexions")
+        .subtitle("Activer l'historique et l'onglet History")
         .build();
+
+    let current = load_settings();
+    remember_servers.set_active(current.remember_servers);
+
+    let on_changed_cb = on_settings_changed.clone();
+    remember_servers.connect_active_notify(move |row| {
+        let mut settings = load_settings();
+        settings.remember_servers = row.is_active();
+        if let Err(e) = save_settings(&settings) {
+            eprintln!("Failed to save settings: {}", e);
+        }
+        if let Some(cb) = &on_changed_cb {
+            cb();
+        }
+    });
 
     let notifications = SwitchRow::builder()
         .title("Notifications")

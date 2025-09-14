@@ -8,6 +8,8 @@ use gtk4::prelude::*;
 use gtk4::{Box as GtkBox, Button, DragSource, Frame, Image, Label, Orientation};
 use libadwaita::prelude::AdwDialogExt;
 use std::process::Command;
+use crate::service::{append_history, load_settings};
+use crate::ui::bus::emit_history_refresh;
 use std::rc::Rc;
 
 pub fn create_server_card(
@@ -120,6 +122,16 @@ pub fn create_server_card(
 
     let server_name_clone = server.name.clone();
     connect_button.connect_clicked(move |_| {
+        // Record history once per click if enabled
+        let settings = load_settings();
+        if settings.remember_servers {
+            if let Err(e) = append_history(&server_name_clone) {
+                eprintln!("Failed to append history: {}", e);
+            } else {
+                emit_history_refresh();
+            }
+        }
+
         let terminal_commands = vec![
             ("foot", vec!["-e", "ssh", &server_name_clone]),
             ("gnome-terminal", vec!["--", "ssh", &server_name_clone]),
