@@ -41,7 +41,7 @@
 - [ ] 🔄 **Server Groups & Tags**: Organize servers by project or environment
 - [ ] 📊 **Connection History**: Track and manage recent connections
 - [x] 🔐 **Key Generation Wizard**: Guided SSH key creation with best practices (https://github.com/Cleboost/Rustmius/pull/9)
-- [ ] 📋 **Import/Export**: Backup and restore SSH configurations
+- [ ] 📋 **Import/Export**: Backup and restore SSH configurations (https://github.com/Cleboost/Rustmius/pull/7)
 
 #### Phase 2 - Advanced Features (v0.4.0)
 - [ ] 🌐 **Remote Config Sync**: Sync configurations across multiple machines (not sure)
