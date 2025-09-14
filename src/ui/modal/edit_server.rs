@@ -261,7 +261,7 @@ fn save_server_config(
 
     let mut section_start: Option<usize> = None;
     let mut section_end: usize = lines.len();
-    let mut existing_display: Option<String> = None;
+    let mut _existing_display: Option<String> = None;
 
     for (i, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
@@ -280,7 +280,7 @@ fn save_server_config(
                     }
                     let t_lower = t.to_lowercase();
                     if t_lower.starts_with("displayname ") {
-                        existing_display = Some(t["DisplayName ".len()..].trim().to_string());
+                        _existing_display = Some(t["DisplayName ".len()..].trim().to_string());
                     }
                     j += 1;
                 }
@@ -290,11 +290,11 @@ fn save_server_config(
     }
 
     if let Some(start) = section_start {
-        let name_raw = new_name.trim();
+        let name_raw = new_display_name.trim();
         let mut parts = name_raw.split_whitespace();
-        let new_token = parts.next().unwrap_or("").to_string();
+        let _new_token = parts.next().unwrap_or("").to_string();
         let rest: Vec<&str> = parts.collect();
-        let new_display = if rest.is_empty() {
+        let _new_display = if rest.is_empty() {
             None
         } else {
             Some(rest.join(" "))
