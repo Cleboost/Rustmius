@@ -50,7 +50,7 @@ pub fn create_folder_card(
     };
 
     let info_label = Label::new(Some(&format!(
-        "{}\n({} serveurs)",
+        "{}\n({} servers)",
         cfg.folder_name, server_count
     )));
     info_label.add_css_class("title-4");
