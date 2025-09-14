@@ -495,8 +495,16 @@ pub fn drop_onto_server_into_folder(
     let parent_items: &mut Vec<LayoutItem> = find_folder_mut(layout, parent_folder)
         .ok_or_else(|| format!("Parent folder '{}' not found", parent_folder))?;
 
-    let target_index = find_item_index_in_vec(parent_items, |item| matches!(item, LayoutItem::Server { name } if name == target_server))
-        .ok_or_else(|| format!("Target server '{}' not found in folder '{}'", target_server, parent_folder))?;
+    let target_index = find_item_index_in_vec(
+        parent_items,
+        |item| matches!(item, LayoutItem::Server { name } if name == target_server),
+    )
+    .ok_or_else(|| {
+        format!(
+            "Target server '{}' not found in folder '{}'",
+            target_server, parent_folder
+        )
+    })?;
 
     if target_index >= parent_items.len() {
         return Err(format!(
