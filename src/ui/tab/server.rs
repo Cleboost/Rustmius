@@ -382,7 +382,7 @@ pub fn create_server_tab(
                 servers_grid.set_halign(gtk4::Align::Center);
                 servers_grid.set_valign(gtk4::Align::Center);
 
-                let status_page = if let Some(_) = current_folder_name {
+                let status_page = if current_folder_name.is_some() {
                     StatusPage::builder()
                         .icon_name("folder-symbolic")
                         .title("This folder is empty")
