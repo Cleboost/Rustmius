@@ -1,3 +1,4 @@
+pub mod notifications;
 pub mod ssh_config;
 pub mod ssh_keys;
 

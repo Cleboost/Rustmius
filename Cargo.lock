@@ -913,6 +913,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "lazy_static"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+
+[[package]]
 name = "libadwaita"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1326,6 +1332,7 @@ dependencies = [
  "dirs",
  "gtk4",
  "html-escape",
+ "lazy_static",
  "libadwaita",
  "reqwest",
  "serde",
