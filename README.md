@@ -40,7 +40,7 @@
 #### Phase 1 - Enhanced Management (v0.3.0)
 - [ ] 🔄 **Server Groups & Tags**: Organize servers by project or environment
 - [ ] 📊 **Connection History**: Track and manage recent connections
-- [ ] 🔐 **Key Generation Wizard**: Guided SSH key creation with best practices
+- [x] 🔐 **Key Generation Wizard**: Guided SSH key creation with best practices (https://github.com/Cleboost/Rustmius/pull/9)
 - [ ] 📋 **Import/Export**: Backup and restore SSH configurations
 
 #### Phase 2 - Advanced Features (v0.4.0)
