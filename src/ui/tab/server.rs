@@ -26,7 +26,7 @@ fn count_servers_recursive(items: &[LayoutItem]) -> usize {
 
 pub fn create_server_tab(
     parent_window: Option<&libadwaita::ApplicationWindow>,
-) -> (Box, Rc<dyn Fn() + '_>) {
+) -> (Box, Rc<dyn Fn() + 'static>) {
     let container = Box::new(Orientation::Vertical, 0);
 
     let header_container = Box::new(Orientation::Vertical, 20);
@@ -536,7 +536,7 @@ pub fn create_server_tab(
                     let mut index_in_row = 0usize;
                     for item in ordered.iter() {
                         match *item {
-                            crate::service::layout::LayoutItem::Server { name } => {
+                            LayoutItem::Server { name } => {
                                 if let Some(server) = by_name.get::<str>(&name) {
                                     let server_card = create_server_card(
                                         server,
@@ -549,7 +549,7 @@ pub fn create_server_tab(
                                     index_in_row += 1;
                                 }
                             }
-                            crate::service::layout::LayoutItem::Folder { id, name, items } => {
+                            LayoutItem::Folder { id, name, items } => {
                                 let server_count = count_servers_recursive(items);
                                 if server_count > 0 {
                                     let folder_name = name.to_string();
