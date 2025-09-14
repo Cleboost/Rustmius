@@ -1,5 +1,7 @@
 use crate::service::SshServer;
-use crate::service::notifications::{notify_connection_started, notify_connection_success, notify_connection_failed};
+use crate::service::notifications::{
+    notify_connection_failed, notify_connection_started, notify_connection_success,
+};
 use crate::ui::modal::{
     delete_server::create_delete_server_dialog, edit_server::create_edit_server_dialog,
 };
@@ -161,7 +163,10 @@ pub fn create_server_card(
                 }
                 Err(e) => {
                     eprintln!("Failed to open any terminal for SSH connection: {}", e);
-                    notify_connection_failed(&server_name_clone, &format!("Unable to open terminal: {}", e));
+                    notify_connection_failed(
+                        &server_name_clone,
+                        &format!("Unable to open terminal: {}", e),
+                    );
                 }
             }
         }

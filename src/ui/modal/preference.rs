@@ -1,5 +1,5 @@
+use crate::service::notifications::{get_notification_settings, update_notification_settings};
 use crate::service::ssh_config::{export_ssh_config_to_file, load_ssh_servers};
-use crate::service::notifications::{update_notification_settings, get_notification_settings};
 use libadwaita::{
     ActionRow, ComboRow, PreferencesDialog, PreferencesGroup, PreferencesPage, SpinRow, SwitchRow,
     prelude::*,
