@@ -1,5 +1,7 @@
-use crate::service::ssh_config::{export_ssh_config_to_file, load_ssh_servers};
-use crate::service::{load_settings, save_settings};
+use crate::service::{
+    load_settings, save_settings,
+    ssh_config::{export_ssh_config_to_file, import_ssh_config_from_file, load_ssh_servers},
+};
 use libadwaita::{
     ActionRow, ComboRow, PreferencesDialog, PreferencesGroup, PreferencesPage, SpinRow, SwitchRow,
     prelude::*,
@@ -134,7 +136,23 @@ pub fn create_preference_dialog(on_settings_changed: Option<Rc<dyn Fn()>>) -> Pr
     security_group.add(&agent_forwarding);
     ssh_page.add(&security_group);
 
-    let export_group = PreferencesGroup::builder().title("Export").build();
+    let import_export_group = PreferencesGroup::builder().title("Import/Export").build();
+
+    let import_row = ActionRow::builder()
+        .title("Importer la configuration SSH")
+        .subtitle("Remplacer la configuration actuelle par un fichier .ssh/config")
+        .build();
+
+    let import_button = gtk4::Button::builder()
+        .label("Importer")
+        .css_classes(vec!["destructive-action".to_string()])
+        .build();
+
+    import_button.connect_clicked(move |_| {
+        import_ssh_config();
+    });
+
+    import_row.add_suffix(&import_button);
 
     let export_row = ActionRow::builder()
         .title("Exporter la configuration SSH")
@@ -152,8 +170,9 @@ pub fn create_preference_dialog(on_settings_changed: Option<Rc<dyn Fn()>>) -> Pr
 
     export_row.add_suffix(&export_button);
 
-    export_group.add(&export_row);
-    ssh_page.add(&export_group);
+    import_export_group.add(&import_row);
+    import_export_group.add(&export_row);
+    ssh_page.add(&import_export_group);
 
     let advanced_page = PreferencesPage::builder()
         .title("Avancé")
@@ -295,4 +314,97 @@ fn export_ssh_config() {
     });
 
     file_dialog.show();
+}
+
+fn import_ssh_config() {
+    // Dialogue de confirmation avant l'import
+    let confirm_dialog = gtk4::MessageDialog::builder()
+        .modal(true)
+        .message_type(gtk4::MessageType::Warning)
+        .text("Confirmer l'importation")
+        .secondary_text("Cette action va remplacer complètement votre configuration SSH actuelle. Une sauvegarde sera créée automatiquement. Voulez-vous continuer ?")
+        .build();
+
+    confirm_dialog.add_button("Annuler", gtk4::ResponseType::Cancel);
+    confirm_dialog.add_button("Continuer", gtk4::ResponseType::Accept);
+
+    confirm_dialog.connect_response(move |dialog, response| {
+        if response == gtk4::ResponseType::Accept {
+            let file_dialog = gtk4::FileChooserDialog::builder()
+                .modal(true)
+                .title("Importer la configuration SSH")
+                .action(gtk4::FileChooserAction::Open)
+                .build();
+
+            file_dialog.add_button("Annuler", gtk4::ResponseType::Cancel);
+            file_dialog.add_button("Importer", gtk4::ResponseType::Accept);
+
+            let filter = gtk4::FileFilter::new();
+            filter.set_name(Some("Fichiers de configuration SSH"));
+            filter.add_pattern("config");
+            filter.add_pattern("*.config");
+            filter.add_pattern("*.ssh");
+            file_dialog.add_filter(&filter);
+
+            let all_filter = gtk4::FileFilter::new();
+            all_filter.set_name(Some("Tous les fichiers"));
+            all_filter.add_pattern("*");
+            file_dialog.add_filter(&all_filter);
+
+            file_dialog.connect_response(move |dialog, response| {
+                if response == gtk4::ResponseType::Accept {
+                    if let Some(file_path) = dialog.file() {
+                        if let Some(path_str) = file_path.path() {
+                            if let Some(path_str) = path_str.to_str() {
+                                match import_ssh_config_from_file(path_str) {
+                                    Ok(_) => {
+                                        let success_dialog = gtk4::MessageDialog::builder()
+                                            .transient_for(dialog)
+                                            .modal(true)
+                                            .message_type(gtk4::MessageType::Info)
+                                            .text("Importation réussie")
+                                            .secondary_text(&format!(
+                                                "La configuration SSH a été importée depuis:\n{}\n\nUne sauvegarde de l'ancienne configuration a été créée dans ~/.ssh/config.backup",
+                                                path_str
+                                            ))
+                                            .build();
+
+                                        success_dialog.add_button("OK", gtk4::ResponseType::Ok);
+                                        success_dialog.connect_response(|dialog, _| {
+                                            dialog.close();
+                                        });
+                                        success_dialog.show();
+                                    }
+                                    Err(e) => {
+                                        let error_dialog = gtk4::MessageDialog::builder()
+                                            .transient_for(dialog)
+                                            .modal(true)
+                                            .message_type(gtk4::MessageType::Error)
+                                            .text("Erreur d'importation")
+                                            .secondary_text(&format!(
+                                                "Impossible d'importer la configuration:\n{}",
+                                                e
+                                            ))
+                                            .build();
+
+                                        error_dialog.add_button("OK", gtk4::ResponseType::Ok);
+                                        error_dialog.connect_response(|dialog, _| {
+                                            dialog.close();
+                                        });
+                                        error_dialog.show();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                dialog.close();
+            });
+
+            file_dialog.show();
+        }
+        dialog.close();
+    });
+
+    confirm_dialog.show();
 }
