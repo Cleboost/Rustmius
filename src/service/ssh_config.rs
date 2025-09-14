@@ -164,3 +164,67 @@ pub fn export_ssh_config_to_file(
     fs::write(file_path, config_content)?;
     Ok(())
 }
+
+pub fn import_ssh_config_from_file(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let home_dir = std::env::var("HOME")?;
+    let ssh_dir = Path::new(&home_dir).join(".ssh");
+    let config_path = ssh_dir.join("config");
+
+    if !ssh_dir.exists() {
+        fs::create_dir_all(&ssh_dir)?;
+    }
+
+    let import_content = fs::read_to_string(file_path)?;
+
+    if !is_valid_ssh_config(&import_content) {
+        return Err("The selected file does not seem to be a valid SSH configuration file".into());
+    }
+
+    if config_path.exists() {
+        let backup_path = ssh_dir.join("config.backup");
+        fs::copy(&config_path, &backup_path)?;
+    }
+
+    fs::write(&config_path, import_content)?;
+
+    Ok(())
+}
+
+fn is_valid_ssh_config(content: &str) -> bool {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut has_host_directive = false;
+    let mut has_valid_directives = false;
+
+    for line in lines {
+        let line = line.trim();
+
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        if line.to_lowercase().starts_with("host ") {
+            has_host_directive = true;
+        } else if has_host_directive {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 2 {
+                let directive = parts[0].to_lowercase();
+                match directive.as_str() {
+                    "hostname"
+                    | "user"
+                    | "identityfile"
+                    | "port"
+                    | "proxycommand"
+                    | "forwardagent"
+                    | "compression"
+                    | "serveraliveinterval"
+                    | "serveralivecountmax" => {
+                        has_valid_directives = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    has_host_directive && has_valid_directives
+}
