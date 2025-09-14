@@ -558,7 +558,9 @@ pub fn drop_folder_onto_folder(
 }
 
 fn find_and_remove_folder(layout: &mut Layout, folder_id_or_name: &str) -> Option<LayoutItem> {
-    let index = find_item_index(layout, |item| is_folder_by_id_or_name(item, folder_id_or_name))?;
+    let index = find_item_index(layout, |item| {
+        is_folder_by_id_or_name(item, folder_id_or_name)
+    })?;
     Some(layout.items.remove(index))
 }
 
