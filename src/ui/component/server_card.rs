@@ -2,8 +2,10 @@ use crate::service::SshServer;
 use crate::ui::modal::{
     delete_server::create_delete_server_dialog, edit_server::create_edit_server_dialog,
 };
+use gtk4::gdk;
+use gtk4::glib::{Type, Value};
 use gtk4::prelude::*;
-use gtk4::{Box as GtkBox, Button, Frame, Image, Label, Orientation};
+use gtk4::{Box as GtkBox, Button, DragSource, Frame, Image, Label, Orientation};
 use libadwaita::prelude::AdwDialogExt;
 use std::process::Command;
 use std::rc::Rc;
@@ -12,6 +14,7 @@ pub fn create_server_card(
     server: &SshServer,
     parent_window: Option<&libadwaita::ApplicationWindow>,
     on_save: Option<std::rc::Rc<dyn Fn() + 'static>>,
+    current_folder: Option<String>,
 ) -> Frame {
     let card = Frame::new(None);
     card.add_css_class("server-card");
@@ -198,6 +201,79 @@ pub fn create_server_card(
     if is_special_host {
         card.set_tooltip_text(Some("This host is special host and can't be edit"));
     }
+
+    let drag_source = DragSource::builder()
+        .actions(gdk::DragAction::COPY.union(gdk::DragAction::MOVE))
+        .build();
+    {
+        let name = server.name.clone();
+        drag_source.connect_prepare(move |_w, _x, _y| {
+            let value = Value::from(name.clone());
+            Some(gtk4::gdk::ContentProvider::for_value(&value))
+        });
+    }
+    card.add_controller(drag_source);
+
+    let drop_target = gtk4::DropTarget::new(
+        Type::STRING,
+        gdk::DragAction::COPY.union(gdk::DragAction::MOVE),
+    );
+    {
+        let target_name = server.name.clone();
+        let on_save = on_save.clone();
+        let current_folder_context = current_folder.clone();
+        drop_target.connect_drop(move |_w, value, _x, _y| {
+            if let Ok(source_name) = value.get::<String>() {
+                if source_name == target_name {
+                    return false;
+                }
+                let servers = match crate::service::load_ssh_servers() {
+                    Ok(v) => v,
+                    Err(_) => vec![],
+                };
+                let mut layout = crate::service::load_layout(&servers);
+
+                if let Some(folder_name) = &current_folder_context {
+                    match crate::service::drop_onto_server_into_folder(
+                        &mut layout,
+                        &source_name,
+                        &target_name,
+                        folder_name,
+                    ) {
+                        Ok(_) => {
+                            let _ = crate::service::save_layout(&layout);
+                            if let Some(cb) = &on_save {
+                                cb();
+                            }
+                            return true;
+                        }
+                        Err(e) => {
+                            eprintln!("Drop onto server in folder failed: {}", e);
+                        }
+                    }
+                } else {
+                    match crate::service::drop_onto_server_into(
+                        &mut layout,
+                        &source_name,
+                        &target_name,
+                    ) {
+                        Ok(_) => {
+                            let _ = crate::service::save_layout(&layout);
+                            if let Some(cb) = &on_save {
+                                cb();
+                            }
+                            return true;
+                        }
+                        Err(e) => {
+                            eprintln!("Drop onto server failed: {}", e);
+                        }
+                    }
+                }
+            }
+            false
+        });
+    }
+    card.add_controller(drop_target);
 
     card
 }
