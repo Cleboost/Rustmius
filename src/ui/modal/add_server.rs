@@ -1,3 +1,4 @@
+use crate::service::ssh_config::{generate_valid_hostname, load_ssh_servers};
 use crate::service::ssh_keys::load_ssh_keys;
 use dirs;
 use gtk4::{
@@ -195,14 +196,22 @@ pub fn create_add_server_dialog(on_save: Option<std::boxed::Box<dyn Fn() + 'stat
         let ssh_key_dropdown = ssh_key_dropdown.clone();
         let ssh_keys = ssh_keys.clone();
         move |_| {
-            let name = name_input.text().trim().to_string();
+            let display_name = name_input.text().trim().to_string();
             let hostname = ip_input.text().trim().to_string();
             let user = user_input.text().trim().to_string();
             let port = port_input.text().trim().to_string();
 
-            if name.is_empty() || hostname.is_empty() || user.is_empty() {
+            if display_name.is_empty() || hostname.is_empty() || user.is_empty() {
                 return;
             }
+
+            let existing_servers = match load_ssh_servers() {
+                Ok(servers) => servers,
+                Err(_) => vec![],
+            };
+
+            let (ssh_host_name, final_display_name) =
+                generate_valid_hostname(&display_name, &existing_servers);
 
             let selected_index = ssh_key_dropdown.selected();
             let selected_key_name = if selected_index > 0 {
@@ -244,7 +253,7 @@ pub fn create_add_server_dialog(on_save: Option<std::boxed::Box<dyn Fn() + 'stat
             let mut lines: Vec<String> = existing.lines().map(|s| s.to_string()).collect();
 
             let mut new_section: Vec<String> = Vec::new();
-            new_section.push(format!("Host {}", name));
+            new_section.push(format!("Host {}", ssh_host_name));
             new_section.push(format!("  HostName {}", hostname));
             new_section.push(format!("  User {}", user));
             if !port.is_empty() && port != "22" {
@@ -260,7 +269,9 @@ pub fn create_add_server_dialog(on_save: Option<std::boxed::Box<dyn Fn() + 'stat
                 let trimmed = line.trim();
                 if trimmed.starts_with("Host ") {
                     let host_val = trimmed.strip_prefix("Host ").unwrap_or("");
-                    if section_start.is_none() && host_val == name {
+
+                    let first = host_val.split_whitespace().next().unwrap_or("");
+                    if section_start.is_none() && first == ssh_host_name {
                         section_start = Some(i);
                     } else if section_start.is_some() {
                         section_end = i;
@@ -283,6 +294,58 @@ pub fn create_add_server_dialog(on_save: Option<std::boxed::Box<dyn Fn() + 'stat
             if let Err(e) = fs::write(&config_path, new_content) {
                 eprintln!("Failed to write ~/.ssh/config: {}", e);
                 return;
+            }
+
+            match crate::service::load_ssh_servers() {
+                Ok(servers2) => {
+                    let mut layout = crate::service::load_layout(&servers2);
+
+                    let server_exists = layout.items.iter().any(|item| match item {
+                        crate::service::layout::LayoutItem::Server { name, .. } => {
+                            name == &ssh_host_name
+                        }
+                        _ => false,
+                    });
+
+                    if !server_exists {
+                        layout
+                            .items
+                            .push(crate::service::layout::LayoutItem::Server {
+                                name: ssh_host_name.clone(),
+                                display_name: Some(final_display_name.clone()),
+                            });
+                    } else {
+                        fn assign_display(
+                            items: &mut Vec<crate::service::layout::LayoutItem>,
+                            token: &str,
+                            val: &str,
+                        ) {
+                            for item in items.iter_mut() {
+                                match item {
+                                    crate::service::layout::LayoutItem::Server {
+                                        name,
+                                        display_name,
+                                    } => {
+                                        if name == token {
+                                            *display_name = Some(val.to_string());
+                                        }
+                                    }
+                                    crate::service::layout::LayoutItem::Folder {
+                                        items, ..
+                                    } => {
+                                        assign_display(items, token, val);
+                                    }
+                                }
+                            }
+                        }
+                        assign_display(&mut layout.items, &ssh_host_name, &final_display_name);
+                    }
+
+                    let _ = crate::service::save_layout(&layout);
+                }
+                Err(e) => {
+                    eprintln!("Failed to load ssh servers to save display name: {}", e);
+                }
             }
 
             if let Some(cb) = &on_save {
