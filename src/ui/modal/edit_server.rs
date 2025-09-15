@@ -280,7 +280,7 @@ fn save_server_config(
                     }
                     let t_lower = t.to_lowercase();
                     if t_lower.starts_with("displayname ") {
-                        _existing_display = Some(t["DisplayName ".len()..].trim().to_string());
+                        _existing_display = Some(t["displayname ".len()..].trim().to_string());
                     }
                     j += 1;
                 }
