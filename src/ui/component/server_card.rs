@@ -48,7 +48,40 @@ pub fn create_server_card(
     title_container.set_hexpand(true);
     title_container.set_margin_end(16);
 
-    let server_name = Label::new(Some(&server.name));
+    let display_title = {
+        let mut title = server.name.clone();
+        if let Ok(existing_servers) = crate::service::load_ssh_servers() {
+            let layout = crate::service::load_layout(&existing_servers);
+            fn find_display(
+                items: &[crate::service::layout::LayoutItem],
+                token: &str,
+            ) -> Option<String> {
+                for item in items {
+                    match item {
+                        crate::service::layout::LayoutItem::Server { name, display_name } => {
+                            if name == token {
+                                return display_name.clone();
+                            }
+                        }
+                        crate::service::layout::LayoutItem::Folder { items, .. } => {
+                            if let Some(d) = find_display(items, token) {
+                                return Some(d);
+                            }
+                        }
+                    }
+                }
+                None
+            }
+            if let Some(d) = find_display(&layout.items, &server.name) {
+                if !d.trim().is_empty() {
+                    title = d;
+                }
+            }
+        }
+        title
+    };
+
+    let server_name = Label::new(Some(&display_title));
     server_name.add_css_class("title-3");
     server_name.set_halign(gtk4::Align::Start);
     title_container.append(&server_name);
@@ -122,7 +155,6 @@ pub fn create_server_card(
 
     let server_name_clone = server.name.clone();
     connect_button.connect_clicked(move |_| {
-        // Record history once per click if enabled
         let settings = load_settings();
         if settings.remember_servers {
             if let Err(e) = append_history(&server_name_clone) {

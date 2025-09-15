@@ -13,6 +13,34 @@ use libadwaita::StatusPage;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+fn find_server_display_name(
+    layout: &crate::service::layout::Layout,
+    server_name: &str,
+) -> Option<String> {
+    fn search_in_items(items: &[LayoutItem], target_name: &str) -> Option<String> {
+        for item in items {
+            match item {
+                LayoutItem::Server { name, display_name } => {
+                    if name == target_name {
+                        return display_name.clone();
+                    }
+                }
+                LayoutItem::Folder {
+                    items: folder_items,
+                    ..
+                } => {
+                    if let Some(display_name) = search_in_items(folder_items, target_name) {
+                        return Some(display_name);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    search_in_items(&layout.items, server_name)
+}
+
 fn count_servers_recursive(items: &[LayoutItem]) -> usize {
     let mut count = 0;
     for item in items {
@@ -148,9 +176,14 @@ pub fn create_server_tab(
                     load_layout(&servers)
                 }; // servers borrow is released here
 
+                let display_name = find_server_display_name(&layout, &server_name);
+
                 remove_server_from_anywhere(&mut layout, &server_name);
 
-                layout.items.push(LayoutItem::Server { name: server_name });
+                layout.items.push(LayoutItem::Server {
+                    name: server_name,
+                    display_name,
+                });
 
                 if let Err(e) = save_layout(&layout) {
                     eprintln!("Failed to save layout: {}", e);
@@ -429,7 +462,10 @@ pub fn create_server_tab(
 
                     for (i, item) in ordered.iter().enumerate() {
                         match *item {
-                            LayoutItem::Server { name: server_name } => {
+                            LayoutItem::Server {
+                                name: server_name,
+                                display_name: _,
+                            } => {
                                 if let Some(server) =
                                     servers.iter().find(|s| s.name == *server_name)
                                 {
@@ -536,7 +572,10 @@ pub fn create_server_tab(
                     let mut index_in_row = 0usize;
                     for item in ordered.iter() {
                         match *item {
-                            LayoutItem::Server { name } => {
+                            LayoutItem::Server {
+                                name,
+                                display_name: _,
+                            } => {
                                 if let Some(server) = by_name.get::<str>(&name) {
                                     let server_card = create_server_card(
                                         server,
