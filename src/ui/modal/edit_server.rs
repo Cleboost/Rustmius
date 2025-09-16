@@ -343,10 +343,12 @@ fn save_server_config(
                         Some(final_display_name.clone()),
                     );
                 } else {
-                    layout.items.push(crate::service::layout::LayoutItem::Server {
-                        name: new_ssh_host_name.clone(),
-                        display_name: Some(final_display_name.clone()),
-                    });
+                    layout
+                        .items
+                        .push(crate::service::layout::LayoutItem::Server {
+                            name: new_ssh_host_name.clone(),
+                            display_name: Some(final_display_name.clone()),
+                        });
                 }
 
                 println!(
