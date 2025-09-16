@@ -245,6 +245,10 @@ fn save_server_config(
         Err(_) => vec![],
     };
 
+    let layout_before = crate::service::load_layout(&existing_servers);
+    let parent_folder_id_before =
+        crate::service::layout::find_parent_folder_id_of_server(&layout_before, old_name);
+
     let (new_ssh_host_name, final_display_name) =
         generate_valid_hostname(new_display_name, &existing_servers);
 
@@ -326,17 +330,26 @@ fn save_server_config(
         match crate::service::load_ssh_servers() {
             Ok(servers2) => {
                 let mut layout = crate::service::load_layout(&servers2);
+                let parent_folder_id = parent_folder_id_before;
 
                 crate::service::remove_server_from_anywhere(&mut layout, old_name);
-
                 crate::service::remove_server_from_anywhere(&mut layout, &new_ssh_host_name);
 
-                layout
-                    .items
-                    .push(crate::service::layout::LayoutItem::Server {
-                        name: new_ssh_host_name.clone(),
-                        display_name: Some(final_display_name.clone()),
-                    });
+                if let Some(folder_id) = parent_folder_id {
+                    let _ = crate::service::layout::insert_server_into_folder_with_display(
+                        &mut layout,
+                        &new_ssh_host_name,
+                        &folder_id,
+                        Some(final_display_name.clone()),
+                    );
+                } else {
+                    layout
+                        .items
+                        .push(crate::service::layout::LayoutItem::Server {
+                            name: new_ssh_host_name.clone(),
+                            display_name: Some(final_display_name.clone()),
+                        });
+                }
 
                 println!(
                     "Serveur '{}' remplacé par '{}' avec le nom d'affichage '{}'",
