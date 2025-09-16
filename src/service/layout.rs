@@ -757,6 +757,57 @@ pub fn get_items_in_folder(layout: &Layout, folder_name: &str) -> Vec<LayoutItem
     find_folder_and_get_items(&layout.items, folder_name).unwrap_or_default()
 }
 
+pub fn find_parent_folder_id_of_server(layout: &Layout, server_name: &str) -> Option<String> {
+    fn find_in(items: &[LayoutItem], target: &str) -> Option<String> {
+        for item in items {
+            match item {
+                LayoutItem::Folder {
+                    id,
+                    items: sub_items,
+                    ..
+                } => {
+                    if sub_items
+                        .iter()
+                        .any(|i| matches!(i, LayoutItem::Server { name, .. } if name == target))
+                    {
+                        return Some(id.clone());
+                    }
+                    if let Some(found) = find_in(sub_items, target) {
+                        return Some(found);
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    find_in(&layout.items, server_name)
+}
+
+pub fn insert_server_into_folder_with_display(
+    layout: &mut Layout,
+    server_name: &str,
+    folder_id_or_name: &str,
+    display_name: Option<String>,
+) -> Result<(), String> {
+    if let Some(items) = find_folder_mut(layout, folder_id_or_name) {
+        if !items
+            .iter()
+            .any(|i| matches!(i, LayoutItem::Server { name, .. } if name == server_name))
+        {
+            items.push(LayoutItem::Server {
+                name: server_name.to_string(),
+                display_name,
+            });
+        }
+        remove_server_from_anywhere_except_folder(layout, server_name, folder_id_or_name);
+        Ok(())
+    } else {
+        Err(format!("Folder '{}' not found", folder_id_or_name))
+    }
+}
+
 pub fn rename_folder(
     layout: &mut Layout,
     key_id_or_name: &str,
