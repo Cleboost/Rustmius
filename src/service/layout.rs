@@ -761,7 +761,11 @@ pub fn find_parent_folder_id_of_server(layout: &Layout, server_name: &str) -> Op
     fn find_in(items: &[LayoutItem], target: &str) -> Option<String> {
         for item in items {
             match item {
-                LayoutItem::Folder { id, items: sub_items, .. } => {
+                LayoutItem::Folder {
+                    id,
+                    items: sub_items,
+                    ..
+                } => {
                     if sub_items
                         .iter()
                         .any(|i| matches!(i, LayoutItem::Server { name, .. } if name == target))
