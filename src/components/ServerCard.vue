@@ -22,6 +22,9 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ref } from "vue";
+import { addServerTab } from "@/stores/tabs";
+import { useConsolesStore } from "@/stores/consoles";
+import { useRouter } from "vue-router";
 
 defineProps<{
     server: Server;
@@ -35,9 +38,17 @@ const emit = defineEmits<{
 
 const confirmOpen = ref(false);
 const serversStore = useServersStore();
+const router = useRouter();
+const consoles = useConsolesStore();
 async function onConfirmDelete(id: Server["id"]) {
     await serversStore.removeServer(id);
     confirmOpen.value = false;
+}
+
+function onConnect(id: Server["id"]) {
+    consoles.openConsole(id);
+    addServerTab('Console', id);
+    router.push(`/server/${id}/console`);
 }
 </script>
 
@@ -60,7 +71,7 @@ async function onConfirmDelete(id: Server["id"]) {
                 <Button
                     class="self-center"
                     variant="outline"
-                    @click="emit('connect', server.id)"
+                    @click="onConnect(server.id)"
                     >Connect</Button
                 >
             </Card>

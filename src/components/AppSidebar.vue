@@ -6,19 +6,10 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-const sidebarRoutes = [
-    {
-        name: "Servers",
-        icon: "ph:house-duotone",
-        path: "/home",
-    },
-    {
-        name: "SSH Keys",
-        icon: "ph:key-duotone",
-        path: "/keys",
-    },
-];
+import { sidebarRoutes } from "@/stores/tabs";
+import { useConsolesStore } from "@/stores/consoles";
+import { RouterLink } from "vue-router";
+const consoles = useConsolesStore();
 </script>
 
 <template>
@@ -52,27 +43,22 @@ const sidebarRoutes = [
                 </TooltipContent>
             </Tooltip>
         </nav>
-        <div class="">
-            <Tooltip>
-                <TooltipTrigger as-child>
-                    <RouterLink to="/settings">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            :class="
-                                '/settings' === $route.path ? 'bg-muted' : ''
-                            "
-                            class="mt-auto rounded-lg"
-                            :aria-label="'Label'"
-                        >
-                            <Icon icon="lucide:server" class="size-5" />
-                        </Button>
-                    </RouterLink>
-                </TooltipTrigger>
-                <TooltipContent side="right" :side-offset="5">
-                    {{ "settings.label" }}
-                </TooltipContent>
-            </Tooltip>
+        <div class="flex flex-col gap-1">
+            <RouterLink
+                v-for="s in consoles.list()"
+                :key="s.serverId"
+                :to="`/server/${s.serverId}/console`"
+            >
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    :class="`rounded-lg ${$route.params.id === s.serverId ? 'bg-muted' : ''}`"
+                    :aria-label="s.serverId"
+                    :title="s.serverId"
+                >
+                    <Icon icon="lucide:server" class="size-5" />
+                </Button>
+            </RouterLink>
         </div>
         <div class="">
             <Tooltip>

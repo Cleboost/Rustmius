@@ -22,13 +22,23 @@
         { "path": "$HOME/.ssh/*" }
       ]
     },
-    "shell:allow-spawn",
+    "shell:default",
     "shell:allow-execute",
+    "shell:allow-spawn",
     "shell:allow-stdin-write",
-    { "identifier": "shell:allow-execute", "allow": [
-      { "name": "ssh", "cmd": "ssh", "args": true },
-      { "name": "sshpass", "cmd": "sshpass", "args": true },
-      { "name": "ssh-copy-id", "cmd": "ssh-copy-id", "args": true }
-    ] }
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        { "name": "ssh", "cmd": "ssh", "args": true },
+        { "name": "sshpass", "cmd": "sshpass", "args": true },
+        { "name": "ssh-copy-id", "cmd": "ssh-copy-id", "args": true }
+      ]
+    },
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        { "name": "ssh", "cmd": "ssh", "args": true }
+      ]
+    }
   ]
 }

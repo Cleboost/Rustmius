@@ -18,6 +18,11 @@ const routes = [
     component: () => import("@/pages/keys.vue"),
   },
   {
+    path: "/server/:id/console",
+    name: "server-console",
+    component: () => import("@/pages/server/console.vue"),
+  },
+  {
     path: "/settings",
     name: "settings",
     component: () => import("@/pages/settings.vue"),
