@@ -39,6 +39,10 @@ const selectedKeyId = ref<string | null>(null);
 const saving = ref(false);
 const logDone = ref(false);
 const logLines = ref<string[]>([]);
+const askPasswordOpen = ref(false);
+const installing = ref(false);
+const password = ref("");
+const lastHostAlias = ref<string | null>(null);
 
 onMounted(async () => {
     await keysStore.load();
@@ -73,6 +77,7 @@ async function saveServer() {
         const ipAddr = ip.value.trim();
         const userName = username.value.trim();
         const keyIdNum = selectedKeyId.value != null ? Number(selectedKeyId.value) : null;
+        lastHostAlias.value = serverId;
 
         const sshConfigRel = ".ssh/config";
         let content = "";
@@ -93,28 +98,11 @@ async function saveServer() {
         const serversStore = useServersStore();
         await serversStore.addServer({ id: serverId, name: hostName, ip: ipAddr, keyID: keyIdNum ?? 0 } as any, "/");
 
-        const sshCmd = await Command.create('ssh', [
-            '-o', 'StrictHostKeyChecking=accept-new',
-            '-o', 'BatchMode=yes',
-            '-l', userName,
-            serverId,
-            'exit'
-        ]);
-        sshCmd.on('close', (data) => {
-            logLines.value.push(`[exit] code=${data.code}`);
-        });
-        sshCmd.on('error', (data) => {
-            logLines.value.push(`[error] ${data}`);
-        });
-        sshCmd.stdout.on('data', (line) => {
-            logLines.value.push(`[out] ${line}`);
-        });
-        sshCmd.stderr.on('data', (line) => {
-            logLines.value.push(`[err] ${line}`);
-        });
-        const status = await sshCmd.execute();
-        if (status.code !== 0) {
-            // TODO: open password modal and retry with password (not implemented yet)
+        const status = await testConnection(userName, serverId);
+        if (status !== 0) {
+            askPasswordOpen.value = true;
+        } else {
+            logDone.value = true;
         }
 
         emit("save", { name: hostName, username: userName, ip: ipAddr, keyId: keyIdNum });
@@ -123,7 +111,8 @@ async function saveServer() {
         console.error('[server] save error', e);
         logLines.value.push(`[exception] ${(e as any)?.toString?.() ?? 'error'}`);
     } finally {
-        logDone.value = true;
+        // If we opened password prompt we'll flip logDone after second test
+        if (!askPasswordOpen.value) logDone.value = true;
     }
 }
 
@@ -132,6 +121,80 @@ async function keyPathFromId(id: number): Promise<string | undefined> {
     await ks.load();
     const all = await ks.getKeys();
     return all.find(k => k.id === id)?.private;
+}
+
+async function keyPubPathFromId(id: number): Promise<string | undefined> {
+    const priv = await keyPathFromId(id);
+    if (!priv) return undefined;
+    const pub = `${priv}.pub`;
+    return pub;
+}
+
+async function testConnection(userName: string, hostAlias: string): Promise<number> {
+    const sshCmd = await Command.create('ssh', [
+        '-vv',
+        '-o', 'StrictHostKeyChecking=accept-new',
+        '-o', 'ConnectTimeout=8',
+        '-o', 'BatchMode=yes',
+        '-l', userName,
+        hostAlias,
+        'exit'
+    ]);
+    sshCmd.on('close', ({ code }) => {
+        logLines.value.push(`[exit] code=${code}`);
+    });
+    sshCmd.on('error', (err) => {
+        logLines.value.push(`[error] ${String(err)}`);
+    });
+    sshCmd.stdout.on('data', (line) => {
+        logLines.value.push(`[out] ${String(line).trimEnd()}`);
+    });
+    sshCmd.stderr.on('data', (line) => {
+        const text = String(line);
+        logLines.value.push(`[err] ${text.trimEnd()}`);
+        // quick regex signals (optional)
+        if (/password:/i.test(text)) {
+            // hints of password prompt
+        }
+    });
+    const status = await sshCmd.execute();
+    if (status.stdout) logLines.value.push(`[out] ${status.stdout.trimEnd()}`);
+    if (status.stderr) logLines.value.push(`[err] ${status.stderr.trimEnd()}`);
+    return status.code;
+}
+
+async function onInstallKey(userName: string, hostAlias: string) {
+    if (!selectedKeyId.value || !hostAlias) { askPasswordOpen.value = false; return; }
+    installing.value = true;
+    try {
+        const keyIdNum = Number(selectedKeyId.value);
+        const pub = await keyPubPathFromId(keyIdNum);
+        const priv = await keyPathFromId(keyIdNum);
+        const keyArg = pub ?? priv;
+        if (!keyArg) return;
+        const proc = await Command.create('sshpass', [
+            '-p', password.value,
+            'ssh-copy-id',
+            '-o', 'StrictHostKeyChecking=accept-new',
+            '-i', keyArg,
+            `${userName}@${hostAlias}`,
+        ]);
+        proc.stdout.on('data', (l) => logLines.value.push(`[copy] ${String(l).trimEnd()}`));
+        proc.stderr.on('data', (l) => logLines.value.push(`[copy-err] ${String(l).trimEnd()}`));
+        const r = await proc.execute();
+        if (r.stdout) logLines.value.push(`[copy-out] ${r.stdout.trimEnd()}`);
+        if (r.stderr) logLines.value.push(`[copy-err] ${r.stderr.trimEnd()}`);
+        logLines.value.push(`[copy-exit] code=${r.code}`);
+        askPasswordOpen.value = false;
+        // re-test
+        const code = await testConnection(userName, hostAlias);
+        logDone.value = true;
+    } catch (e) {
+        logLines.value.push(`[install-exception] ${(e as any)?.toString?.() ?? 'error'}`);
+    } finally {
+        installing.value = false;
+        password.value = "";
+    }
 }
 </script>
 
@@ -235,6 +298,27 @@ async function keyPathFromId(id: number): Promise<string | undefined> {
       </div>
       <DialogFooter v-if="logDone">
         <Button variant="outline" @click="saving = false">Close</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <Dialog v-model:open="askPasswordOpen">
+    <DialogContent class="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>Authentication required</DialogTitle>
+        <DialogDescription>
+          Enter the SSH password to install the selected key on the server.
+        </DialogDescription>
+      </DialogHeader>
+      <div class="grid gap-2">
+        <label class="text-sm font-medium" for="ssh-password">Password</label>
+        <Input id="ssh-password" v-model="password" type="password" placeholder="••••••" />
+      </div>
+      <DialogFooter>
+        <Button variant="outline" @click="askPasswordOpen = false">Cancel</Button>
+        <Button :disabled="installing || !password" @click="onInstallKey(username, lastHostAlias || '')">
+          {{ installing ? 'Installing…' : 'Install key' }}
+        </Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>
