@@ -33,6 +33,9 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Install Bun Packages
+        run: bun install
+
       - name: Build project
         run: bun run tauri build --no-bundle
 
