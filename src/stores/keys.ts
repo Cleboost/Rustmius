@@ -58,7 +58,6 @@ export const useKeysStore = defineStore("keys", () => {
   }
 
   function generateId(): number {
-    // Simple incremental id based on current max; stable across sessions by persistence
     const maxId = keys.value.reduce((m, k) => Math.max(m, k.id), 0);
     return maxId + 1;
   }

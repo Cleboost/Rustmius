@@ -30,7 +30,6 @@ const open = useVModel(props, "open", emits, {
 function setOpen(value: boolean) {
   open.value = value // emits('update:open', value)
 
-  // This sets the cookie to keep the sidebar state.
   document.cookie = `${SIDEBAR_COOKIE_NAME}=${open.value}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
 }
 
@@ -38,7 +37,6 @@ function setOpenMobile(value: boolean) {
   openMobile.value = value
 }
 
-// Helper to toggle the sidebar.
 function toggleSidebar() {
   return isMobile.value ? setOpenMobile(!openMobile.value) : setOpen(!open.value)
 }
@@ -50,8 +48,6 @@ useEventListener("keydown", (event: KeyboardEvent) => {
   }
 })
 
-// We add a state so that we can do data-state="expanded" or "collapsed".
-// This makes it easier to style the sidebar with Tailwind classes.
 const state = computed(() => open.value ? "expanded" : "collapsed")
 
 provideSidebarContext({

@@ -35,11 +35,9 @@ function onLegendItemClick(d: BulletLegendItemInterface, i: number) {
   const isBulletActive = !props.items[i].inactive
   const isFilterApplied = props.items.some(i => i.inactive)
   if (isFilterApplied && isBulletActive) {
-    // reset filter
     emits("update:items", props.items.map(item => ({ ...item, inactive: false })))
   }
   else {
-    // apply selection, set other item as inactive
     emits("update:items", props.items.map(item => item.name === d.name ? ({ ...d, inactive: false }) : { ...item, inactive: true }))
   }
   keepStyling()

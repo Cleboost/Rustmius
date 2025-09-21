@@ -13,7 +13,6 @@ const props = defineProps<{
   customTooltip?: Component
 }>()
 
-// Use weakmap to store reference to each datapoint for Tooltip
 const wm = new WeakMap()
 function template(d: any, i: number, elements: (HTMLElement | SVGElement)[]) {
   const valueFormatter = props.valueFormatter ?? ((tick: number) => `${tick}`)

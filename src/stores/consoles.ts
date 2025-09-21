@@ -1,72 +1,89 @@
 import { defineStore } from "pinia";
-import { reactive, toRefs } from "vue";
+import { reactive } from "vue";
 import { Command } from "@tauri-apps/plugin-shell";
 
 export type ConsoleSession = {
   serverId: string;
-  output: string;
-  connecting: boolean;
-  connected: boolean;
+  state: SessionState;
   error?: string;
-  child?: any; // plugin-shell Child
+  process?: Command;
 };
+
+export type SessionState =
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "error";
 
 export const useConsolesStore = defineStore("consoles", () => {
   const sessions = reactive<Record<string, ConsoleSession>>({});
 
   async function openConsole(serverId: string): Promise<void> {
-    if (sessions[serverId]?.child) return;
+    if (sessions[serverId]) return;
+    
     const session: ConsoleSession = {
       serverId,
-      output: "",
-      connecting: true,
-      connected: false,
+      state: "connecting",
     };
     sessions[serverId] = session;
+
     try {
-      const cmd = await Command.create("ssh", [
-        "-vv",
-        "-tt",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
+      const testCmd = Command.create("ssh", [
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", "ConnectTimeout=5",
+        "-o", "BatchMode=yes",
         serverId,
+        "echo 'SSH connection test successful'"
       ]);
-      const child = await cmd.spawn();
-      session.child = child;
-      child.stdout.on("data", (l: unknown) => {
-        session.output += String(l);
+
+      testCmd.on("close", ({ code }) => {
+        if (code === 0) {
+          session.state = "connected";
+        } else {
+          session.state = "error";
+          session.error = `SSH connection failed with code ${code}`;
+        }
       });
-      child.stderr.on("data", (l: unknown) => {
-        session.output += String(l);
+
+      testCmd.on("error", (err) => {
+        session.state = "error";
+        session.error = String(err);
       });
-      child.on("close", ({ code }: { code: number }) => {
-        session.output += `\n[exit ${code}]`;
-        session.connected = false;
-        session.connecting = false;
-      });
-      // nudge for prompt
-      await child.write("\n");
-      session.connecting = false;
-      session.connected = true;
+
+      await testCmd.spawn();
+      
     } catch (e) {
       session.error = String(e);
-      session.connecting = false;
-      session.connected = false;
+      session.state = "error";
     }
   }
 
-  async function send(serverId: string, input: string): Promise<void> {
-    const s = sessions[serverId];
-    if (!s?.child) return;
-    await s.child.write(input);
+  async function launchTerminal(serverId: string): Promise<void> {
+    const session = sessions[serverId];
+    if (!session || session.state !== "connected") {
+      throw new Error("Session not ready for terminal launch");
+    }
+    
+    try {
+      await launchNativeTerminal(serverId);
+    } catch (err) {
+      console.error(`[native-terminal-error] ${String(err)}`);
+      session.state = "error";
+      session.error = String(err);
+      throw err;
+    }
   }
 
   async function closeConsole(serverId: string): Promise<void> {
-    const s = sessions[serverId];
-    if (!s) return;
+    const session = sessions[serverId];
+    if (!session) return;
+    
     try {
-      await s.child?.kill?.();
+      if (session.process) {
+        session.process.kill();
+      }
     } catch {}
+    
     delete sessions[serverId];
   }
 
@@ -74,5 +91,48 @@ export const useConsolesStore = defineStore("consoles", () => {
     return Object.values(sessions);
   }
 
-  return { sessions, openConsole, send, closeConsole, list };
+  async function launchNativeTerminal(id: string): Promise<void> {
+    console.log(`Attempting to launch native terminal for server: ${id}`);
+    const sshArgs = ["ssh", "-tt", "-o", "StrictHostKeyChecking=accept-new", id];
+    const candidates: Array<{ bin: string; args: string[] }> = [
+      { bin: "foot", args: ["-e", ...sshArgs] },
+      { bin: "alacritty", args: ["-e", ...sshArgs] },
+      { bin: "kitty", args: ["-e", ...sshArgs] },
+      { bin: "wezterm", args: ["start", "--", ...sshArgs] },
+      { bin: "gnome-terminal", args: ["--", ...sshArgs] },
+      { bin: "xfce4-terminal", args: ["-e", sshArgs.join(" ")] },
+      { bin: "konsole", args: ["-e", ...sshArgs] },
+      { bin: "tilix", args: ["-e", ...sshArgs] },
+      { bin: "lxterminal", args: ["-e", ...sshArgs] },
+      { bin: "xterm", args: ["-e", ...sshArgs] },
+      { bin: "footclient", args: ["-e", ...sshArgs] }, // Keep as fallback
+    ];
+    
+    let lastErr: unknown;
+    for (const c of candidates) {
+      try {
+        console.log(`Trying terminal: ${c.bin} with args:`, c.args);
+        const proc = await Command.create(c.bin, c.args);
+        
+        proc.on("close", ({ code }) => {
+          console.log(`Terminal ${c.bin} closed with code: ${code}`);
+        });
+        
+        proc.on("error", (err) => {
+          console.log(`Terminal ${c.bin} error:`, err);
+        });
+        
+        await proc.spawn();
+        console.log(`✅ Successfully opened terminal: ${c.bin}`);
+        return;
+      } catch (e) {
+        lastErr = e;
+        console.log(`❌ Failed to open ${c.bin}:`, e);
+      }
+    }
+    console.error("❌ No terminal emulator available. Last error:", lastErr);
+    throw lastErr ?? new Error("No terminal emulator available");
+  }
+
+  return { sessions, openConsole, launchTerminal, launchNativeTerminal, closeConsole, list };
 });

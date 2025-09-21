@@ -18,7 +18,12 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useKeysStore } from "@/stores/keys";
-import { Server as ServerIcon, Key as KeyIcon, Network, User as UserIcon } from "lucide-vue-next";
+import {
+    Server as ServerIcon,
+    Key as KeyIcon,
+    Network,
+    User as UserIcon,
+} from "lucide-vue-next";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { BaseDirectory } from "@tauri-apps/api/path";
 import { useServersStore } from "@/stores/servers";
@@ -31,7 +36,9 @@ const name = ref("");
 const username = ref("");
 const ip = ref("");
 
-const canSave = computed(() => name.value.trim().length > 0 && username.value.trim().length > 0);
+const canSave = computed(
+    () => name.value.trim().length > 0 && username.value.trim().length > 0,
+);
 
 const keysStore = useKeysStore();
 const keys = ref<KeyPair[]>([]);
@@ -52,7 +59,12 @@ onMounted(async () => {
 const emit = defineEmits<{
     (
         e: "save",
-        payload: { name: string; username: string; ip: string; keyId: number | null },
+        payload: {
+            name: string;
+            username: string;
+            ip: string;
+            keyId: number | null;
+        },
     ): void;
     (e: "cancel"): void;
 }>();
@@ -76,27 +88,44 @@ async function saveServer() {
         const hostName = name.value.trim();
         const ipAddr = ip.value.trim();
         const userName = username.value.trim();
-        const keyIdNum = selectedKeyId.value != null ? Number(selectedKeyId.value) : null;
+        const keyIdNum =
+            selectedKeyId.value != null ? Number(selectedKeyId.value) : null;
         lastHostAlias.value = serverId;
 
         const sshConfigRel = ".ssh/config";
         let content = "";
         try {
-            content = await readTextFile(sshConfigRel, { baseDir: BaseDirectory.Home });
+            content = await readTextFile(sshConfigRel, {
+                baseDir: BaseDirectory.Home,
+            });
         } catch {}
         const newBlock = [
             `Host ${serverId}`,
             ipAddr ? `  Hostname ${ipAddr}` : undefined,
             `  User ${userName}`,
-            keyIdNum ? `  IdentityFile ${await keyPathFromId(keyIdNum)}` : undefined,
+            keyIdNum
+                ? `  IdentityFile ${await keyPathFromId(keyIdNum)}`
+                : undefined,
         ]
             .filter(Boolean)
             .join("\n");
-        const newContent = content ? `${content.trim()}\n\n${newBlock}\n` : `${newBlock}\n`;
-        await writeTextFile(sshConfigRel, newContent, { baseDir: BaseDirectory.Home });
+        const newContent = content
+            ? `${content.trim()}\n\n${newBlock}\n`
+            : `${newBlock}\n`;
+        await writeTextFile(sshConfigRel, newContent, {
+            baseDir: BaseDirectory.Home,
+        });
 
         const serversStore = useServersStore();
-        await serversStore.addServer({ id: serverId, name: hostName, ip: ipAddr, keyID: keyIdNum ?? 0 } as any, "/");
+        await serversStore.addServer(
+            {
+                id: serverId,
+                name: hostName,
+                ip: ipAddr,
+                keyID: keyIdNum ?? 0,
+            } as any,
+            "/",
+        );
 
         const status = await testConnection(userName, serverId);
         if (status !== 0) {
@@ -105,13 +134,19 @@ async function saveServer() {
             logDone.value = true;
         }
 
-        emit("save", { name: hostName, username: userName, ip: ipAddr, keyId: keyIdNum });
+        emit("save", {
+            name: hostName,
+            username: userName,
+            ip: ipAddr,
+            keyId: keyIdNum,
+        });
         open.value = false;
     } catch (e) {
-        console.error('[server] save error', e);
-        logLines.value.push(`[exception] ${(e as any)?.toString?.() ?? 'error'}`);
+        console.error("[server] save error", e);
+        logLines.value.push(
+            `[exception] ${(e as any)?.toString?.() ?? "error"}`,
+        );
     } finally {
-        // If we opened password prompt we'll flip logDone after second test
         if (!askPasswordOpen.value) logDone.value = true;
     }
 }
@@ -120,7 +155,7 @@ async function keyPathFromId(id: number): Promise<string | undefined> {
     const ks = useKeysStore();
     await ks.load();
     const all = await ks.getKeys();
-    return all.find(k => k.id === id)?.private;
+    return all.find((k) => k.id === id)?.private;
 }
 
 async function keyPubPathFromId(id: number): Promise<string | undefined> {
@@ -130,31 +165,36 @@ async function keyPubPathFromId(id: number): Promise<string | undefined> {
     return pub;
 }
 
-async function testConnection(userName: string, hostAlias: string): Promise<number> {
-    const sshCmd = await Command.create('ssh', [
-        '-vv',
-        '-o', 'StrictHostKeyChecking=accept-new',
-        '-o', 'ConnectTimeout=8',
-        '-o', 'BatchMode=yes',
-        '-l', userName,
+async function testConnection(
+    userName: string,
+    hostAlias: string,
+): Promise<number> {
+    const sshCmd = Command.create("ssh", [
+        "-vv",
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+        "-o",
+        "ConnectTimeout=8",
+        "-o",
+        "BatchMode=yes",
+        "-l",
+        userName,
         hostAlias,
-        'exit'
+        "exit",
     ]);
-    sshCmd.on('close', ({ code }) => {
+    sshCmd.on("close", ({ code }) => {
         logLines.value.push(`[exit] code=${code}`);
     });
-    sshCmd.on('error', (err) => {
+    sshCmd.on("error", (err) => {
         logLines.value.push(`[error] ${String(err)}`);
     });
-    sshCmd.stdout.on('data', (line) => {
+    sshCmd.stdout.on("data", (line) => {
         logLines.value.push(`[out] ${String(line).trimEnd()}`);
     });
-    sshCmd.stderr.on('data', (line) => {
+    sshCmd.stderr.on("data", (line) => {
         const text = String(line);
         logLines.value.push(`[err] ${text.trimEnd()}`);
-        // quick regex signals (optional)
         if (/password:/i.test(text)) {
-            // hints of password prompt
         }
     });
     const status = await sshCmd.execute();
@@ -164,7 +204,10 @@ async function testConnection(userName: string, hostAlias: string): Promise<numb
 }
 
 async function onInstallKey(userName: string, hostAlias: string) {
-    if (!selectedKeyId.value || !hostAlias) { askPasswordOpen.value = false; return; }
+    if (!selectedKeyId.value || !hostAlias) {
+        askPasswordOpen.value = false;
+        return;
+    }
     installing.value = true;
     try {
         const keyIdNum = Number(selectedKeyId.value);
@@ -172,25 +215,33 @@ async function onInstallKey(userName: string, hostAlias: string) {
         const priv = await keyPathFromId(keyIdNum);
         const keyArg = pub ?? priv;
         if (!keyArg) return;
-        const proc = await Command.create('sshpass', [
-            '-p', password.value,
-            'ssh-copy-id',
-            '-o', 'StrictHostKeyChecking=accept-new',
-            '-i', keyArg,
+        const proc = await Command.create("sshpass", [
+            "-p",
+            password.value,
+            "ssh-copy-id",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-i",
+            keyArg,
             `${userName}@${hostAlias}`,
         ]);
-        proc.stdout.on('data', (l) => logLines.value.push(`[copy] ${String(l).trimEnd()}`));
-        proc.stderr.on('data', (l) => logLines.value.push(`[copy-err] ${String(l).trimEnd()}`));
+        proc.stdout.on("data", (l) =>
+            logLines.value.push(`[copy] ${String(l).trimEnd()}`),
+        );
+        proc.stderr.on("data", (l) =>
+            logLines.value.push(`[copy-err] ${String(l).trimEnd()}`),
+        );
         const r = await proc.execute();
         if (r.stdout) logLines.value.push(`[copy-out] ${r.stdout.trimEnd()}`);
         if (r.stderr) logLines.value.push(`[copy-err] ${r.stderr.trimEnd()}`);
         logLines.value.push(`[copy-exit] code=${r.code}`);
         askPasswordOpen.value = false;
-        // re-test
         const code = await testConnection(userName, hostAlias);
         logDone.value = true;
     } catch (e) {
-        logLines.value.push(`[install-exception] ${(e as any)?.toString?.() ?? 'error'}`);
+        logLines.value.push(
+            `[install-exception] ${(e as any)?.toString?.() ?? "error"}`,
+        );
     } finally {
         installing.value = false;
         password.value = "";
@@ -211,7 +262,10 @@ async function onInstallKey(userName: string, hostAlias: string) {
 
             <div class="grid gap-4 py-2">
                 <div class="grid gap-2">
-                    <label class="text-sm font-medium flex items-center gap-2" for="server-name">
+                    <label
+                        class="text-sm font-medium flex items-center gap-2"
+                        for="server-name"
+                    >
                         <ServerIcon class="size-4 opacity-60" /> Name
                     </label>
                     <Input
@@ -221,7 +275,10 @@ async function onInstallKey(userName: string, hostAlias: string) {
                     />
                 </div>
                 <div class="grid gap-2">
-                    <label class="text-sm font-medium flex items-center gap-2" for="server-user">
+                    <label
+                        class="text-sm font-medium flex items-center gap-2"
+                        for="server-user"
+                    >
                         <UserIcon class="size-4 opacity-60" /> Username
                     </label>
                     <Input
@@ -231,7 +288,10 @@ async function onInstallKey(userName: string, hostAlias: string) {
                     />
                 </div>
                 <div class="grid gap-2">
-                    <label class="text-sm font-medium flex items-center gap-2" for="server-ip">
+                    <label
+                        class="text-sm font-medium flex items-center gap-2"
+                        for="server-ip"
+                    >
                         <Network class="size-4 opacity-60" /> IP
                     </label>
                     <Input
@@ -241,7 +301,10 @@ async function onInstallKey(userName: string, hostAlias: string) {
                     />
                 </div>
                 <div class="grid gap-2">
-                    <label class="text-sm font-medium flex items-center gap-2" for="server-key">
+                    <label
+                        class="text-sm font-medium flex items-center gap-2"
+                        for="server-key"
+                    >
                         <KeyIcon class="size-4 opacity-60" /> SSH key
                     </label>
                     <Select v-model="selectedKeyId">
@@ -276,50 +339,87 @@ async function onInstallKey(userName: string, hostAlias: string) {
         </DialogContent>
     </Dialog>
 
-  <Dialog v-model:open="saving">
-    <DialogContent class="sm:max-w-xl">
-      <DialogHeader>
-        <DialogTitle>Testing SSH connection…</DialogTitle>
-        <DialogDescription>
-          We’re accepting the fingerprint and probing the host.
-        </DialogDescription>
-      </DialogHeader>
-      <div class="flex items-center gap-3">
-        <svg v-if="!logDone" class="size-5 animate-spin text-muted-foreground" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-        </svg>
-        <span class="text-sm text-muted-foreground">
-          {{ logDone ? 'Completed. Review logs below.' : 'Running ssh -o StrictHostKeyChecking=accept-new …' }}
-        </span>
-      </div>
-      <div class="mt-4 h-48 overflow-auto rounded-md border bg-muted p-2 text-xs font-mono whitespace-pre-wrap">
-        <template v-for="(l, idx) in logLines" :key="idx">{{ l }}\n</template>
-      </div>
-      <DialogFooter v-if="logDone">
-        <Button variant="outline" @click="saving = false">Close</Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+    <Dialog v-model:open="saving">
+        <DialogContent class="sm:max-w-xl">
+            <DialogHeader>
+                <DialogTitle>Testing SSH connection…</DialogTitle>
+                <DialogDescription>
+                    We’re accepting the fingerprint and probing the host.
+                </DialogDescription>
+            </DialogHeader>
+            <div class="flex items-center gap-3">
+                <svg
+                    v-if="!logDone"
+                    class="size-5 animate-spin text-muted-foreground"
+                    viewBox="0 0 24 24"
+                >
+                    <circle
+                        class="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        stroke-width="4"
+                        fill="none"
+                    />
+                    <path
+                        class="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                    />
+                </svg>
+                <span class="text-sm text-muted-foreground">
+                    {{
+                        logDone
+                            ? "Completed. Review logs below."
+                            : "Running ssh -o StrictHostKeyChecking=accept-new …"
+                    }}
+                </span>
+            </div>
+            <div
+                class="mt-4 h-48 overflow-auto rounded-md border bg-muted p-2 text-xs font-mono whitespace-pre-wrap"
+            >
+                <template v-for="(l, idx) in logLines" :key="idx"
+                    >{{ l }}\n</template
+                >
+            </div>
+            <DialogFooter v-if="logDone">
+                <Button variant="outline" @click="saving = false">Close</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
 
-  <Dialog v-model:open="askPasswordOpen">
-    <DialogContent class="sm:max-w-md">
-      <DialogHeader>
-        <DialogTitle>Authentication required</DialogTitle>
-        <DialogDescription>
-          Enter the SSH password to install the selected key on the server.
-        </DialogDescription>
-      </DialogHeader>
-      <div class="grid gap-2">
-        <label class="text-sm font-medium" for="ssh-password">Password</label>
-        <Input id="ssh-password" v-model="password" type="password" placeholder="••••••" />
-      </div>
-      <DialogFooter>
-        <Button variant="outline" @click="askPasswordOpen = false">Cancel</Button>
-        <Button :disabled="installing || !password" @click="onInstallKey(username, lastHostAlias || '')">
-          {{ installing ? 'Installing…' : 'Install key' }}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+    <Dialog v-model:open="askPasswordOpen">
+        <DialogContent class="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle>Authentication required</DialogTitle>
+                <DialogDescription>
+                    Enter the SSH password to install the selected key on the
+                    server.
+                </DialogDescription>
+            </DialogHeader>
+            <div class="grid gap-2">
+                <label class="text-sm font-medium" for="ssh-password"
+                    >Password</label
+                >
+                <Input
+                    id="ssh-password"
+                    v-model="password"
+                    type="password"
+                    placeholder="••••••"
+                />
+            </div>
+            <DialogFooter>
+                <Button variant="outline" @click="askPasswordOpen = false"
+                    >Cancel</Button
+                >
+                <Button
+                    :disabled="installing || !password"
+                    @click="onInstallKey(username, lastHostAlias || '')"
+                >
+                    {{ installing ? "Installing…" : "Install key" }}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
 </template>
