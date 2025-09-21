@@ -31,13 +31,35 @@
       "allow": [
         { "name": "ssh", "cmd": "ssh", "args": true },
         { "name": "sshpass", "cmd": "sshpass", "args": true },
-        { "name": "ssh-copy-id", "cmd": "ssh-copy-id", "args": true }
+        { "name": "ssh-copy-id", "cmd": "ssh-copy-id", "args": true },
+        { "name": "foot", "cmd": "foot", "args": true },
+        { "name": "footclient", "cmd": "footclient", "args": true },
+        { "name": "alacritty", "cmd": "alacritty", "args": true },
+        { "name": "kitty", "cmd": "kitty", "args": true },
+        { "name": "wezterm", "cmd": "wezterm", "args": true },
+        { "name": "gnome-terminal", "cmd": "gnome-terminal", "args": true },
+        { "name": "xfce4-terminal", "cmd": "xfce4-terminal", "args": true },
+        { "name": "konsole", "cmd": "konsole", "args": true },
+        { "name": "tilix", "cmd": "tilix", "args": true },
+        { "name": "lxterminal", "cmd": "lxterminal", "args": true },
+        { "name": "xterm", "cmd": "xterm", "args": true }
       ]
     },
     {
       "identifier": "shell:allow-spawn",
       "allow": [
-        { "name": "ssh", "cmd": "ssh", "args": true }
+        { "name": "ssh", "cmd": "ssh", "args": true },
+        { "name": "foot", "cmd": "foot", "args": true },
+        { "name": "footclient", "cmd": "footclient", "args": true },
+        { "name": "alacritty", "cmd": "alacritty", "args": true },
+        { "name": "kitty", "cmd": "kitty", "args": true },
+        { "name": "wezterm", "cmd": "wezterm", "args": true },
+        { "name": "gnome-terminal", "cmd": "gnome-terminal", "args": true },
+        { "name": "xfce4-terminal", "cmd": "xfce4-terminal", "args": true },
+        { "name": "konsole", "cmd": "konsole", "args": true },
+        { "name": "tilix", "cmd": "tilix", "args": true },
+        { "name": "lxterminal", "cmd": "lxterminal", "args": true },
+        { "name": "xterm", "cmd": "xterm", "args": true }
       ]
     }
   ]

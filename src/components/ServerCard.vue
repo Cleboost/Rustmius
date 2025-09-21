@@ -22,8 +22,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ref } from "vue";
-import { addServerTab } from "@/stores/tabs";
-import { useConsolesStore } from "@/stores/consoles";
+import { useServerInstancesStore } from "@/stores/serverInstances";
 import { useRouter } from "vue-router";
 
 defineProps<{
@@ -39,16 +38,21 @@ const emit = defineEmits<{
 const confirmOpen = ref(false);
 const serversStore = useServersStore();
 const router = useRouter();
-const consoles = useConsolesStore();
+const serverInstancesStore = useServerInstancesStore();
 async function onConfirmDelete(id: Server["id"]) {
     await serversStore.removeServer(id);
     confirmOpen.value = false;
 }
 
-function onConnect(id: Server["id"]) {
-    consoles.openConsole(id);
-    addServerTab('Console', id);
-    router.push(`/server/${id}/console`);
+async function onConnect(id: Server["id"]) {
+    console.log("ServerCard: Connecting to server:", id);
+    const serverInstance = serverInstancesStore.getServerInstance(id);
+    await serverInstance.ensureLoaded();
+    console.log("ServerCard: Server loaded, name:", serverInstance.getName());
+
+    serverInstancesStore.addToSidebar(id);
+
+    router.push(`/server/${id}`);
 }
 </script>
 
@@ -91,12 +95,15 @@ function onConnect(id: Server["id"]) {
             <AlertDialogHeader>
                 <AlertDialogTitle>Supprimer ce serveur ?</AlertDialogTitle>
                 <AlertDialogDescription>
-                    Cette action est irréversible et supprimera l'entrée de la liste locale.
+                    Cette action est irréversible et supprimera l'entrée de la
+                    liste locale.
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel>Annuler</AlertDialogCancel>
-                <AlertDialogAction @click="onConfirmDelete(server.id)">Supprimer</AlertDialogAction>
+                <AlertDialogAction @click="onConfirmDelete(server.id)"
+                    >Supprimer</AlertDialogAction
+                >
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>

@@ -242,7 +242,12 @@ export const useServersStore = defineStore("servers", () => {
     }
   }
 
+  function serverExists(id: Server["id"]): boolean {
+    return findServerById(tree.value, id) !== undefined;
+  }
+
   return {
+    tree,
     load,
     getServers,
     getServer,
@@ -250,5 +255,7 @@ export const useServersStore = defineStore("servers", () => {
     removeServer,
     updateServer,
     syncFromSshConfig,
+    findServerById: (id: Server["id"]) => findServerById(tree.value, id),
+    serverExists,
   };
 });

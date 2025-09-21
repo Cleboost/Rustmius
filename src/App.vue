@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import AppSidebar from "@/components/AppSidebar.vue";
 import { TooltipProvider } from "@/components/ui/tooltip";
-// import AppTopbar from "@/components/AppTopbar.vue";
 </script>
 
 <template>
     <!-- <ConfigProvider> -->
     <!-- <AppTopbar /> -->
     <TooltipProvider>
-        <main class="flex">
+        <main class="flex h-dvh">
             <AppSidebar />
-            <section class="bg-background grow p-4">
+            <section
+                class="bg-background grow p-4 flex flex-col overflow-hidden"
+            >
                 <router-view />
             </section>
         </main>

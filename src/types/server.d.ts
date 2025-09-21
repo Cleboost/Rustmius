@@ -5,6 +5,7 @@ export interface EntryConfig {
 
 export interface Server extends EntryConfig {
   ip: string;
+  username?: string;
   keyID: number;
 }
 

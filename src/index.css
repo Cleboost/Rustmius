@@ -139,3 +139,7 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* xterm base styles to fill container and scroll properly */
+.xterm, .xterm-viewport, .xterm-screen { height: 100% !important; }
+.xterm-viewport { overflow: auto !important; }
