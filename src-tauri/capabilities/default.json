@@ -1,0 +1,66 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:path:default",
+    "opener:default",
+    "store:default",
+    "fs:default",
+    "fs:allow-read-file",
+    "fs:allow-read-text-file",
+    "fs:allow-read-dir",
+    "fs:allow-exists",
+    "fs:allow-write-text-file",
+    "fs:scope-home-recursive",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$HOME/.ssh" },
+        { "path": "$HOME/.ssh/*" }
+      ]
+    },
+    "shell:default",
+    "shell:allow-execute",
+    "shell:allow-spawn",
+    "shell:allow-stdin-write",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        { "name": "ssh", "cmd": "ssh", "args": true },
+        { "name": "sshpass", "cmd": "sshpass", "args": true },
+        { "name": "ssh-copy-id", "cmd": "ssh-copy-id", "args": true },
+        { "name": "foot", "cmd": "foot", "args": true },
+        { "name": "footclient", "cmd": "footclient", "args": true },
+        { "name": "alacritty", "cmd": "alacritty", "args": true },
+        { "name": "kitty", "cmd": "kitty", "args": true },
+        { "name": "wezterm", "cmd": "wezterm", "args": true },
+        { "name": "gnome-terminal", "cmd": "gnome-terminal", "args": true },
+        { "name": "xfce4-terminal", "cmd": "xfce4-terminal", "args": true },
+        { "name": "konsole", "cmd": "konsole", "args": true },
+        { "name": "tilix", "cmd": "tilix", "args": true },
+        { "name": "lxterminal", "cmd": "lxterminal", "args": true },
+        { "name": "xterm", "cmd": "xterm", "args": true }
+      ]
+    },
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        { "name": "ssh", "cmd": "ssh", "args": true },
+        { "name": "foot", "cmd": "foot", "args": true },
+        { "name": "footclient", "cmd": "footclient", "args": true },
+        { "name": "alacritty", "cmd": "alacritty", "args": true },
+        { "name": "kitty", "cmd": "kitty", "args": true },
+        { "name": "wezterm", "cmd": "wezterm", "args": true },
+        { "name": "gnome-terminal", "cmd": "gnome-terminal", "args": true },
+        { "name": "xfce4-terminal", "cmd": "xfce4-terminal", "args": true },
+        { "name": "konsole", "cmd": "konsole", "args": true },
+        { "name": "tilix", "cmd": "tilix", "args": true },
+        { "name": "lxterminal", "cmd": "lxterminal", "args": true },
+        { "name": "xterm", "cmd": "xterm", "args": true }
+      ]
+    }
+  ]
+}
