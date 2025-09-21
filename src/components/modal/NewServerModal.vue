@@ -200,7 +200,7 @@ async function testConnection(
     const status = await sshCmd.execute();
     if (status.stdout) logLines.value.push(`[out] ${status.stdout.trimEnd()}`);
     if (status.stderr) logLines.value.push(`[err] ${status.stderr.trimEnd()}`);
-    return status.code;
+    return status.code || 0;
 }
 
 async function onInstallKey(userName: string, hostAlias: string) {
@@ -236,7 +236,7 @@ async function onInstallKey(userName: string, hostAlias: string) {
         if (r.stderr) logLines.value.push(`[copy-err] ${r.stderr.trimEnd()}`);
         logLines.value.push(`[copy-exit] code=${r.code}`);
         askPasswordOpen.value = false;
-        const code = await testConnection(userName, hostAlias);
+        await testConnection(userName, hostAlias);
         logDone.value = true;
     } catch (e) {
         logLines.value.push(

@@ -1,9 +1,9 @@
 import { defineStore } from "pinia";
-import { reactive, computed, ref } from "vue";
+import { computed, ref } from "vue";
 import Server from "@/class/Server";
 
 export const useServerInstancesStore = defineStore("serverInstances", () => {
-  const instancesArray = ref<Server[]>([]);
+  const instancesArray = ref<any[]>([]);
   const loadedInstances = ref<Set<string>>(new Set());
 
   function getServerInstance(serverId: string): Server {

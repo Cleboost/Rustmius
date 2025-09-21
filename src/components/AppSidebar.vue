@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from "vue";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@iconify/vue";
 import {
@@ -7,11 +6,10 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { RouterLink, useRoute, useRouter } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 import { useServerInstancesStore } from "@/stores/serverInstances";
 
 const route = useRoute();
-const router = useRouter();
 const serverInstancesStore = useServerInstancesStore();
 
 function isRouteActive(routePath: string): boolean {
@@ -22,35 +20,6 @@ const routes = [
     { name: "Servers", icon: "ph:house-duotone", path: "/home" },
     { name: "SSH Keys", icon: "ph:key-duotone", path: "/keys" },
 ];
-
-function closeServerTab(serverId: string, event: Event) {
-    event.preventDefault();
-    event.stopPropagation();
-
-    console.log("AppSidebar: Closing server tab for:", serverId);
-    console.log("Current route:", route.path);
-
-    serverInstancesStore.removeServerInstance(serverId);
-
-    if (route.path === `/server/${serverId}`) {
-        router.push("/home");
-    }
-}
-
-function editServer(serverId: string, event: Event) {
-    event.preventDefault();
-    event.stopPropagation();
-
-    console.log("AppSidebar: Editing server:", serverId);
-    editingServerId.value = serverId;
-    editModalOpen.value = true;
-}
-
-function handleServerUpdated() {
-    console.log("AppSidebar: Server updated, refreshing instances");
-    editModalOpen.value = false;
-    editingServerId.value = null;
-}
 </script>
 
 <template>

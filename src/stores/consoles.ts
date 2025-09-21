@@ -6,7 +6,7 @@ export type ConsoleSession = {
   serverId: string;
   state: SessionState;
   error?: string;
-  process?: Command;
+  process?: Command<any>;
 };
 
 export type SessionState =
@@ -80,7 +80,7 @@ export const useConsolesStore = defineStore("consoles", () => {
     
     try {
       if (session.process) {
-        session.process.kill();
+        await session.process.terminate();
       }
     } catch {}
     

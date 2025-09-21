@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from "vue";
+import { ref, computed, watch } from "vue";
 import {
     Dialog,
     DialogContent,
@@ -171,7 +171,7 @@ async function saveServer() {
             keyID:
                 selectedKeyId.value && selectedKeyId.value !== "none"
                     ? parseInt(selectedKeyId.value)
-                    : undefined,
+                    : 0,
         };
 
         await updateSSHConfig(serverId.serverId, {
