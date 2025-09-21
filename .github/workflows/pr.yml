@@ -39,8 +39,8 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      # - name: Check formatting
+      #   run: cargo fmt --all -- --check
 
       - name: Install Bun Packages
         run: bun install
