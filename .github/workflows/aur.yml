@@ -1,0 +1,48 @@
+name: Manual AUR Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g., v1.0.0)"
+        required: true
+        default: "v0.1.0"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Publish AUR package
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: rustmius
+          pkgbuild: ./PKGBUILD
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update AUR package
+          ssh_keyscan_types: rsa,ecdsa,ed25519
+
+      - name: Publish AUR package
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: rustmius-bin
+          pkgbuild: ./PKGBUILD-BIN
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update AUR package
+          ssh_keyscan_types: rsa,ecdsa,ed25519
