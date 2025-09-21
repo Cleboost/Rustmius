@@ -3,7 +3,7 @@ name: Continuous Release Build
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,72 +15,76 @@ jobs:
     container:
       image: archlinux:latest
 
-    permissions: 
+    permissions:
       contents: write
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v5
-      
-    - name: Install dependencies
-      run: |
-        pacman -Syu --noconfirm
-        pacman -S --noconfirm base-devel libadwaita gtk4
-        
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        components: rustfmt, clippy
-          
-    - name: Check formatting
-      run: cargo fmt --all -- --check
-      
-    #- name: Run clippy
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel libadwaita gtk4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # - name: Check formatting
+      #   run: cargo fmt --all -- --check
+
+      #- name: Run clippy
       #run: cargo clippy --all-targets --all-features -- -D warnings
-      
-    - name: Build project
-      run: cargo build --release
-      
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ github.ref_name }}
-        name: Release ${{ github.ref_name }}
-        body: |
-          ## Rustmius - Build ${{ github.ref_name }}
-          
-          **Build Date:** ${{ github.event.head_commit.timestamp }}
 
+      - name: Build project
+        run: bun run tauri build --no-bundle
 
-        generate_release_notes: true
-        append_body: true
-        files: target/release/rustmius
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Publish AUR package
-      uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
-      with:
-        pkgname: rustmius
-        pkgbuild: ./PKGBUILD
-        commit_username: ${{ secrets.AUR_USERNAME }}
-        commit_email: ${{ secrets.AUR_EMAIL }}
-        ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-        commit_message: Update AUR package
-        ssh_keyscan_types: rsa,ecdsa,ed25519
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## Rustmius - Build ${{ github.ref_name }}
 
-    - name: Generate AUR package for binary
-      run: chmod +x .github/scripts/aur-bin.sh && .github/scripts/aur-bin.sh
+            **Build Date:** ${{ github.event.head_commit.timestamp }}
 
-    - name: Publish AUR package
-      uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
-      with:
-        pkgname: rustmius-bin
-        pkgbuild: ./PKGBUILD-BIN
-        commit_username: ${{ secrets.AUR_USERNAME }}
-        commit_email: ${{ secrets.AUR_EMAIL }}
-        ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-        commit_message: Update AUR package
-        ssh_keyscan_types: rsa,ecdsa,ed25519
+          generate_release_notes: true
+          append_body: true
+          files: src-tauri/target/release/rustmius
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish AUR package
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: rustmius
+          pkgbuild: ./PKGBUILD
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update AUR package
+          ssh_keyscan_types: rsa,ecdsa,ed25519
+
+      - name: Generate AUR package for binary
+        run: chmod +x .github/scripts/aur-bin.sh && .github/scripts/aur-bin.sh
+
+      - name: Publish AUR package
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: rustmius-bin
+          pkgbuild: ./PKGBUILD-BIN
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update AUR package
+          ssh_keyscan_types: rsa,ecdsa,ed25519
