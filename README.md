@@ -1,15 +1,16 @@
 <div align="center">
-
-  <img src=".github/assets/icon.svg" alt="Rustmius Logo" width="100"/>
-
-  <h1>🔐 Rustmius</h1>
-
-  <p>
-    <img src="https://img.shields.io/aur/version/rustmius?label=AUR%20Rustmius&logo=arch-linux&logoColor=white&labelColor=1793d1" alt="AUR Version"/>
-    <img src="https://img.shields.io/aur/version/rustmius-bin?label=AUR%20Rustmius%20Bin&logo=arch-linux&logoColor=white&labelColor=1793d1" alt="AUR Version Bin"/>
-    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/>
-    <img src="https://img.shields.io/badge/rust-1.70+-orange.svg" alt="Rust"/>
-  </p>
+    <table>
+        <tr>
+            <td><img src=".github/assets/icon.svg" alt="Rustmius Logo" width="100"/></td>
+            <td><h1>Rustmius</h1></td>
+        </tr>
+    </table>
+    <p>
+        <img src="https://img.shields.io/aur/version/rustmius?label=AUR%20Rustmius&logo=arch-linux&logoColor=white&labelColor=1793d1" alt="AUR Version"/>
+        <img src="https://img.shields.io/aur/version/rustmius-bin?label=AUR%20Rustmius%20Bin&logo=arch-linux&logoColor=white&labelColor=1793d1" alt="AUR Version Bin"/>
+        <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/>
+        <img src="https://img.shields.io/badge/rust-1.70+-orange.svg" alt="Rust"/>
+    </p>
 
   <img src=".github/assets/screen.png" alt="Rustmius Screenshot" width="500"/>
 
@@ -32,6 +33,7 @@
 ## 🛠️ Development Roadmap
 
 ### 🎯 Current Version (v0.2.0)
+
 - ✅ Basic server management (add, edit, delete)
 - ✅ SSH key visualization and management
 - ✅ Server connection with terminal integration
@@ -40,16 +42,19 @@
 ### 🚀 Upcoming Features
 
 #### Phase 1 - Enhanced Management (v0.3.0)
+
 - [x] 🔄 **Server Groups & Tags**: Organize servers by project or environment (https://github.com/Cleboost/Rustmius/pull/16)
 - [x] 📊 **Connection History**: Track and manage recent connections (https://github.com/Cleboost/Rustmius/pull/19)
 - [x] 🔐 **Key Generation Wizard**: Guided SSH key creation with best practices (https://github.com/Cleboost/Rustmius/pull/9)
 - [x] 📋 **Import/Export**: Backup and restore SSH configurations (https://github.com/Cleboost/Rustmius/pull/7 https://github.com/Cleboost/Rustmius/pull/21)
 
 #### Phase 2 - Advanced Features (v0.4.0)
+
 - [ ] 🌐 **Remote Config Sync**: Sync configurations across multiple machines (not sure)
 - [ ] 🎨 **Custom Themes**: Dark/light mode and custom color schemes
 
 ### 🎨 UI/UX Improvements
+
 - [ ] 🎯 **Keyboard Shortcuts**: Power-user keyboard navigation
 - [ ] 📱 **Responsive Design**: Better support for different screen sizes
 - [ ] 🌍 **Internationalization**: Multi-language support
@@ -58,6 +63,7 @@
 ## 🚀 Installation
 
 ### From AUR (Arch Linux)
+
 ```bash
 # Install from source
 yay -S rustmius
@@ -67,6 +73,7 @@ yay -S rustmius-bin
 ```
 
 ### From Source
+
 ```bash
 git clone https://github.com/Cleboost/Rustmius.git
 cd Rustmius
@@ -74,6 +81,7 @@ cargo build --release
 ```
 
 ### From Flatpak (soon)
+
 ```bash
 flatpak install com.github.Cleboost.Rustmius # soon
 ```
