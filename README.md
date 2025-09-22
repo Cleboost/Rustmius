@@ -1,5 +1,7 @@
 <div align="center">
 
+  <img src=".github/assets/icon.svg" alt="Rustmius Logo" width="100"/>
+
   <h1>🔐 Rustmius</h1>
 
   <p>
@@ -15,12 +17,12 @@
 
 ## 🎯 Purpose
 
-**Rustmius** is a full local Termius alternative for Linux, built with Rust and GTK4/libadwaita that simplifies SSH server and key management. Say goodbye to manually editing SSH config files and managing keys through the command line! 
+**Rustmius** is a full local Termius alternative for Linux, built with Rust and GTK4/libadwaita that simplifies SSH server and key management. Say goodbye to manually editing SSH config files and managing keys through the command line!
 
 ### ✨ Key Features
 
 - 🖥️ **Visual Server Management**: Add, edit, and organize your SSH servers with a beautiful, modern interface
-- 🔑 **SSH Key Management**: Generate, view, and manage your SSH key pairs effortlessly  
+- 🔑 **SSH Key Management**: Generate, view, and manage your SSH key pairs effortlessly
 - 🔍 **Smart Search**: Quickly find servers and keys with intelligent filtering
 - 🚀 **One-Click Connection**: Connect to servers directly from the app with automatic terminal detection
 - 🎨 **Modern UI**: Built with libadwaita for a native GNOME experience
