@@ -95,5 +95,5 @@ async function ensureSshKeysSynced() {
 
 async function ensureServersSynced() {
   const serversStore = useServersStore();
-  await serversStore.syncFromSshConfig();
+  await serversStore.load();
 }

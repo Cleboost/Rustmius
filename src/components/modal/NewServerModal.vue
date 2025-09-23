@@ -24,8 +24,6 @@ import {
     Network,
     User as UserIcon,
 } from "lucide-vue-next";
-import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
-import { BaseDirectory } from "@tauri-apps/api/path";
 import { useServersStore } from "@/stores/servers";
 import { Command } from "@tauri-apps/plugin-shell";
 import type { KeyPair } from "@/types/key";
@@ -92,29 +90,6 @@ async function saveServer() {
             selectedKeyId.value != null ? Number(selectedKeyId.value) : null;
         lastHostAlias.value = serverId;
 
-        const sshConfigRel = ".ssh/config";
-        let content = "";
-        try {
-            content = await readTextFile(sshConfigRel, {
-                baseDir: BaseDirectory.Home,
-            });
-        } catch {}
-        const newBlock = [
-            `Host ${serverId}`,
-            ipAddr ? `  Hostname ${ipAddr}` : undefined,
-            `  User ${userName}`,
-            keyIdNum
-                ? `  IdentityFile ${await keyPathFromId(keyIdNum)}`
-                : undefined,
-        ]
-            .filter(Boolean)
-            .join("\n");
-        const newContent = content
-            ? `${content.trim()}\n\n${newBlock}\n`
-            : `${newBlock}\n`;
-        await writeTextFile(sshConfigRel, newContent, {
-            baseDir: BaseDirectory.Home,
-        });
 
         const serversStore = useServersStore();
         await serversStore.addServer(
@@ -151,19 +126,6 @@ async function saveServer() {
     }
 }
 
-async function keyPathFromId(id: number): Promise<string | undefined> {
-    const ks = useKeysStore();
-    await ks.load();
-    const all = await ks.getKeys();
-    return all.find((k) => k.id === id)?.private;
-}
-
-async function keyPubPathFromId(id: number): Promise<string | undefined> {
-    const priv = await keyPathFromId(id);
-    if (!priv) return undefined;
-    const pub = `${priv}.pub`;
-    return pub;
-}
 
 async function testConnection(
     userName: string,
@@ -211,10 +173,11 @@ async function onInstallKey(userName: string, hostAlias: string) {
     installing.value = true;
     try {
         const keyIdNum = Number(selectedKeyId.value);
-        const pub = await keyPubPathFromId(keyIdNum);
-        const priv = await keyPathFromId(keyIdNum);
-        const keyArg = pub ?? priv;
-        if (!keyArg) return;
+        const keysStore = useKeysStore();
+        await keysStore.load();
+        const key = await keysStore.getKeyById(keyIdNum);
+        if (!key) return;
+        const keyArg = key.public || key.private;
         const proc = await Command.create("sshpass", [
             "-p",
             password.value,

@@ -27,13 +27,10 @@ import {
 import { useServersStore } from "@/stores/servers";
 import { useServerInstancesStore } from "@/stores/serverInstances";
 import {
-    writeTextFile,
-    readTextFile,
     readDir,
     exists,
 } from "@tauri-apps/plugin-fs";
-import { BaseDirectory } from "@tauri-apps/api/path";
-import { homeDir, join } from "@tauri-apps/api/path";
+import { homeDir, join, BaseDirectory } from "@tauri-apps/api/path";
 import type { KeyPair } from "@/types/key";
 
 const open = defineModel<boolean>("open", { default: false });
@@ -98,59 +95,13 @@ async function loadServerData() {
             ip.value = server.ip || "";
             selectedKeyId.value = server.keyID?.toString() || "none";
 
-            const sshUsername = await getUsernameFromSSHConfig(
-                serverId.serverId,
-            );
-            username.value = sshUsername || server.username || "";
+            username.value = server.username || "";
         }
     } catch (error) {
         console.error("Error loading server data:", error);
     }
 }
 
-async function getUsernameFromSSHConfig(
-    serverId: string,
-): Promise<string | null> {
-    try {
-        const sshConfigRel = ".ssh/config";
-        const content = await readTextFile(sshConfigRel, {
-            baseDir: BaseDirectory.Home,
-        });
-
-        const lines = content.split("\n");
-        let i = 0;
-
-        while (i < lines.length) {
-            const line = lines[i];
-            const trimmed = line.trim();
-
-            if (/^Host\s+/i.test(trimmed)) {
-                const hostAlias = trimmed.replace(/^Host\s+/i, "").trim();
-
-                if (hostAlias === serverId) {
-                    i++;
-                    while (
-                        i < lines.length &&
-                        !/^Host\s+/i.test(lines[i].trim())
-                    ) {
-                        const currentLine = lines[i].trim();
-                        if (/^User\s+/i.test(currentLine)) {
-                            return currentLine.replace(/^User\s+/i, "").trim();
-                        }
-                        i++;
-                    }
-                    break;
-                }
-            }
-            i++;
-        }
-
-        return null;
-    } catch (error) {
-        console.error("Error reading SSH config:", error);
-        return null;
-    }
-}
 
 async function saveServer() {
     if (!serverId.serverId || !canSave.value) return;
@@ -174,12 +125,6 @@ async function saveServer() {
                     : 0,
         };
 
-        await updateSSHConfig(serverId.serverId, {
-            name: updatedServer.name,
-            username: updatedServer.username,
-            ip: updatedServer.ip,
-            keyID: updatedServer.keyID,
-        });
 
         await serversStore.updateServer(serverId.serverId, updatedServer);
 
@@ -267,95 +212,7 @@ async function syncKeysFromSSHDirectory() {
     }
 }
 
-async function keyPathFromId(id: number): Promise<string | undefined> {
-    const ks = useKeysStore();
-    await ks.load();
-    const all = await ks.getKeys();
-    return all.find((k) => k.id === id)?.private;
-}
 
-async function updateSSHConfig(
-    serverId: string,
-    config: {
-        name: string;
-        username: string;
-        ip: string;
-        keyID?: number;
-    },
-) {
-    const sshConfigRel = ".ssh/config";
-
-    try {
-        const content = await readTextFile(sshConfigRel, {
-            baseDir: BaseDirectory.Home,
-        });
-
-        const lines = content.split("\n");
-        const newLines: string[] = [];
-        let i = 0;
-        let modified = false;
-
-        while (i < lines.length) {
-            const line = lines[i];
-            const trimmed = line.trim();
-
-            if (/^Host\s+/i.test(trimmed)) {
-                const hostAlias = trimmed.replace(/^Host\s+/i, "").trim();
-
-                if (hostAlias === serverId) {
-                    const newBlock = [
-                        `Host ${serverId}`,
-                        config.ip ? `  Hostname ${config.ip}` : undefined,
-                        config.username
-                            ? `  User ${config.username}`
-                            : undefined,
-                        config.keyID
-                            ? `  IdentityFile ${await keyPathFromId(config.keyID)}`
-                            : undefined,
-                    ]
-                        .filter(Boolean)
-                        .join("\n");
-
-                    newLines.push(newBlock);
-                    modified = true;
-
-                    i++;
-                    while (
-                        i < lines.length &&
-                        !/^Host\s+/i.test(lines[i].trim())
-                    ) {
-                        i++;
-                    }
-                } else {
-                    newLines.push(line);
-                    i++;
-                    while (
-                        i < lines.length &&
-                        !/^Host\s+/i.test(lines[i].trim())
-                    ) {
-                        newLines.push(lines[i]);
-                        i++;
-                    }
-                }
-            } else {
-                newLines.push(line);
-                i++;
-            }
-        }
-
-        if (modified) {
-            await writeTextFile(sshConfigRel, newLines.join("\n"), {
-                baseDir: BaseDirectory.Home,
-            });
-            console.log("SSH config updated successfully");
-        } else {
-            console.warn("Server block not found in SSH config");
-        }
-    } catch (error) {
-        console.error("Error updating SSH config:", error);
-        throw error;
-    }
-}
 
 function resetForm() {
     name.value = "";

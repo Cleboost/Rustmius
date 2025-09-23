@@ -51,7 +51,6 @@ async function onConnect(id: Server["id"]) {
         console.log("ServerCard: Successfully initiated SSH connection");
     } catch (error) {
         console.error("ServerCard: Failed to connect to server:", error);
-        // TODO: Show error message to user
     }
 }
 </script>

@@ -143,7 +143,6 @@ export const useServersStore = defineStore("servers", () => {
       throw new Error(`Server with id ${serverId} not found`);
     }
 
-    // Get the SSH key for this server
     const keysStore = useKeysStore();
     await keysStore.load();
     const key = await keysStore.getKeyById(server.keyID);
@@ -152,21 +151,17 @@ export const useServersStore = defineStore("servers", () => {
       throw new Error(`SSH key with id ${server.keyID} not found`);
     }
 
-    // Build SSH command with all parameters
     const sshArgs = [
       "-i", key.private,
       "-o", "StrictHostKeyChecking=accept-new",
       "-o", "ConnectTimeout=10"
     ];
 
-    // Add username if specified
     if (server.username) {
       sshArgs.push(`${server.username}@${server.ip}`);
     } else {
       sshArgs.push(server.ip);
     }
-
-    // Launch terminal with the constructed SSH command
     const { useConsolesStore } = await import("./consoles");
     const consolesStore = useConsolesStore();
     await consolesStore.launchNativeTerminalWithArgs(sshArgs);

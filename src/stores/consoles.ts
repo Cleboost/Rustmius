@@ -110,7 +110,7 @@ export const useConsolesStore = defineStore("consoles", () => {
       { bin: "tilix", args: ["-e", ...sshArgs] },
       { bin: "lxterminal", args: ["-e", ...sshArgs] },
       { bin: "xterm", args: ["-e", ...sshArgs] },
-      { bin: "footclient", args: ["-e", ...sshArgs] }, // Keep as fallback
+      { bin: "footclient", args: ["-e", ...sshArgs] },
     ];
     
     let lastErr: unknown;
