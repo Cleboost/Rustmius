@@ -46,13 +46,13 @@ async function onConfirmDelete(id: Server["id"]) {
 
 async function onConnect(id: Server["id"]) {
     console.log("ServerCard: Connecting to server:", id);
-    const serverInstance = serverInstancesStore.getServerInstance(id);
-    await serverInstance.ensureLoaded();
-    console.log("ServerCard: Server loaded, name:", serverInstance.getName());
-
-    serverInstancesStore.addToSidebar(id);
-
-    router.push(`/server/${id}`);
+    try {
+        await serversStore.connectToServer(id);
+        console.log("ServerCard: Successfully initiated SSH connection");
+    } catch (error) {
+        console.error("ServerCard: Failed to connect to server:", error);
+        // TODO: Show error message to user
+    }
 }
 </script>
 

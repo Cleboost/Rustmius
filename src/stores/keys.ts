@@ -64,5 +64,10 @@ export const useKeysStore = defineStore("keys", () => {
 
   const byId = computed(() => new Map(keys.value.map((k) => [k.id, k])));
 
-  return { load, getKeys, addOrUpdateKey, removeKey, byId };
+  async function getKeyById(id: number): Promise<KeyPair | undefined> {
+    await load();
+    return keys.value.find((k) => k.id === id);
+  }
+
+  return { load, getKeys, addOrUpdateKey, removeKey, getKeyById, byId };
 });

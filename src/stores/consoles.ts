@@ -94,6 +94,11 @@ export const useConsolesStore = defineStore("consoles", () => {
   async function launchNativeTerminal(id: string): Promise<void> {
     console.log(`Attempting to launch native terminal for server: ${id}`);
     const sshArgs = ["ssh", "-tt", "-o", "StrictHostKeyChecking=accept-new", id];
+    await launchNativeTerminalWithArgs(sshArgs);
+  }
+
+  async function launchNativeTerminalWithArgs(sshArgs: string[]): Promise<void> {
+    console.log(`Attempting to launch native terminal with SSH args:`, sshArgs);
     const candidates: Array<{ bin: string; args: string[] }> = [
       { bin: "foot", args: ["-e", ...sshArgs] },
       { bin: "alacritty", args: ["-e", ...sshArgs] },
@@ -134,5 +139,5 @@ export const useConsolesStore = defineStore("consoles", () => {
     throw lastErr ?? new Error("No terminal emulator available");
   }
 
-  return { sessions, openConsole, launchTerminal, launchNativeTerminal, closeConsole, list };
+  return { sessions, openConsole, launchTerminal, launchNativeTerminal, launchNativeTerminalWithArgs, closeConsole, list };
 });

@@ -132,118 +132,44 @@ export const useServersStore = defineStore("servers", () => {
     );
   }
 
-  async function syncFromSshConfig(): Promise<void> {
-    await load();
-    const home = await homeDir();
-    const sshConfigRel = ".ssh/config";
-    let content: string;
-    try {
-      content = await readTextFile(sshConfigRel, {
-        baseDir: BaseDirectory.Home,
-      });
-    } catch (e) {
-      console.warn("[servers] ~/.ssh/config not found or unreadable", e);
-      return;
-    }
-
-    const lines = content.split(/\r?\n/);
-    type HostBlock = { name: string; options: Record<string, string> };
-    const hosts: HostBlock[] = [];
-    let current: HostBlock | null = null;
-    for (const raw of lines) {
-      const line = raw.trimEnd();
-      if (!line || line.trimStart().startsWith("#")) continue;
-      if (/^Host\s+/i.test(line)) {
-        const name = line.replace(/^Host\s+/i, "").trim();
-        current = { name, options: {} };
-        hosts.push(current);
-      } else if (current) {
-        const m = line.trim().match(/^(\w[\w-]*)\s+(.+)$/);
-        if (m) current.options[m[1].toLowerCase()] = m[2].trim();
-      }
-    }
-
-    const keysStore = useKeysStore();
-    await keysStore.load();
-    const keys = await keysStore.getKeys();
-    const keyByPath = new Map(keys.map((k) => [k.private, k]));
-
-    let modified = false;
-    const newLines: string[] = [];
-    let i = 0;
-    while (i < lines.length) {
-      const raw = lines[i];
-      const trimmed = raw.trim();
-      if (/^Host\s+/i.test(trimmed)) {
-        const originalAlias = trimmed.replace(/^Host\s+/i, "").trim();
-        i++;
-        const block: string[] = [raw];
-        while (i < lines.length && !/^Host\s+/i.test(lines[i].trim())) {
-          block.push(lines[i]);
-          i++;
-        }
-
-        if (originalAlias.toLowerCase() === "aur.archlinux.org") {
-          newLines.push(...block);
-          continue;
-        }
-
-        const parsed = hosts.find((h) => h.name === originalAlias)!;
-        const hostname = parsed.options["hostname"] ?? "";
-        let identityFile = parsed.options["identityfile"];
-        if (identityFile && identityFile.startsWith("~")) {
-          identityFile = identityFile.replace(/^~\//, `${home}/`);
-        }
-
-        if (isUuid(originalAlias)) {
-          let server = findServerById(tree.value, originalAlias);
-          if (!server) {
-            server = {
-              id: originalAlias,
-              name: originalAlias,
-              ip: hostname,
-              keyID: keyByPath.get(identityFile ?? "")?.id ?? 0,
-            } as Server;
-            await addServer(server);
-          } else {
-            const keyId = keyByPath.get(identityFile ?? "")?.id ?? server.keyID;
-            const updated: Server = {
-              ...server,
-              ip: hostname || server.ip,
-              keyID: keyId,
-            };
-            await updateServer(server.id, updated);
-          }
-          newLines.push(...block);
-        } else {
-          const newId = crypto.randomUUID();
-          const server: Server = {
-            id: newId,
-            name: originalAlias,
-            ip: hostname,
-            keyID: keyByPath.get(identityFile ?? "")?.id ?? 0,
-          } as Server;
-          await addServer(server);
-          const replaced = block.slice();
-          replaced[0] = block[0].replace(/^(\s*Host\s+).+$/i, `$1${newId}`);
-          newLines.push(...replaced);
-          modified = true;
-        }
-      } else {
-        newLines.push(raw);
-        i++;
-      }
-    }
-
-    if (modified) {
-      await writeTextFile(sshConfigRel, newLines.join("\n"), {
-        baseDir: BaseDirectory.Home,
-      });
-    }
-  }
 
   function serverExists(id: Server["id"]): boolean {
     return findServerById(tree.value, id) !== undefined;
+  }
+
+  async function connectToServer(serverId: Server["id"]): Promise<void> {
+    const server = await getServer(serverId);
+    if (!server) {
+      throw new Error(`Server with id ${serverId} not found`);
+    }
+
+    // Get the SSH key for this server
+    const keysStore = useKeysStore();
+    await keysStore.load();
+    const key = await keysStore.getKeyById(server.keyID);
+    
+    if (!key) {
+      throw new Error(`SSH key with id ${server.keyID} not found`);
+    }
+
+    // Build SSH command with all parameters
+    const sshArgs = [
+      "-i", key.private,
+      "-o", "StrictHostKeyChecking=accept-new",
+      "-o", "ConnectTimeout=10"
+    ];
+
+    // Add username if specified
+    if (server.username) {
+      sshArgs.push(`${server.username}@${server.ip}`);
+    } else {
+      sshArgs.push(server.ip);
+    }
+
+    // Launch terminal with the constructed SSH command
+    const { useConsolesStore } = await import("./consoles");
+    const consolesStore = useConsolesStore();
+    await consolesStore.launchNativeTerminalWithArgs(sshArgs);
   }
 
   return {
@@ -254,7 +180,7 @@ export const useServersStore = defineStore("servers", () => {
     addServer,
     removeServer,
     updateServer,
-    syncFromSshConfig,
+    connectToServer,
     findServerById: (id: Server["id"]) => findServerById(tree.value, id),
     serverExists,
   };
