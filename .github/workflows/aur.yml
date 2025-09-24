@@ -2,49 +2,32 @@ name: Manual AUR Publish
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_rustmius:
+        description: 'Publish rustmius (source package)'
+        required: false
+        type: boolean
+        default: false
+      publish_rustmius_bin:
+        description: 'Publish rustmius-bin (binary package)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    name: Build Linux
+  publish:
+    name: AUR Publish
     runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
-
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
-        with:
-          fetch-depth: 2
-
-      - name: Install git
-        run: pacman -Syu --noconfirm git
-
-      - name: Check if PKGBUILD changed
-        id: check-rustmius
-        run: |
-          if git diff --name-only HEAD~1 HEAD | grep -q "^PKGBUILD$"; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Check if PKGBUILD-BIN changed
-        id: check-rustmius-bin
-        run: |
-          if git diff --name-only HEAD~1 HEAD | grep -q "^PKGBUILD-BIN$"; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-          fi
 
       - name: Publish AUR package (rustmius)
-        if: steps.check-rustmius.outputs.changed == 'true'
+        if: ${{ github.event.inputs.publish_rustmius == 'true' }}
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
         with:
           pkgname: rustmius
@@ -56,7 +39,7 @@ jobs:
           ssh_keyscan_types: rsa,ecdsa,ed25519
 
       - name: Publish AUR package (rustmius-bin)
-        if: steps.check-rustmius-bin.outputs.changed == 'true'
+        if: ${{ github.event.inputs.publish_rustmius_bin == 'true' }}
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
         with:
           pkgname: rustmius-bin
