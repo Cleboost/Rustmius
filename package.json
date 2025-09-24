@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "knip": "knip"
   },
   "dependencies": {
     "@iconify/vue": "^5.0.0",
@@ -41,8 +42,10 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2",
     "@types/bun": "^1.2.22",
+    "@types/node": "^24.5.2",
     "@vitejs/plugin-vue": "^5.2.1",
-    "typescript": "~5.9.0",
+    "knip": "^5.64.0",
+    "typescript": "^5.9.2",
     "vite": "^6.0.3",
     "vue-tsc": "^3.0.0"
   }
