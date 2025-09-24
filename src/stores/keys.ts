@@ -7,13 +7,10 @@ const store: LazyStore = new LazyStore("keys.json");
 
 export const useKeysStore = defineStore("keys", () => {
   const keys = ref<KeysConfig>([]);
-  let loaded = false;
 
   async function load(): Promise<void> {
-    if (loaded) return;
     const saved = await store.get<KeysConfig>("keys");
-    keys.value = saved ?? [];
-    loaded = true;
+    keys.value = saved ?? [];  
   }
 
   async function save(): Promise<void> {
@@ -21,6 +18,28 @@ export const useKeysStore = defineStore("keys", () => {
     await store.save();
   }
 
+  /**
+   * Get a key by its ID.
+   * @param id - The ID of the key.
+   * @returns The key.
+   */
+  function getKey(id: number): KeyPair | undefined {
+    return keys.value.find((k) => k.id === id);
+  }
+
+  /**
+   * Get all keys.
+   * @returns The keys.
+   */
+  function listKeys(): KeyPair[] {
+    return keys.value;
+  }
+
+  /**
+   * @deprecated Use listKeys instead.
+   * Get all keys.
+   * @returns A promise that resolves to the keys.
+   */
   async function getKeys(): Promise<KeysConfig> {
     await load();
     return keys.value;
@@ -64,5 +83,5 @@ export const useKeysStore = defineStore("keys", () => {
 
   const byId = computed(() => new Map(keys.value.map((k) => [k.id, k])));
 
-  return { load, getKeys, addOrUpdateKey, removeKey, byId };
+  return { load, getKeys, addOrUpdateKey, removeKey, byId, getKey, listKeys };
 });

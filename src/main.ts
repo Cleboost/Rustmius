@@ -5,7 +5,7 @@ import router from "@/router";
 import { createPinia } from "pinia";
 import { useSettingsStore } from "@/stores/settings";
 import { useKeysStore } from "./stores/keys";
-import { useServersStore } from "./stores/servers";
+import { useServerConfigStore } from "./stores/servers";
 import { readDir, exists } from "@tauri-apps/plugin-fs";
 import { homeDir, join, BaseDirectory } from "@tauri-apps/api/path";
 
@@ -35,7 +35,7 @@ async function initAppSetttings() {
   }
 
   await ensureSshKeysSynced();
-  await ensureServersSynced();
+  await useServerConfigStore().load();
 }
 
 async function ensureSshKeysSynced() {
@@ -91,9 +91,4 @@ async function ensureSshKeysSynced() {
       });
     }
   }
-}
-
-async function ensureServersSynced() {
-  const serversStore = useServersStore();
-  await serversStore.syncFromSshConfig();
 }
