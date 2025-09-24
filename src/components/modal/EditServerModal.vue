@@ -24,7 +24,7 @@ import {
     Network,
     User as UserIcon,
 } from "lucide-vue-next";
-import { useServersStore } from "@/stores/servers";
+import { useServerConfigStore } from "@/stores/servers";
 import { useServerInstancesStore } from "@/stores/serverInstances";
 import {
     writeTextFile,
@@ -57,7 +57,7 @@ const canSave = computed(
 );
 
 const keysStore = useKeysStore();
-const serversStore = useServersStore();
+const serversStore = useServerConfigStore();
 const serverInstancesStore = useServerInstancesStore();
 const keys = ref<KeyPair[]>([]);
 const selectedKeyId = ref<string | null>(null);

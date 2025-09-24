@@ -2,7 +2,6 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@iconify/vue";
-import { Server } from "@/types/server";
 import {
     ContextMenu,
     ContextMenuContent,
@@ -10,7 +9,6 @@ import {
     ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Pencil, Trash2 } from "lucide-vue-next";
-import { useServersStore } from "@/stores/servers";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -21,38 +19,22 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ref } from "vue";
-import { useServerInstancesStore } from "@/stores/serverInstances";
+import { useServerInstanceStore } from "@/stores/serverInstance";
 import { useRouter } from "vue-router";
+import { ref } from "vue";
+import Server from "@/class/Server";
 
-defineProps<{
+const props = defineProps<{
     server: Server;
 }>();
 
-const emit = defineEmits<{
-    (e: "connect", server: Server["id"]): void;
-    (e: "edit", server: Server["id"]): void;
-    (e: "delete", server: Server["id"]): void;
-}>();
-
 const confirmOpen = ref(false);
-const serversStore = useServersStore();
 const router = useRouter();
-const serverInstancesStore = useServerInstancesStore();
-async function onConfirmDelete(id: Server["id"]) {
-    await serversStore.removeServer(id);
-    confirmOpen.value = false;
-}
+const serverInstanceStore = useServerInstanceStore();
 
-async function onConnect(id: Server["id"]) {
-    console.log("ServerCard: Connecting to server:", id);
-    const serverInstance = serverInstancesStore.getServerInstance(id);
-    await serverInstance.ensureLoaded();
-    console.log("ServerCard: Server loaded, name:", serverInstance.getName());
-
-    serverInstancesStore.addToSidebar(id);
-
-    router.push(`/server/${id}`);
+async function connect() {
+    await serverInstanceStore.addServerInstance(props.server);
+    return router.push(`/server/${props.server.config().getID()}`);
 }
 </script>
 
@@ -67,21 +49,21 @@ async function onConnect(id: Server["id"]) {
                     height="32"
                 />
                 <div class="flex flex-col">
-                    <div class="text-lg font-semibold">{{ server.name }}</div>
+                    <div class="text-lg font-semibold">
+                        {{ server.config().getName() || "N/A" }}
+                    </div>
                     <div class="text-sm text-gray-500">
-                        IP: {{ server.ip || "N/A" }}
+                        IP:
+                        {{ server.config().getIP() || "N/A" }}
                     </div>
                 </div>
-                <Button
-                    class="self-center"
-                    variant="outline"
-                    @click="onConnect(server.id)"
-                    >Connect</Button
+                <Button class="self-center" variant="outline" @click="connect()"
+                    >View</Button
                 >
             </Card>
         </ContextMenuTrigger>
         <ContextMenuContent>
-            <ContextMenuItem @select="emit('edit', server.id)">
+            <ContextMenuItem @select="">
                 <Pencil class="size-4 opacity-60 mr-2" /> Éditer
             </ContextMenuItem>
             <ContextMenuItem @select="confirmOpen = true">
@@ -101,9 +83,7 @@ async function onConnect(id: Server["id"]) {
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel>Annuler</AlertDialogCancel>
-                <AlertDialogAction @click="onConfirmDelete(server.id)"
-                    >Supprimer</AlertDialogAction
-                >
+                <AlertDialogAction @click="">Supprimer</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>

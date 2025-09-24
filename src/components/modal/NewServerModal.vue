@@ -26,7 +26,7 @@ import {
 } from "lucide-vue-next";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { BaseDirectory } from "@tauri-apps/api/path";
-import { useServersStore } from "@/stores/servers";
+import { useServerConfigStore } from "@/stores/servers";
 import { Command } from "@tauri-apps/plugin-shell";
 import type { KeyPair } from "@/types/key";
 
@@ -116,7 +116,7 @@ async function saveServer() {
             baseDir: BaseDirectory.Home,
         });
 
-        const serversStore = useServersStore();
+        const serversStore = useServerConfigStore();
         await serversStore.addServer(
             {
                 id: serverId,
