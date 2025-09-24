@@ -1,10 +1,10 @@
 <script lang="ts" setup>
-import ThemeSwitch from "@/components/ThemeSwitch.vue";
+import { Icon } from "@iconify/vue";
 </script>
 
 <template>
     <div class="container mx-auto">
-        <div class="space-y-0.5 p-10">
+        <!-- <div class="space-y-0.5 p-10">
             <h2 class="text-2xl font-bold tracking-tight">
                 {{ "settings.label" }}
             </h2>
@@ -19,7 +19,7 @@ import ThemeSwitch from "@/components/ThemeSwitch.vue";
                     "settings.theme.label"
                 }}</Label>
                 <ThemeSwitch />
-            </div>
+            </div> -->
             <!-- <div class="flex items-center space-x-2">
                 <Label class="text-lg font-medium" for="language-select">{{
                     t("languages.label")
@@ -41,6 +41,10 @@ import ThemeSwitch from "@/components/ThemeSwitch.vue";
                     </SelectContent>
                 </Select>
             </div> -->
-        </div>
+        <!-- </div> -->
+    <div class="fixed inset-0 flex flex-col items-center justify-center">
+        <Icon icon="mdi:construction" class="mb-4 text-gray-400" width="128" height="128" />
+        <span class="text-gray-400 text-6xl font-medium font-bold">Under Construction</span>
+    </div>
     </div>
 </template>
