@@ -38,10 +38,6 @@ async function connect() {
     await serverInstanceStore.addServerInstance(props.server);
     return router.push(`/server/${props.server.config().getID()}`);
 }
-
-function remove() {
-    serverStore.removeServer(props.server.config().getID());
-}
 </script>
 
 <template>
@@ -89,7 +85,7 @@ function remove() {
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel>Annuler</AlertDialogCancel>
-                <AlertDialogAction @click="remove()">Supprimer</AlertDialogAction>
+                <AlertDialogAction @click="serverStore.removeServer(props.server.config().getID());">Supprimer</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
