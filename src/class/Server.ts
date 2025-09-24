@@ -21,7 +21,7 @@ export default class Server {
 }
 
 export class ConfigServer {
-  readonly server: ServerType;
+  server: ServerType;
   readonly serversStore = useServerConfigStore();
 
   constructor(server: ServerType | undefined) {
@@ -52,25 +52,9 @@ export class ConfigServer {
     return new Key(this.getKeyID());
   }
 
-  setName(name: string): void {
-    if (this.server) {
-      this.server.name = name;
-      this.serversStore.updateServer(this.server.id, this.server);
-    }
-  }
-
-  setIP(ip: string): void {
-    if (this.server) {
-      this.server.ip = ip;
-      this.serversStore.updateServer(this.server.id, this.server);
-    }
-  }
-
-  setKeyID(keyID: number): void {
-    if (this.server) {
-      this.server.keyID = keyID;
-      this.serversStore.updateServer(this.server.id, this.server);
-    }
+  update(server: ServerType): void {
+    this.server = { ...this.server, ...server };
+    this.serversStore.updateServer(this.server.id, this.server);
   }
 
   isValid(): boolean {
@@ -96,13 +80,21 @@ export class ConfigServer {
 
 export class ServerConsole {
   readonly server: Server;
-    
+
   constructor(server: Server) {
     this.server = server;
   }
 
   async create(): Promise<void> {
-    const sshArgs = ["ssh", "-tt", "-o", "StrictHostKeyChecking=accept-new", "-i", await this.server.config().getKey().getPath(), `root@${this.server.config().getIP()}`];
+    const sshArgs = [
+      "ssh",
+      "-tt",
+      "-o",
+      "StrictHostKeyChecking=accept-new",
+      "-i",
+      await this.server.config().getKey().getPath(),
+      `root@${this.server.config().getIP()}`,
+    ];
     const candidates: Array<{ bin: string; args: string[] }> = [
       { bin: "foot", args: ["-e", ...sshArgs] },
       { bin: "alacritty", args: ["-e", ...sshArgs] },
@@ -123,8 +115,7 @@ export class ServerConsole {
         console.log(`Trying terminal: ${c.bin} with args:`, c.args);
         await Command.create(c.bin, c.args).spawn();
         return;
-      }
-      catch (err) {
+      } catch (err) {
         lastErr = err;
         console.log(`❌ Failed to open ${c.bin}:`, err);
       }
