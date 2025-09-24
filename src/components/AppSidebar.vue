@@ -7,10 +7,15 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { RouterLink, useRoute } from "vue-router";
-import { useServerInstancesStore } from "@/stores/serverInstances";
+import { computed } from "vue";
+import { useServerInstanceStore } from "@/stores/serverInstance";
 
 const route = useRoute();
-const serverInstancesStore = useServerInstancesStore();
+const instanceStore = useServerInstanceStore();
+
+const serverInstance = computed(() => {
+    return instanceStore.listServerInstances();
+});
 
 function isRouteActive(routePath: string): boolean {
     return routePath === route.path;
@@ -27,7 +32,6 @@ const routes = [
         class="flex flex-col h-dvh pb-2 pt-2 px-2 justify-between bg-sidebar"
     >
         <div class="flex flex-col gap-1">
-            <!-- Fixed Routes (Servers, SSH Keys) -->
             <nav class="grid gap-1">
                 <Tooltip v-for="route in routes" :key="route.name">
                     <TooltipTrigger as-child>
@@ -50,19 +54,14 @@ const routes = [
                     </TooltipContent>
                 </Tooltip>
             </nav>
-
-            <!-- Separator -->
             <div
-                v-if="serverInstancesStore.sidebarInstances.length > 0"
+                v-if="serverInstance.length > 0"
                 class="border-t border-sidebar-border my-2"
             ></div>
 
-            <nav
-                v-if="serverInstancesStore.sidebarInstances.length > 0"
-                class="grid gap-1"
-            >
+            <nav v-if="serverInstance.length > 0" class="grid gap-1">
                 <div
-                    v-for="instance in serverInstancesStore.sidebarInstances"
+                    v-for="instance in serverInstance"
                     :key="instance.id"
                     class="group relative"
                 >
@@ -78,14 +77,16 @@ const routes = [
                                             : ''
                                     "
                                     class="rounded-lg"
-                                    :aria-label="instance.name"
+                                    :aria-label="
+                                        instance.config().getName() || 'N/A'
+                                    "
                                 >
                                     <Icon icon="lucide:server" class="size-5" />
                                 </Button>
                             </RouterLink>
                         </TooltipTrigger>
                         <TooltipContent side="right" :side-offset="5">
-                            {{ instance.name }}
+                            {{ instance.config().getName() || "N/A" }}
                         </TooltipContent>
                     </Tooltip>
                 </div>

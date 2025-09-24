@@ -1,27 +1,17 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useServerInstancesStore } from "@/stores/serverInstances";
 import { Icon } from "@iconify/vue";
 import { Button } from "@/components/ui/button";
+import Server from "@/class/Server";
 
-const props = defineProps<{
-    serverId: string;
+defineProps<{
+    server: Server;
 }>();
 
 const emit = defineEmits<{
     (e: "close"): void;
     (e: "edit"): void;
 }>();
-
-const serverInstancesStore = useServerInstancesStore();
-
-const serverInstance = computed(() => {
-    return serverInstancesStore.instancesArray.find(
-        (s) => s.id === props.serverId,
-    );
-});
-const serverName = computed(() => serverInstance.value?.getName() || "Unknown");
-const serverIp = computed(() => serverInstance.value?.getIP() || "Unknown");
 </script>
 
 <template>
@@ -30,14 +20,15 @@ const serverIp = computed(() => serverInstance.value?.getIP() || "Unknown");
             <div class="flex items-center gap-3">
                 <Icon icon="logos:debian" class="w-8 h-8" />
                 <div>
-                    <h1 class="text-xl font-semibold">{{ serverName }}</h1>
+                    <h1 class="text-xl font-semibold">
+                        {{ server.config().getName() }}
+                    </h1>
                     <p class="text-sm text-muted-foreground">
-                        IP: {{ serverIp }}
+                        IP: {{ server.config().getIP() }}
                     </p>
                 </div>
             </div>
             <div class="flex items-center gap-2">
-                <!-- Edit Button -->
                 <Button
                     variant="ghost"
                     size="icon"
@@ -48,7 +39,6 @@ const serverIp = computed(() => serverInstance.value?.getIP() || "Unknown");
                     <Icon icon="lucide:pencil" class="w-4 h-4" />
                 </Button>
 
-                <!-- Close Button -->
                 <Button
                     variant="ghost"
                     size="icon"
