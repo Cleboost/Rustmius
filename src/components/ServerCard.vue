@@ -23,6 +23,7 @@ import { useServerInstanceStore } from "@/stores/serverInstance";
 import { useRouter } from "vue-router";
 import { ref } from "vue";
 import Server from "@/class/Server";
+import { useServerConfigStore } from "@/stores/servers";
 
 const props = defineProps<{
     server: Server;
@@ -31,10 +32,15 @@ const props = defineProps<{
 const confirmOpen = ref(false);
 const router = useRouter();
 const serverInstanceStore = useServerInstanceStore();
+const serverStore = useServerConfigStore();
 
 async function connect() {
     await serverInstanceStore.addServerInstance(props.server);
     return router.push(`/server/${props.server.config().getID()}`);
+}
+
+function remove() {
+    serverStore.removeServer(props.server.config().getID());
 }
 </script>
 
@@ -83,7 +89,7 @@ async function connect() {
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel>Annuler</AlertDialogCancel>
-                <AlertDialogAction @click="">Supprimer</AlertDialogAction>
+                <AlertDialogAction @click="remove()">Supprimer</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
