@@ -26,8 +26,8 @@ const tools = [
         name: "Docker",
         desc: "Docker management UI",
         icon: "logos:docker",
-        disabled: true,
-        click: () => {},
+        click: () => router.push(`/server/${server.value?.id}/docker`),
+
     },
     {
         name: "File Manager",
