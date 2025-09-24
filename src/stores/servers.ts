@@ -7,9 +7,9 @@ import { homeDir, BaseDirectory } from "@tauri-apps/api/path";
 import { useKeysStore } from "@/stores/keys";
 
 const store: LazyStore = new LazyStore("servers.json");
-export const useServersStore = defineStore("servers", () => {
+export const useServerConfigStore = defineStore("serversconfig", () => {
   const tree = ref<ServerConfig>([]);
-  let loaded = false;
+  load();
 
   function isFolder(entry: Folder | Server): entry is Folder {
     return (entry as Folder).contents !== undefined;
@@ -31,10 +31,8 @@ export const useServersStore = defineStore("servers", () => {
   }
 
   async function load(): Promise<void> {
-    if (loaded) return;
     const saved = await store.get<ServerConfig>("servers");
     tree.value = saved ?? [];
-    loaded = true;
   }
 
   async function save(): Promise<void> {
@@ -111,135 +109,32 @@ export const useServersStore = defineStore("servers", () => {
     }
   }
 
-  async function getServer(id: Server["id"]): Promise<Server | undefined> {
-    await load();
-    return findServerById(tree.value, id);
-  }
-
-  function flatten(entries: ServerConfig, acc: Server[] = []): Server[] {
-    for (const entry of entries) {
-      if (isFolder(entry)) flatten(entry.contents, acc);
-      else acc.push(entry);
-    }
-    return acc;
-  }
-
-  const getServers = computed<Server[]>(() => flatten(tree.value));
-
-  function isUuid(value: string): boolean {
-    return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
-      value,
-    );
-  }
-
-  async function syncFromSshConfig(): Promise<void> {
-    await load();
-    const home = await homeDir();
-    const sshConfigRel = ".ssh/config";
-    let content: string;
-    try {
-      content = await readTextFile(sshConfigRel, {
-        baseDir: BaseDirectory.Home,
-      });
-    } catch (e) {
-      console.warn("[servers] ~/.ssh/config not found or unreadable", e);
-      return;
-    }
-
-    const lines = content.split(/\r?\n/);
-    type HostBlock = { name: string; options: Record<string, string> };
-    const hosts: HostBlock[] = [];
-    let current: HostBlock | null = null;
-    for (const raw of lines) {
-      const line = raw.trimEnd();
-      if (!line || line.trimStart().startsWith("#")) continue;
-      if (/^Host\s+/i.test(line)) {
-        const name = line.replace(/^Host\s+/i, "").trim();
-        current = { name, options: {} };
-        hosts.push(current);
-      } else if (current) {
-        const m = line.trim().match(/^(\w[\w-]*)\s+(.+)$/);
-        if (m) current.options[m[1].toLowerCase()] = m[2].trim();
+  function getServer(id: Server["id"]): Server | undefined {
+    const search = (entries: ServerConfig): Server | undefined => {
+      for (const entry of entries) {
+        if (isFolder(entry)) {
+          const found = search(entry.contents);
+          if (found) return found;
+        } else if (entry.id === id) return entry;
       }
-    }
+      return undefined;
+    };
+    return search(tree.value);
+  }
 
-    const keysStore = useKeysStore();
-    await keysStore.load();
-    const keys = await keysStore.getKeys();
-    const keyByPath = new Map(keys.map((k) => [k.private, k]));
-
-    let modified = false;
-    const newLines: string[] = [];
-    let i = 0;
-    while (i < lines.length) {
-      const raw = lines[i];
-      const trimmed = raw.trim();
-      if (/^Host\s+/i.test(trimmed)) {
-        const originalAlias = trimmed.replace(/^Host\s+/i, "").trim();
-        i++;
-        const block: string[] = [raw];
-        while (i < lines.length && !/^Host\s+/i.test(lines[i].trim())) {
-          block.push(lines[i]);
-          i++;
-        }
-
-        if (originalAlias.toLowerCase() === "aur.archlinux.org") {
-          newLines.push(...block);
-          continue;
-        }
-
-        const parsed = hosts.find((h) => h.name === originalAlias)!;
-        const hostname = parsed.options["hostname"] ?? "";
-        let identityFile = parsed.options["identityfile"];
-        if (identityFile && identityFile.startsWith("~")) {
-          identityFile = identityFile.replace(/^~\//, `${home}/`);
-        }
-
-        if (isUuid(originalAlias)) {
-          let server = findServerById(tree.value, originalAlias);
-          if (!server) {
-            server = {
-              id: originalAlias,
-              name: originalAlias,
-              ip: hostname,
-              keyID: keyByPath.get(identityFile ?? "")?.id ?? 0,
-            } as Server;
-            await addServer(server);
-          } else {
-            const keyId = keyByPath.get(identityFile ?? "")?.id ?? server.keyID;
-            const updated: Server = {
-              ...server,
-              ip: hostname || server.ip,
-              keyID: keyId,
-            };
-            await updateServer(server.id, updated);
-          }
-          newLines.push(...block);
+  function listServers(): Server[] {
+    const servers: Server[] = [];
+    const traverse = (entries: ServerConfig) => {
+      for (const entry of entries) {
+        if (isFolder(entry)) {
+          traverse(entry.contents);
         } else {
-          const newId = crypto.randomUUID();
-          const server: Server = {
-            id: newId,
-            name: originalAlias,
-            ip: hostname,
-            keyID: keyByPath.get(identityFile ?? "")?.id ?? 0,
-          } as Server;
-          await addServer(server);
-          const replaced = block.slice();
-          replaced[0] = block[0].replace(/^(\s*Host\s+).+$/i, `$1${newId}`);
-          newLines.push(...replaced);
-          modified = true;
+          servers.push(entry);
         }
-      } else {
-        newLines.push(raw);
-        i++;
       }
-    }
-
-    if (modified) {
-      await writeTextFile(sshConfigRel, newLines.join("\n"), {
-        baseDir: BaseDirectory.Home,
-      });
-    }
+    };
+    traverse(tree.value);
+    return servers;
   }
 
   function serverExists(id: Server["id"]): boolean {
@@ -247,15 +142,12 @@ export const useServersStore = defineStore("servers", () => {
   }
 
   return {
-    tree,
     load,
-    getServers,
     getServer,
+    listServers,
     addServer,
     removeServer,
     updateServer,
-    syncFromSshConfig,
-    findServerById: (id: Server["id"]) => findServerById(tree.value, id),
     serverExists,
   };
 });

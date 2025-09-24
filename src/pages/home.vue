@@ -2,11 +2,12 @@
 import { ref, onMounted } from "vue";
 import ServerCard from "@/components/ServerCard.vue";
 import { Button } from "@/components/ui/button";
-import { useServersStore } from "@/stores/servers";
+import { useServerConfigStore } from "@/stores/servers";
 import { Icon } from "@iconify/vue";
 import NewServerModal from "@/components/modal/NewServerModal.vue";
+import Server from "@/class/Server";
 
-const serversStore = useServersStore();
+const serversStore = useServerConfigStore();
 const newServerOpen = ref(false);
 
 onMounted(async () => {
@@ -35,10 +36,9 @@ onMounted(async () => {
         <h2 class="mt-8 text-2xl font-semibold">Your hosts</h2>
         <div class="mt-4 flex flex-wrap gap-2">
             <ServerCard
-                v-for="server in serversStore.getServers"
+                v-for="server in serversStore.listServers()"
                 :key="server.id"
-                :server="server"
-                @connect="(id) => console.log('Connect to server with id:', id)"
+                :server="new Server(server.id)"
             />
         </div>
     </div>

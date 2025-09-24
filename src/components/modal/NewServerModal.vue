@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed } from "vue";
 import {
     Dialog,
     DialogContent,
@@ -23,244 +23,427 @@ import {
     Key as KeyIcon,
     Network,
     User as UserIcon,
+    CheckCircle,
+    AlertCircle,
+    Loader2,
 } from "lucide-vue-next";
-import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
-import { BaseDirectory } from "@tauri-apps/api/path";
-import { useServersStore } from "@/stores/servers";
+import { useServerConfigStore } from "@/stores/servers";
 import { Command } from "@tauri-apps/plugin-shell";
+import {
+    readTextFile,
+    writeTextFile,
+    BaseDirectory,
+} from "@tauri-apps/plugin-fs";
 import type { KeyPair } from "@/types/key";
+import { Server as ServerType } from "@/types/server";
 
 const open = defineModel<boolean>("open", { default: false });
 
 const name = ref("");
 const username = ref("");
 const ip = ref("");
-
-const canSave = computed(
-    () => name.value.trim().length > 0 && username.value.trim().length > 0,
-);
+const selectedKeyId = ref<string | null>(null);
 
 const keysStore = useKeysStore();
+const serverStore = useServerConfigStore();
 const keys = ref<KeyPair[]>([]);
-const selectedKeyId = ref<string | null>(null);
-const saving = ref(false);
-const logDone = ref(false);
+keys.value = keysStore.listKeys();
+
+const testing = ref(false);
+const connectionStatus = ref<
+    "idle" | "testing" | "success" | "failed" | "needs-key"
+>("idle");
 const logLines = ref<string[]>([]);
-const askPasswordOpen = ref(false);
-const installing = ref(false);
+
+const keyDeploymentConfirmOpen = ref(false);
+const passwordModalOpen = ref(false);
+const deploying = ref(false);
 const password = ref("");
-const lastHostAlias = ref<string | null>(null);
 
-onMounted(async () => {
-    await keysStore.load();
-    keys.value = await keysStore.getKeys();
-});
+const successModalOpen = ref(false);
+const serverAdded = ref(false);
+const keyDeployed = ref(false);
+const keyAlreadyExists = ref(false);
+const currentServerId = ref<string | null>(null);
 
-const emit = defineEmits<{
-    (
-        e: "save",
-        payload: {
-            name: string;
-            username: string;
-            ip: string;
-            keyId: number | null;
-        },
-    ): void;
-    (e: "cancel"): void;
-}>();
+const canSave = computed(
+    () =>
+        name.value.trim().length > 0 &&
+        username.value.trim().length > 0 &&
+        ip.value.trim().length > 0,
+);
+
+const canTestConnection = computed(
+    () => username.value.trim().length > 0 && ip.value.trim().length > 0,
+);
+
+function resetForm() {
+    name.value = "";
+    username.value = "";
+    ip.value = "";
+    selectedKeyId.value = null;
+    connectionStatus.value = "idle";
+    logLines.value = [];
+    password.value = "";
+    serverAdded.value = false;
+    keyDeployed.value = false;
+    keyAlreadyExists.value = false;
+    currentServerId.value = null;
+}
 
 function onCancel() {
-    emit("cancel");
     open.value = false;
+    resetForm();
 }
 
-function onSave() {
-    if (!canSave.value) return;
-    void saveServer();
-}
+async function testConnection() {
+    if (!canTestConnection.value) return;
 
-async function saveServer() {
-    saving.value = true;
-    logDone.value = false;
+    testing.value = true;
+    connectionStatus.value = "testing";
     logLines.value = [];
+
     try {
-        const serverId = crypto.randomUUID();
-        const hostName = name.value.trim();
-        const ipAddr = ip.value.trim();
-        const userName = username.value.trim();
-        const keyIdNum =
-            selectedKeyId.value != null ? Number(selectedKeyId.value) : null;
-        lastHostAlias.value = serverId;
+        const sshCmd = Command.create("ssh", [
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "ConnectTimeout=8",
+            "-o",
+            "BatchMode=yes",
+            "-l",
+            username.value.trim(),
+            ip.value.trim(),
+            "exit",
+        ]);
 
-        const sshConfigRel = ".ssh/config";
-        let content = "";
-        try {
-            content = await readTextFile(sshConfigRel, {
-                baseDir: BaseDirectory.Home,
-            });
-        } catch {}
-        const newBlock = [
-            `Host ${serverId}`,
-            ipAddr ? `  Hostname ${ipAddr}` : undefined,
-            `  User ${userName}`,
-            keyIdNum
-                ? `  IdentityFile ${await keyPathFromId(keyIdNum)}`
-                : undefined,
-        ]
-            .filter(Boolean)
-            .join("\n");
-        const newContent = content
-            ? `${content.trim()}\n\n${newBlock}\n`
-            : `${newBlock}\n`;
-        await writeTextFile(sshConfigRel, newContent, {
-            baseDir: BaseDirectory.Home,
+        sshCmd.on("close", ({ code }) => {
+            logLines.value.push(`[exit] code=${code}`);
         });
 
-        const serversStore = useServersStore();
-        await serversStore.addServer(
-            {
-                id: serverId,
-                name: hostName,
-                ip: ipAddr,
-                keyID: keyIdNum ?? 0,
-            } as any,
-            "/",
-        );
+        sshCmd.on("error", (err) => {
+            logLines.value.push(`[error] ${String(err)}`);
+        });
 
-        const status = await testConnection(userName, serverId);
-        if (status !== 0) {
-            askPasswordOpen.value = true;
+        sshCmd.stdout.on("data", (line) => {
+            logLines.value.push(`[out] ${String(line).trimEnd()}`);
+        });
+
+        sshCmd.stderr.on("data", (line) => {
+            const text = String(line);
+            logLines.value.push(`[err] ${text.trimEnd()}`);
+        });
+
+        const status = await sshCmd.execute();
+
+        if (status.stdout)
+            logLines.value.push(`[out] ${status.stdout.trimEnd()}`);
+        if (status.stderr)
+            logLines.value.push(`[err] ${status.stderr.trimEnd()}`);
+
+        if (status.code === 0) {
+            connectionStatus.value = "success";
+            if (
+                !keyDeployed.value &&
+                !logLines.value.some((log) => /password:/i.test(log))
+            ) {
+                keyAlreadyExists.value = true;
+            }
         } else {
-            logDone.value = true;
+            const needsPassword = logLines.value.some(
+                (log) =>
+                    /password:/i.test(log) || /permission denied/i.test(log),
+            );
+            connectionStatus.value = needsPassword ? "needs-key" : "failed";
         }
-
-        emit("save", {
-            name: hostName,
-            username: userName,
-            ip: ipAddr,
-            keyId: keyIdNum,
-        });
-        open.value = false;
-    } catch (e) {
-        console.error("[server] save error", e);
+    } catch (error) {
         logLines.value.push(
-            `[exception] ${(e as any)?.toString?.() ?? "error"}`,
+            `[exception] ${(error as any)?.toString?.() ?? "error"}`,
         );
+        connectionStatus.value = "failed";
     } finally {
-        if (!askPasswordOpen.value) logDone.value = true;
+        testing.value = false;
     }
 }
 
-async function keyPathFromId(id: number): Promise<string | undefined> {
-    const ks = useKeysStore();
-    await ks.load();
-    const all = await ks.getKeys();
-    return all.find((k) => k.id === id)?.private;
-}
+async function deployKey() {
+    if (!selectedKeyId.value || !password.value) return;
 
-async function keyPubPathFromId(id: number): Promise<string | undefined> {
-    const priv = await keyPathFromId(id);
-    if (!priv) return undefined;
-    const pub = `${priv}.pub`;
-    return pub;
-}
+    deploying.value = true;
 
-async function testConnection(
-    userName: string,
-    hostAlias: string,
-): Promise<number> {
-    const sshCmd = Command.create("ssh", [
-        "-vv",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        "-o",
-        "ConnectTimeout=8",
-        "-o",
-        "BatchMode=yes",
-        "-l",
-        userName,
-        hostAlias,
-        "exit",
-    ]);
-    sshCmd.on("close", ({ code }) => {
-        logLines.value.push(`[exit] code=${code}`);
-    });
-    sshCmd.on("error", (err) => {
-        logLines.value.push(`[error] ${String(err)}`);
-    });
-    sshCmd.stdout.on("data", (line) => {
-        logLines.value.push(`[out] ${String(line).trimEnd()}`);
-    });
-    sshCmd.stderr.on("data", (line) => {
-        const text = String(line);
-        logLines.value.push(`[err] ${text.trimEnd()}`);
-        if (/password:/i.test(text)) {
-        }
-    });
-    const status = await sshCmd.execute();
-    if (status.stdout) logLines.value.push(`[out] ${status.stdout.trimEnd()}`);
-    if (status.stderr) logLines.value.push(`[err] ${status.stderr.trimEnd()}`);
-    return status.code || 0;
-}
-
-async function onInstallKey(userName: string, hostAlias: string) {
-    if (!selectedKeyId.value || !hostAlias) {
-        askPasswordOpen.value = false;
-        return;
-    }
-    installing.value = true;
     try {
         const keyIdNum = Number(selectedKeyId.value);
-        const pub = await keyPubPathFromId(keyIdNum);
-        const priv = await keyPathFromId(keyIdNum);
-        const keyArg = pub ?? priv;
-        if (!keyArg) return;
-        const proc = await Command.create("sshpass", [
+        const keyPath = await getKeyPath(keyIdNum);
+        if (!keyPath) {
+            logLines.value.push("[error] Key not found");
+            return;
+        }
+
+        const proc = Command.create("sshpass", [
             "-p",
             password.value,
             "ssh-copy-id",
             "-o",
             "StrictHostKeyChecking=accept-new",
             "-i",
-            keyArg,
-            `${userName}@${hostAlias}`,
+            keyPath,
+            `${username.value.trim()}@${ip.value.trim()}`,
         ]);
-        proc.stdout.on("data", (l) =>
-            logLines.value.push(`[copy] ${String(l).trimEnd()}`),
-        );
-        proc.stderr.on("data", (l) =>
-            logLines.value.push(`[copy-err] ${String(l).trimEnd()}`),
-        );
-        const r = await proc.execute();
-        if (r.stdout) logLines.value.push(`[copy-out] ${r.stdout.trimEnd()}`);
-        if (r.stderr) logLines.value.push(`[copy-err] ${r.stderr.trimEnd()}`);
-        logLines.value.push(`[copy-exit] code=${r.code}`);
-        askPasswordOpen.value = false;
-        await testConnection(userName, hostAlias);
-        logDone.value = true;
-    } catch (e) {
+
+        proc.stdout.on("data", (line) => {
+            logLines.value.push(`[copy] ${String(line).trimEnd()}`);
+        });
+
+        proc.stderr.on("data", (line) => {
+            logLines.value.push(`[copy-err] ${String(line).trimEnd()}`);
+        });
+
+        const result = await proc.execute();
+
+        if (result.stdout)
+            logLines.value.push(`[copy-out] ${result.stdout.trimEnd()}`);
+        if (result.stderr)
+            logLines.value.push(`[copy-err] ${result.stderr.trimEnd()}`);
+        logLines.value.push(`[copy-exit] code=${result.code}`);
+
+        if (result.code === 0) {
+            passwordModalOpen.value = false;
+            password.value = "";
+            keyDeployed.value = true;
+            await testConnection();
+            successModalOpen.value = true;
+        }
+    } catch (error) {
         logLines.value.push(
-            `[install-exception] ${(e as any)?.toString?.() ?? "error"}`,
+            `[install-exception] ${(error as any)?.toString?.() ?? "error"}`,
         );
     } finally {
-        installing.value = false;
-        password.value = "";
+        deploying.value = false;
+    }
+}
+
+async function getKeyPath(keyId: number): Promise<string | undefined> {
+    await keysStore.load();
+    const allKeys = await keysStore.getKeys();
+    return allKeys.find((k) => k.id === keyId)?.private;
+}
+
+async function onSave() {
+    if (!canSave.value) return;
+
+    const serverId = crypto.randomUUID();
+    const server: ServerType = {
+        id: serverId,
+        name: name.value.trim(),
+        ip: ip.value.trim(),
+        keyID: selectedKeyId.value ? Number(selectedKeyId.value) : 0,
+        username: username.value.trim(),
+    };
+
+    try {
+        await updateSSHConfig(server);
+
+        serverStore.addServer(server);
+
+        serverAdded.value = true;
+        currentServerId.value = serverId;
+
+        open.value = false;
+
+        await testConnectionForSave();
+    } catch (error) {
+        console.error("Error saving server:", error);
+    }
+}
+
+async function testConnectionForSave() {
+    if (!canTestConnection.value) return;
+
+    testing.value = true;
+    connectionStatus.value = "testing";
+    logLines.value = [];
+
+    try {
+        const sshCmd = Command.create("ssh", [
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "ConnectTimeout=8",
+            "-o",
+            "BatchMode=yes",
+            "-l",
+            username.value.trim(),
+            ip.value.trim(),
+            "exit",
+        ]);
+
+        sshCmd.on("close", ({ code }) => {
+            logLines.value.push(`[exit] code=${code}`);
+        });
+
+        sshCmd.on("error", (err) => {
+            logLines.value.push(`[error] ${String(err)}`);
+        });
+
+        sshCmd.stdout.on("data", (line) => {
+            logLines.value.push(`[out] ${String(line).trimEnd()}`);
+        });
+
+        sshCmd.stderr.on("data", (line) => {
+            const text = String(line);
+            logLines.value.push(`[err] ${text.trimEnd()}`);
+        });
+
+        const status = await sshCmd.execute();
+
+        if (status.stdout)
+            logLines.value.push(`[out] ${status.stdout.trimEnd()}`);
+        if (status.stderr)
+            logLines.value.push(`[err] ${status.stderr.trimEnd()}`);
+
+        if (status.code === 0) {
+            connectionStatus.value = "success";
+            if (
+                !keyDeployed.value &&
+                !logLines.value.some((log) => /password:/i.test(log))
+            ) {
+                keyAlreadyExists.value = true;
+            }
+            successModalOpen.value = true;
+        } else {
+            const needsPassword = logLines.value.some(
+                (log) =>
+                    /password:/i.test(log) || /permission denied/i.test(log),
+            );
+            if (needsPassword && selectedKeyId.value) {
+                keyDeploymentConfirmOpen.value = true;
+                connectionStatus.value = "needs-key";
+            } else {
+                connectionStatus.value = "failed";
+                successModalOpen.value = true;
+            }
+        }
+    } catch (error) {
+        logLines.value.push(
+            `[exception] ${(error as any)?.toString?.() ?? "error"}`,
+        );
+        connectionStatus.value = "failed";
+        successModalOpen.value = true;
+    } finally {
+        testing.value = false;
+    }
+}
+
+function agreeToDeployKey() {
+    keyDeploymentConfirmOpen.value = false;
+    passwordModalOpen.value = true;
+}
+
+async function declineKeyDeployment() {
+    keyDeploymentConfirmOpen.value = false;
+
+    if (currentServerId.value && serverAdded.value) {
+        await serverStore.removeServer(currentServerId.value);
+        await removeFromSSHConfig(currentServerId.value);
+    }
+
+    resetForm();
+}
+
+async function cancelKeyDeployment() {
+    passwordModalOpen.value = false;
+    password.value = "";
+
+    if (currentServerId.value && serverAdded.value) {
+        await serverStore.removeServer(currentServerId.value);
+        await removeFromSSHConfig(currentServerId.value);
+    }
+
+    resetForm();
+}
+
+async function updateSSHConfig(server: ServerType) {
+    const sshConfigPath = ".ssh/config";
+
+    let content = "";
+    try {
+        content = await readTextFile(sshConfigPath, {
+            baseDir: BaseDirectory.Home,
+        });
+    } catch {}
+
+    const keyPath = server.keyID ? await getKeyPath(server.keyID) : null;
+
+    const newBlock = [
+        `Host ${server.id}`,
+        server.ip ? `  Hostname ${server.ip}` : undefined,
+        `  User ${server.username}`,
+        keyPath ? `  IdentityFile ${keyPath}` : undefined,
+    ]
+        .filter(Boolean)
+        .join("\n");
+
+    const newContent = content
+        ? `${content.trim()}\n\n${newBlock}\n`
+        : `${newBlock}\n`;
+
+    await writeTextFile(sshConfigPath, newContent, {
+        baseDir: BaseDirectory.Home,
+    });
+}
+
+async function removeFromSSHConfig(serverId: string) {
+    const sshConfigPath = ".ssh/config";
+
+    try {
+        const content = await readTextFile(sshConfigPath, {
+            baseDir: BaseDirectory.Home,
+        });
+
+        const lines = content.split("\n");
+        const newLines: string[] = [];
+        let skipBlock = false;
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+
+            if (line.trim().startsWith(`Host ${serverId}`)) {
+                skipBlock = true;
+                continue;
+            }
+
+            if (
+                skipBlock &&
+                (line.trim() === "" || line.trim().startsWith("Host "))
+            ) {
+                skipBlock = false;
+            }
+
+            if (!skipBlock) {
+                newLines.push(line);
+            }
+        }
+
+        await writeTextFile(sshConfigPath, newLines.join("\n"), {
+            baseDir: BaseDirectory.Home,
+        });
+    } catch (error) {
+        console.error("Error removing server from SSH config:", error);
     }
 }
 </script>
 
 <template>
     <Dialog v-model:open="open">
-        <DialogContent>
+        <DialogContent class="sm:max-w-md">
             <DialogHeader>
-                <DialogTitle>New server</DialogTitle>
-                <DialogDescription
-                    >Provide basic information for the new
-                    server.</DialogDescription
-                >
+                <DialogTitle>New Server</DialogTitle>
+                <DialogDescription>
+                    Configure your new server connection
+                </DialogDescription>
             </DialogHeader>
 
-            <div class="grid gap-4 py-2">
+            <div class="grid gap-4 py-4">
                 <div class="grid gap-2">
                     <label
                         class="text-sm font-medium flex items-center gap-2"
@@ -274,6 +457,7 @@ async function onInstallKey(userName: string, hostAlias: string) {
                         placeholder="e.g. staging-app"
                     />
                 </div>
+
                 <div class="grid gap-2">
                     <label
                         class="text-sm font-medium flex items-center gap-2"
@@ -287,12 +471,13 @@ async function onInstallKey(userName: string, hostAlias: string) {
                         placeholder="e.g. root"
                     />
                 </div>
+
                 <div class="grid gap-2">
                     <label
                         class="text-sm font-medium flex items-center gap-2"
                         for="server-ip"
                     >
-                        <Network class="size-4 opacity-60" /> IP
+                        <Network class="size-4 opacity-60" /> IP Address
                     </label>
                     <Input
                         id="server-ip"
@@ -300,12 +485,13 @@ async function onInstallKey(userName: string, hostAlias: string) {
                         placeholder="e.g. 192.168.1.10"
                     />
                 </div>
+
                 <div class="grid gap-2">
                     <label
                         class="text-sm font-medium flex items-center gap-2"
                         for="server-key"
                     >
-                        <KeyIcon class="size-4 opacity-60" /> SSH key
+                        <KeyIcon class="size-4 opacity-60" /> SSH Key
                     </label>
                     <Select v-model="selectedKeyId">
                         <SelectTrigger id="server-key">
@@ -332,92 +518,229 @@ async function onInstallKey(userName: string, hostAlias: string) {
                 </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter class="gap-2">
                 <Button variant="outline" @click="onCancel">Cancel</Button>
-                <Button :disabled="!canSave" @click="onSave">Save</Button>
+                <Button :disabled="!canSave" @click="onSave"
+                    >Save Server</Button
+                >
             </DialogFooter>
         </DialogContent>
     </Dialog>
 
-    <Dialog v-model:open="saving">
-        <DialogContent class="sm:max-w-xl">
-            <DialogHeader>
-                <DialogTitle>Testing SSH connection…</DialogTitle>
-                <DialogDescription>
-                    We’re accepting the fingerprint and probing the host.
-                </DialogDescription>
-            </DialogHeader>
-            <div class="flex items-center gap-3">
-                <svg
-                    v-if="!logDone"
-                    class="size-5 animate-spin text-muted-foreground"
-                    viewBox="0 0 24 24"
-                >
-                    <circle
-                        class="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        stroke-width="4"
-                        fill="none"
-                    />
-                    <path
-                        class="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                    />
-                </svg>
-                <span class="text-sm text-muted-foreground">
-                    {{
-                        logDone
-                            ? "Completed. Review logs below."
-                            : "Running ssh -o StrictHostKeyChecking=accept-new …"
-                    }}
-                </span>
-            </div>
-            <div
-                class="mt-4 h-48 overflow-auto rounded-md border bg-muted p-2 text-xs font-mono whitespace-pre-wrap"
-            >
-                <template v-for="(l, idx) in logLines" :key="idx"
-                    >{{ l }}\n</template
-                >
-            </div>
-            <DialogFooter v-if="logDone">
-                <Button variant="outline" @click="saving = false">Close</Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
-
-    <Dialog v-model:open="askPasswordOpen">
+    <Dialog v-model:open="keyDeploymentConfirmOpen">
         <DialogContent class="sm:max-w-md">
             <DialogHeader>
-                <DialogTitle>Authentication required</DialogTitle>
+                <DialogTitle class="flex items-center gap-2">
+                    <KeyIcon class="size-5 text-blue-400" />
+                    SSH Key Deployment Required
+                </DialogTitle>
                 <DialogDescription>
-                    Enter the SSH password to install the selected key on the
-                    server.
+                    The server requires password authentication to deploy your
+                    SSH key.
                 </DialogDescription>
             </DialogHeader>
-            <div class="grid gap-2">
-                <label class="text-sm font-medium" for="ssh-password"
-                    >Password</label
+
+            <div class="space-y-4">
+                <div
+                    class="p-3 bg-blue-950/50 rounded-lg border border-blue-800/50"
                 >
-                <Input
-                    id="ssh-password"
-                    v-model="password"
-                    type="password"
-                    placeholder="••••••"
-                />
+                    <div class="flex items-start gap-3">
+                        <AlertCircle class="size-5 text-blue-400 mt-0.5" />
+                        <div class="space-y-2">
+                            <p class="text-sm font-medium text-blue-100">
+                                Password authentication detected
+                            </p>
+                            <p class="text-sm text-blue-200">
+                                To complete the server setup, you'll need to
+                                enter your SSH password to deploy the selected
+                                key :
+                                <strong class="text-blue-100">
+                                    {{
+                                        keys.find(
+                                            (k) =>
+                                                String(k.id) ===
+                                                String(selectedKeyId),
+                                        )?.name
+                                    }}
+                                </strong>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-muted rounded-lg">
+                    <h4 class="font-medium mb-2">Server Details</h4>
+                    <div class="space-y-1 text-sm text-muted-foreground">
+                        <div><strong>Name:</strong> {{ name }}</div>
+                        <div><strong>IP:</strong> {{ ip }}</div>
+                        <div><strong>Username:</strong> {{ username }}</div>
+                    </div>
+                </div>
             </div>
-            <DialogFooter>
-                <Button variant="outline" @click="askPasswordOpen = false"
+
+            <DialogFooter class="gap-2">
+                <Button variant="outline" @click="declineKeyDeployment">
+                    Decline
+                </Button>
+                <Button @click="agreeToDeployKey"> Agree & Deploy Key </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="passwordModalOpen">
+        <DialogContent class="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle class="flex items-center gap-2">
+                    <KeyIcon class="size-5 text-green-400" />
+                    Deploy SSH Key
+                </DialogTitle>
+                <DialogDescription>
+                    Enter your SSH password to deploy the key to {{ ip }}
+                </DialogDescription>
+            </DialogHeader>
+
+            <div class="space-y-4">
+                <div class="grid gap-2">
+                    <label class="text-sm font-medium" for="ssh-password"
+                        >SSH Password</label
+                    >
+                    <Input
+                        id="ssh-password"
+                        v-model="password"
+                        type="password"
+                        placeholder="Enter your SSH password"
+                        @keydown.enter="deployKey"
+                    />
+                </div>
+
+                <div class="p-3 bg-muted rounded-lg">
+                    <div class="flex items-center gap-2 mb-2">
+                        <KeyIcon class="size-4 text-muted-foreground" />
+                        <span class="text-sm font-medium">Deploying Key</span>
+                    </div>
+                    <div class="text-sm text-muted-foreground">
+                        <strong>{{
+                            keys.find(
+                                (k) => String(k.id) === String(selectedKeyId),
+                            )?.name
+                        }}</strong>
+                        to {{ username }}@{{ ip }}
+                    </div>
+                </div>
+            </div>
+            <DialogFooter class="gap-2">
+                <Button variant="outline" @click="cancelKeyDeployment"
                     >Cancel</Button
                 >
-                <Button
-                    :disabled="installing || !password"
-                    @click="onInstallKey(username, lastHostAlias || '')"
+                <Button :disabled="deploying || !password" @click="deployKey">
+                    <template v-if="deploying">
+                        <Loader2 class="size-3 mr-1 animate-spin" />
+                    </template>
+                    {{ deploying ? "Deploying..." : "Deploy Key" }}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="successModalOpen">
+        <DialogContent class="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle class="flex items-center gap-2">
+                    <CheckCircle class="size-5 text-green-400" />
+                    <template v-if="keyDeployed"
+                        >Key Deployed Successfully!</template
+                    >
+                    <template v-else-if="keyAlreadyExists"
+                        >Server Added Successfully!</template
+                    >
+                    <template v-else>Server Added Successfully!</template>
+                </DialogTitle>
+                <DialogDescription>
+                    <template v-if="keyDeployed">
+                        Your SSH key has been deployed and the server is ready
+                        to use.
+                    </template>
+                    <template v-else-if="keyAlreadyExists">
+                        The server is ready to use. No key deployment needed -
+                        it was already configured.
+                    </template>
+                    <template v-else>
+                        Your server has been configured and added to your SSH
+                        config.
+                    </template>
+                </DialogDescription>
+            </DialogHeader>
+
+            <div class="space-y-4">
+                <div
+                    class="p-3 bg-green-950/50 rounded-lg border border-green-800/50"
                 >
-                    {{ installing ? "Installing…" : "Install key" }}
+                    <h4 class="font-medium mb-2 text-green-100">
+                        Server Details
+                    </h4>
+                    <div class="space-y-1 text-sm text-green-200">
+                        <div>
+                            <strong class="text-green-100">Name:</strong>
+                            {{ name }}
+                        </div>
+                        <div>
+                            <strong class="text-green-100">IP:</strong> {{ ip }}
+                        </div>
+                        <div>
+                            <strong class="text-green-100">Username:</strong>
+                            {{ username }}
+                        </div>
+                        <div v-if="selectedKeyId">
+                            <strong class="text-green-100">SSH Key:</strong>
+                            {{
+                                keys.find(
+                                    (k) =>
+                                        String(k.id) === String(selectedKeyId),
+                                )?.name || "Selected key"
+                            }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-muted rounded-lg">
+                    <div class="flex items-center gap-2">
+                        <template v-if="keyDeployed">
+                            <CheckCircle class="size-4 text-green-400" />
+                            <span class="text-sm font-medium text-green-300"
+                                >✅ Key deployed successfully</span
+                            >
+                        </template>
+                        <template v-else-if="keyAlreadyExists">
+                            <CheckCircle class="size-4 text-blue-400" />
+                            <span class="text-sm font-medium text-blue-300"
+                                >✅ Key was already present</span
+                            >
+                        </template>
+                        <template v-else-if="selectedKeyId">
+                            <AlertCircle class="size-4 text-yellow-400" />
+                            <span class="text-sm font-medium text-yellow-300"
+                                >⚠️ Key deployment not attempted</span
+                            >
+                        </template>
+                        <template v-else>
+                            <AlertCircle class="size-4 text-gray-400" />
+                            <span class="text-sm font-medium text-gray-300"
+                                >ℹ️ No SSH key selected</span
+                            >
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <DialogFooter>
+                <Button
+                    @click="
+                        successModalOpen = false;
+                        resetForm();
+                    "
+                    class="w-full"
+                >
+                    Close
                 </Button>
             </DialogFooter>
         </DialogContent>
