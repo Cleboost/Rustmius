@@ -23,7 +23,7 @@ jobs:
           fetch-depth: 2
 
       - name: Install git
-        run: pacman -S --noconfirm git
+        run: pacman -Syu --noconfirm git
 
       - name: Check if PKGBUILD changed
         id: check-rustmius
