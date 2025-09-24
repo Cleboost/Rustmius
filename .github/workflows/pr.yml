@@ -50,5 +50,8 @@ jobs:
       - name: Install Bun Packages
         run: bun install
 
+      - name: Run Knip
+        run: bun run knip
+
       - name: Build project
         run: bun run tauri build --no-bundle
