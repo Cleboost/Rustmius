@@ -1,31 +1,36 @@
 name: Manual AUR Publish
 
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Tag to publish (e.g., v1.0.0)"
-        required: true
-        default: "v0.1.0"
+      publish_rustmius:
+        description: 'Publish rustmius (source package)'
+        required: false
+        type: boolean
+        default: false
+      publish_rustmius_bin:
+        description: 'Publish rustmius-bin (binary package)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    name: Build Linux
+  publish:
+    name: AUR Publish
     runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
-
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Publish AUR package
+      - name: Publish AUR package (rustmius)
+        if: ${{ github.event.inputs.publish_rustmius == 'true' }}
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
         with:
           pkgname: rustmius
@@ -36,7 +41,8 @@ jobs:
           commit_message: Update AUR package
           ssh_keyscan_types: rsa,ecdsa,ed25519
 
-      - name: Publish AUR package
+      - name: Publish AUR package (rustmius-bin)
+        if: ${{ github.event.inputs.publish_rustmius_bin == 'true' }}
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
         with:
           pkgname: rustmius-bin
