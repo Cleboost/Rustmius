@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import ServerHeader from "@/components/ServerHeader.vue";
 import ServerToolCard from "@/components/ServerToolCard.vue";
 import { useServerInstanceStore } from "@/stores/serverInstance";
+import EditServerModal from "@/components/modal/EditServerModal.vue";
 
 const router = useRouter();
 const serverInstancesStore = useServerInstanceStore();
@@ -89,9 +90,8 @@ function editServer() {
         </div>
     </div>
 
-    <!-- <EditServerModal
+    <EditServerModal
         v-model:open="editModalOpen"
-        :server-id="serverId"
-        @server-updated="handleServerUpdated"
-    /> -->
+        :server="server"
+    /> 
 </template>
