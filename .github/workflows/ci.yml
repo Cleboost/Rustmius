@@ -68,9 +68,6 @@ jobs:
           commit_message: Update AUR package
           ssh_keyscan_types: rsa,ecdsa,ed25519
 
-      - name: Generate AUR package for binary
-        run: chmod +x .github/scripts/aur-bin.sh && .github/scripts/aur-bin.sh
-
       - name: Publish AUR package
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
         with:
