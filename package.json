@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "lint" : "vue-tsc --noEmit",
     "knip": "knip"
   },
   "dependencies": {
@@ -16,7 +17,6 @@
     "@tanstack/vue-table": "^8.21.3",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-fs": "^2.4.2",
-    "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-shell": "^2.3.1",
     "@tauri-apps/plugin-store": "^2.4.0",
     "@unovis/ts": "^1.6.1",
