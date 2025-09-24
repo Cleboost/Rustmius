@@ -24,6 +24,7 @@ import { useRouter } from "vue-router";
 import { ref } from "vue";
 import Server from "@/class/Server";
 import { useServerConfigStore } from "@/stores/servers";
+import EditServerModal from "@/components/modal/EditServerModal.vue";
 
 const props = defineProps<{
     server: Server;
@@ -33,6 +34,7 @@ const confirmOpen = ref(false);
 const router = useRouter();
 const serverInstanceStore = useServerInstanceStore();
 const serverStore = useServerConfigStore();
+const editServerModalOpen = ref(false);
 
 async function connect() {
     await serverInstanceStore.addServerInstance(props.server);
@@ -41,6 +43,10 @@ async function connect() {
 </script>
 
 <template>
+    <EditServerModal
+        v-model:open="editServerModalOpen"
+        :server="props.server"
+    />
     <ContextMenu>
         <ContextMenuTrigger as-child>
             <Card class="p-2 flex flex-row">
@@ -65,7 +71,7 @@ async function connect() {
             </Card>
         </ContextMenuTrigger>
         <ContextMenuContent>
-            <ContextMenuItem @select="">
+            <ContextMenuItem @select="editServerModalOpen = true">
                 <Pencil class="size-4 opacity-60 mr-2" /> Éditer
             </ContextMenuItem>
             <ContextMenuItem @select="confirmOpen = true">
@@ -85,7 +91,12 @@ async function connect() {
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel>Annuler</AlertDialogCancel>
-                <AlertDialogAction @click="serverStore.removeServer(props.server.config().getID());">Supprimer</AlertDialogAction>
+                <AlertDialogAction
+                    @click="
+                        serverStore.removeServer(props.server.config().getID())
+                    "
+                    >Supprimer</AlertDialogAction
+                >
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
