@@ -19,65 +19,42 @@ const tools = [
         name: "Terminal",
         desc: "Open SSH terminal",
         icon: "mdi:terminal",
-        //click: () => serverInstance.value?.launchTerminal(),
-        click: () => server.value.console.create()
+        click: () => server.value.console.create(),
     },
     {
         name: "Docker",
         desc: "Docker management UI",
         icon: "logos:docker",
         disabled: true,
-        click: () => {
-            window.open("http://localhost:9000", "_blank");
-        },
+        click: () => {},
     },
     {
         name: "File Manager",
         desc: "Browse server files",
         icon: "mdi:folder-open",
         disabled: true,
-        click: () => {
-            console.log(
-                "File manager not implemented yet for server:",
-                serverInstance.value?.getName(),
-            );
-        },
+        click: () => {},
     },
     {
         name: "System Monitor",
         desc: "Monitor system resources",
         icon: "mdi:chart-line",
         disabled: true,
-        click: () => {
-            console.log(
-                "System monitor not implemented yet for server:",
-                serverInstance.value?.getName(),
-            );
-        },
+        click: () => {},
     },
     {
         name: "Logs Viewer",
         desc: "View system logs",
         icon: "mdi:file-document-outline",
         disabled: true,
-        click: () => {
-            console.log(
-                "Logs viewer not implemented yet for server:",
-                serverInstance.value?.getName(),
-            );
-        },
+        click: () => {},
     },
     {
         name: "Services",
         desc: "Manage system services",
         icon: "mdi:cog",
         disabled: true,
-        click: () => {
-            console.log(
-                "Services manager not implemented yet for server:",
-                serverInstance.value?.getName(),
-            );
-        },
+        click: () => {},
     },
 ];
 
