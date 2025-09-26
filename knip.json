@@ -1,0 +1,19 @@
+{
+    "$schema": "https://unpkg.com/knip@5/schema.json",
+    "entry": ["src/main.ts"],
+    "project": ["src/**/*.{ts,vue}"],
+    "ignore": ["src/**/*.d.ts", "src/components/ui/**/*"],
+    "ignoreDependencies": [
+        "@tanstack/vue-table",
+        "@unovis/ts",
+        "@unovis/vue",
+        "@vee-validate/zod",
+        "embla-carousel-vue",
+        "tailwindcss",
+        "tw-animate-css",
+        "vaul-vue",
+        "vee-validate",
+        "vue-sonner",
+        "zod"
+    ]
+}
