@@ -1,6 +1,6 @@
-import { createMemoryHistory, createRouter } from "vue-router";
+import { createMemoryHistory, createRouter, type RouteRecordRaw } from "vue-router";
 
-const routes = [
+const routes: RouteRecordRaw[] = [
   {
     path: "/",
     redirect: "/home",
@@ -20,9 +20,12 @@ const routes = [
   {
     path: "/server/:id",
     name: "server",
-    children: [
-    ],
     component: () => import("@/pages/server/index.vue"),
+  },
+  {
+    path: "/server/:id/docker",
+    name: "docker",
+    component: () => import("@/pages/server/docker.vue"),
   },
   {
     path: "/settings",

@@ -5,14 +5,16 @@ import Key from "./Class";
 
 export default class Server {
   public readonly id: ServerType["id"];
-  configClass: ConfigServer | undefined;
-  console: ServerConsole | undefined;
+  configClass: ConfigServer;
+  console: ServerConsole;
+  docker: Docker;
   readonly serversStore = useServerConfigStore();
 
   constructor(id: string) {
     this.id = id;
     this.configClass = new ConfigServer(this.serversStore.getServer(id));
     this.console = new ServerConsole(this);
+    this.docker = new Docker(this);
   }
 
   config(): ConfigServer {
@@ -20,7 +22,7 @@ export default class Server {
   }
 }
 
-export class ConfigServer {
+class ConfigServer {
   server: ServerType;
   readonly serversStore = useServerConfigStore();
 
@@ -123,4 +125,90 @@ export class ServerConsole {
     console.error("❌ No terminal emulator available. Last error:", lastErr);
     throw lastErr ?? new Error("No terminal emulator available");
   }
+
+  async execute(command: string): Promise<string> {
+    const child = Command.create("ssh", ["-tt", "-o", "StrictHostKeyChecking=accept-new", "-i", await this.server.config().getKey().getPath(), `root@${this.server.config().getIP()}`, command]);
+    
+    return new Promise((resolve, reject) => {
+      let stdout = "";
+      let stderr = "";
+      
+      child.on("close", (data) => {
+        if (data.code === 0) {
+          resolve(stdout);
+        } else {
+          if (stderr.includes("No route to host")) {
+            reject(new Error("Cannot connect to server: No route to host"));
+          } else if (stderr.includes("Connection refused")) {
+            reject(new Error("Cannot connect to server: Connection refused"));
+          } else if (stderr.includes("Permission denied")) {
+            reject(new Error("Cannot connect to server: Permission denied"));
+          } else if (stderr.includes("Host key verification failed")) {
+            reject(new Error("Cannot connect to server: Host key verification failed"));
+          } else {
+            reject(new Error(`Command failed with code ${data.code}: ${stderr}`));
+          }
+        }
+      });
+      
+      child.on("error", (error) => {
+        reject(new Error(`Error executing command: ${error}`));
+      });
+      
+      child.stdout.on("data", (data) => {
+        stdout += data;
+      });
+      
+      child.stderr.on("data", (data) => {
+        stderr += data;
+      });
+      
+      child.spawn();
+    });
+  }
 }
+
+class Docker {
+  readonly server: Server;
+
+  constructor(server: Server) {
+    this.server = server;
+  }
+  
+  async getVersion(): Promise<string> {
+    try {
+      const output = await this.server.console.execute("docker version");
+      const lines = output.split('\n');
+      let foundCommunity = false;
+      let version = null;
+
+      for (let i = 0; i < lines.length; i++) {
+        if (!foundCommunity && lines[i].includes("Docker Engine - Community")) {
+          foundCommunity = true;
+          for (let j = i + 1; j < lines.length; j++) {
+            const versionMatch = lines[j].match(/Version:\s*([^\s]+)/);
+            if (versionMatch) {
+              version = versionMatch[1];
+              break;
+            }
+          }
+          break;
+        }
+      }
+
+      if (foundCommunity && version) {
+        return `Community Version ${version}`;
+      } else {
+        return "Unknown version";
+      }
+    } catch (error) {
+      console.error("Error retrieving Docker version:", error);
+      if (error instanceof Error) {
+        return `Error: ${error.message}`;
+      }
+      return "Connection error";
+    }
+  }
+}
+
+export type { ConfigServer, Docker };
