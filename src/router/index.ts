@@ -1,4 +1,8 @@
-import { createMemoryHistory, createRouter, type RouteRecordRaw } from "vue-router";
+import {
+  createMemoryHistory,
+  createRouter,
+  type RouteRecordRaw,
+} from "vue-router";
 
 const routes: RouteRecordRaw[] = [
   {
@@ -26,6 +30,21 @@ const routes: RouteRecordRaw[] = [
     path: "/server/:id/docker",
     name: "docker",
     component: () => import("@/pages/server/docker.vue"),
+  },
+  {
+    path: "/server/:id/docker/images",
+    name: "images",
+    component: () => import("@/pages/server/docker/images.vue"),
+  },
+  {
+    path: "/server/:id/docker/containers",
+    name: "containers",
+    component: () => import("@/pages/server/docker/containers.vue"),
+  },
+  {
+    path: "/server/:id/docker/container/:cid",
+    name: "container-details",
+    component: () => import("@/pages/server/docker/container/index.vue"),
   },
   {
     path: "/settings",

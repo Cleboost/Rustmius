@@ -209,6 +209,102 @@ class Docker {
       return "Connection error";
     }
   }
+
+  async getAllDockerData(): Promise<{
+    containers: {
+      running: number;
+      stopped: number;
+      total: number;
+    };
+    images: {
+      local: number;
+      size: string;
+      dangling: number;
+    };
+  }> {
+    try {
+      const command = `echo "===CONTAINERS===" && docker ps -a --format "{{.Status}}" && echo "===IMAGES===" && docker images --format "{{.Repository}}" && echo "===DANGLING===" && docker images -f dangling=true --format "{{.Repository}}" && echo "===SIZE===" && docker system df`;
+      
+      const output = await this.server.console.execute(command);
+      console.log("Docker command output:", output); // Debug log
+      
+      const lines = output.split('\n');
+      let currentSection = '';
+      const containers: string[] = [];
+      const images: string[] = [];
+      const dangling: string[] = [];
+      let size = "0B";
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        
+        if (trimmedLine === '===CONTAINERS===') {
+          currentSection = 'containers';
+          continue;
+        } else if (trimmedLine === '===IMAGES===') {
+          currentSection = 'images';
+          continue;
+        } else if (trimmedLine === '===DANGLING===') {
+          currentSection = 'dangling';
+          continue;
+        } else if (trimmedLine === '===SIZE===') {
+          currentSection = 'size';
+          continue;
+        }
+        
+        if (trimmedLine && !trimmedLine.includes('REPOSITORY')) {
+          switch (currentSection) {
+            case 'containers':
+              containers.push(trimmedLine);
+              break;
+            case 'images':
+              images.push(trimmedLine);
+              break;
+            case 'dangling':
+              dangling.push(trimmedLine);
+              break;
+            case 'size':
+              if (trimmedLine.includes('Images')) {
+                const sizeMatch = trimmedLine.match(/(\d+\.?\d*[GMK]?B)/);
+                if (sizeMatch) {
+                  size = sizeMatch[1];
+                }
+              }
+              break;
+          }
+        }
+      }
+      
+      let running = 0;
+      let stopped = 0;
+      for (const container of containers) {
+        if (container.includes('Up')) {
+          running++;
+        } else {
+          stopped++;
+        }
+      }
+
+      return {
+        containers: {
+          running,
+          stopped,
+          total: running + stopped
+        },
+        images: {
+          local: images.length,
+          size,
+          dangling: dangling.length
+        }
+      };
+    } catch (error) {
+      console.error("Error retrieving Docker data:", error);
+      return {
+        containers: { running: 0, stopped: 0, total: 0 },
+        images: { local: 0, size: "0B", dangling: 0 }
+      };
+    }
+  }
 }
 
 export type { ConfigServer, Docker };

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import ServerHeader from "@/components/ServerHeader.vue";
 import { Icon } from "@iconify/vue";
@@ -17,6 +17,40 @@ const server = computed(() =>
 
 const editModalOpen = ref(false);
 
+const containersData = ref({
+    running: 0,
+    stopped: 0,
+    total: 0
+});
+
+const imagesData = ref({
+    local: 0,
+    size: "0B",
+    dangling: 0
+});
+
+const loading = ref(false);
+
+async function loadDockerData() {
+    if (!server.value) return;
+    
+    loading.value = true;
+    try {
+        const data = await server.value.docker.getAllDockerData();
+        
+        containersData.value = data.containers;
+        imagesData.value = data.images;
+    } catch (error) {
+        console.error("Error loading Docker data:", error);
+    } finally {
+        loading.value = false;
+    }
+}
+
+onMounted(() => {
+    loadDockerData();
+});
+
 function closeServerTab() {
     useServerInstanceStore().removeServerInstance(server.value?.id);
     router.push("/home");
@@ -27,13 +61,11 @@ function editServer() {
 }
 
 function viewContainers() {
-    console.log("View Containers clicked for server:", server.value?.config().get().name);
-    // TODO: Implement containers view
+    router.push(`/server/${server.value?.id}/docker/containers`);
 }
 
 function viewImages() {
-    console.log("View Images clicked for server:", server.value?.config().get().name);
-    // TODO: Implement images view
+    router.push(`/server/${server.value?.id}/docker/images`);
 }
 </script>
 
@@ -60,6 +92,19 @@ function viewImages() {
              </div>
          </div>
          
+         <div class="flex items-center justify-between">
+             <h2 class="text-lg font-semibold">Docker Management</h2>
+             <Button 
+                 @click="loadDockerData" 
+                 :disabled="loading"
+                 variant="outline"
+                 size="sm"
+             >
+                 <Icon icon="mdi:refresh" class="w-4 h-4 mr-2" />
+                 {{ loading ? 'Loading...' : 'Refresh' }}
+             </Button>
+         </div>
+         
          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div class="border rounded-lg p-6 bg-card hover:shadow-md transition-shadow">
                  <div class="flex items-center gap-3 mb-4">
@@ -72,15 +117,24 @@ function viewImages() {
                  <div class="space-y-2">
                      <div class="flex items-center justify-between">
                          <span class="text-sm">Running:</span>
-                         <span class="text-sm font-medium">0</span>
+                         <span class="text-sm font-medium">
+                             <Icon v-if="loading" icon="mdi:loading" class="w-4 h-4 animate-spin" />
+                             <span v-else>{{ containersData.running }}</span>
+                         </span>
                      </div>
                      <div class="flex items-center justify-between">
                          <span class="text-sm">Stopped:</span>
-                         <span class="text-sm font-medium">0</span>
+                         <span class="text-sm font-medium">
+                             <Icon v-if="loading" icon="mdi:loading" class="w-4 h-4 animate-spin" />
+                             <span v-else>{{ containersData.stopped }}</span>
+                         </span>
                      </div>
                      <div class="flex items-center justify-between">
                          <span class="text-sm">Total:</span>
-                         <span class="text-sm font-medium">0</span>
+                         <span class="text-sm font-medium">
+                             <Icon v-if="loading" icon="mdi:loading" class="w-4 h-4 animate-spin" />
+                             <span v-else>{{ containersData.total }}</span>
+                         </span>
                      </div>
                  </div>
                  <Button 
@@ -102,15 +156,24 @@ function viewImages() {
                  <div class="space-y-2">
                      <div class="flex items-center justify-between">
                          <span class="text-sm">Local:</span>
-                         <span class="text-sm font-medium">0</span>
+                         <span class="text-sm font-medium">
+                             <Icon v-if="loading" icon="mdi:loading" class="w-4 h-4 animate-spin" />
+                             <span v-else>{{ imagesData.local }}</span>
+                         </span>
                      </div>
                      <div class="flex items-center justify-between">
                          <span class="text-sm">Size:</span>
-                         <span class="text-sm font-medium">0 MB</span>
+                         <span class="text-sm font-medium">
+                             <Icon v-if="loading" icon="mdi:loading" class="w-4 h-4 animate-spin" />
+                             <span v-else>{{ imagesData.size }}</span>
+                         </span>
                      </div>
                      <div class="flex items-center justify-between">
                          <span class="text-sm">Dangling:</span>
-                         <span class="text-sm font-medium">0</span>
+                         <span class="text-sm font-medium">
+                             <Icon v-if="loading" icon="mdi:loading" class="w-4 h-4 animate-spin" />
+                             <span v-else>{{ imagesData.dangling }}</span>
+                         </span>
                      </div>
                  </div>
                  <Button 

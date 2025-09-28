@@ -27,7 +27,7 @@ const tools = [
         desc: "Docker management UI",
         icon: "logos:docker",
         click: () => router.push(`/server/${server.value?.id}/docker`),
-
+        tag: "Beta",
     },
     {
         name: "File Manager",
@@ -85,13 +85,11 @@ function editServer() {
                 :desc="tool.desc"
                 :icon="tool.icon"
                 :disabled="tool.disabled || false"
+                :tag="tool.tag"
                 @click="tool.click()"
             />
         </div>
     </div>
 
-    <EditServerModal
-        v-model:open="editModalOpen"
-        :server="server"
-    /> 
+    <EditServerModal v-model:open="editModalOpen" :server="server" />
 </template>
