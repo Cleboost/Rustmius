@@ -6,6 +6,7 @@ defineProps<{
     desc: string;
     icon: string;
     disabled?: boolean;
+    tag?: string;
 }>();
 
 defineEmits<{
@@ -32,10 +33,18 @@ defineEmits<{
                 ]"
             />
             <div>
-                <h3 :class="[
-                    'font-semibold',
-                    disabled ? 'text-muted-foreground' : ''
-                ]">{{ name }}</h3>
+                <div class="flex items-center gap-2">
+                    <h3 :class="[
+                        'font-semibold',
+                        disabled ? 'text-muted-foreground' : ''
+                    ]">{{ name }}</h3>
+                    <span 
+                        v-if="tag" 
+                        class="px-2.5 py-1 text-xs font-semibold bg-gradient-to-r from-orange-400 to-orange-500 text-white rounded-full shadow-sm border border-orange-300/20"
+                    >
+                        {{ tag }}
+                    </span>
+                </div>
                 <p class="text-sm text-muted-foreground">{{ desc }}</p>
             </div>
         </div>
