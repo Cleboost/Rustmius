@@ -33,6 +33,8 @@ const maxDataPoints = 60;
 
 const logsContainer = ref<HTMLElement | null>(null);
 
+const visibleEnvVars = ref<Set<string>>(new Set());
+
 async function loadContainerInfo() {
     if (!server.value || !containerId.value) return;
 
@@ -128,6 +130,32 @@ function scrollLogsToBottom() {
     if (logsContainer.value) {
         logsContainer.value.scrollTop = logsContainer.value.scrollHeight;
     }
+}
+
+function isSensitiveEnvVar(envVar: string): boolean {
+    const sensitiveKeywords = ['password', 'pass', 'secret', 'key', 'token', 'auth', 'credential', 'pwd'];
+    const lowerEnvVar = envVar.toLowerCase();
+    return sensitiveKeywords.some(keyword => lowerEnvVar.includes(keyword));
+}
+
+function toggleEnvVarVisibility(envVar: string) {
+    if (visibleEnvVars.value.has(envVar)) {
+        visibleEnvVars.value.delete(envVar);
+    } else {
+        visibleEnvVars.value.add(envVar);
+    }
+}
+
+function isEnvVarVisible(envVar: string): boolean {
+    return visibleEnvVars.value.has(envVar);
+}
+
+function maskEnvVarValue(envVar: string): string {
+    const [key, value] = envVar.split('=');
+    if (!value) return envVar;
+    
+    const maskedValue = '*'.repeat(Math.min(value.length, 8));
+    return `${key}=${maskedValue}`;
 }
 
 function startStatsAutoRefresh() {
@@ -626,9 +654,21 @@ onUnmounted(() => {
                     <div
                         v-for="envVar in containerInfo.Config.Env.slice(0, 10)"
                         :key="envVar"
-                        class="text-sm font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded"
+                        class="flex items-center gap-2 text-sm font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded"
                     >
-                        {{ envVar }}
+                        <span class="flex-1">
+                            {{ isSensitiveEnvVar(envVar) && !isEnvVarVisible(envVar) ? maskEnvVarValue(envVar) : envVar }}
+                        </span>
+                        <button 
+                            v-if="isSensitiveEnvVar(envVar)"
+                            @click="toggleEnvVarVisibility(envVar)"
+                            class="flex items-center justify-center w-6 h-6 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            <Icon 
+                                :icon="isEnvVarVisible(envVar) ? 'mdi:eye-off' : 'mdi:eye'" 
+                                class="w-4 h-4 text-gray-600 dark:text-gray-400"
+                            />
+                        </button>
                     </div>
                     <div
                         v-if="containerInfo.Config.Env.length > 10"
