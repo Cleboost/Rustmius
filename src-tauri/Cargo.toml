@@ -1,7 +1,7 @@
 [package]
 name = "rustmius"
-version = "0.1.0"
-description = "A Tauri App"
+version = "1.3.4"
+description = "Full local Termius alternative for Linux"
 authors = ["Cleboost"]
 edition = "2021"
 
