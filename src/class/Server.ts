@@ -9,6 +9,7 @@ export default class Server {
   console: ServerConsole;
   docker: Docker;
   systemMonitor: SystemMonitor;
+
   readonly serversStore = useServerConfigStore();
 
   constructor(id: string) {
@@ -17,6 +18,7 @@ export default class Server {
     this.console = new ServerConsole(this);
     this.docker = new Docker(this);
     this.systemMonitor = new SystemMonitor(this);
+
   }
 
   config(): ConfigServer {
@@ -24,7 +26,7 @@ export default class Server {
   }
 }
 
-export class ConfigServer {
+class ConfigServer {
   server: ServerType;
   readonly serversStore = useServerConfigStore();
 
@@ -127,6 +129,47 @@ export class ServerConsole {
     console.error("❌ No terminal emulator available. Last error:", lastErr);
     throw lastErr ?? new Error("No terminal emulator available");
   }
+
+  async execute(command: string): Promise<string> {
+    const child = Command.create("ssh", ["-tt", "-o", "StrictHostKeyChecking=accept-new", "-i", await this.server.config().getKey().getPath(), `root@${this.server.config().getIP()}`, command]);
+    
+    return new Promise((resolve, reject) => {
+      let stdout = "";
+      let stderr = "";
+      
+      child.on("close", (data) => {
+        if (data.code === 0) {
+          resolve(stdout);
+        } else {
+          if (stderr.includes("No route to host")) {
+            reject(new Error("Cannot connect to server: No route to host"));
+          } else if (stderr.includes("Connection refused")) {
+            reject(new Error("Cannot connect to server: Connection refused"));
+          } else if (stderr.includes("Permission denied")) {
+            reject(new Error("Cannot connect to server: Permission denied"));
+          } else if (stderr.includes("Host key verification failed")) {
+            reject(new Error("Cannot connect to server: Host key verification failed"));
+          } else {
+            reject(new Error(`Command failed with code ${data.code}: ${stderr}`));
+          }
+        }
+      });
+      
+      child.on("error", (error) => {
+        reject(new Error(`Error executing command: ${error}`));
+      });
+      
+      child.stdout.on("data", (data) => {
+        stdout += data;
+      });
+      
+      child.stderr.on("data", (data) => {
+        stderr += data;
+      });
+      
+      child.spawn();
+    });
+  }
 }
 
 class Docker {
@@ -139,7 +182,8 @@ class Docker {
   async getVersion(): Promise<string> {
     try {
       const output = await this.server.console.execute("docker version");
-      const lines = output.split("\n");
+      const lines = output.split('\n');
+
       let foundCommunity = false;
       let version = null;
 
@@ -185,47 +229,48 @@ class Docker {
   }> {
     try {
       const command = `echo "===CONTAINERS===" && docker ps -a --format "{{.Status}}" && echo "===IMAGES===" && docker images --format "{{.Repository}}" && echo "===DANGLING===" && docker images -f dangling=true --format "{{.Repository}}" && echo "===SIZE===" && docker system df`;
-
       const output = await this.server.console.execute(command);
-      console.log("Docker command output:", output); // Debug log
+      console.log("Docker command output:", output);
+      
+      const lines = output.split('\n');
+      let currentSection = '';
 
-      const lines = output.split("\n");
-      let currentSection = "";
       const containers: string[] = [];
       const images: string[] = [];
       const dangling: string[] = [];
       let size = "0B";
-
+  
       for (const line of lines) {
         const trimmedLine = line.trim();
-
-        if (trimmedLine === "===CONTAINERS===") {
-          currentSection = "containers";
+        
+        if (trimmedLine === '===CONTAINERS===') {
+          currentSection = 'containers';
           continue;
-        } else if (trimmedLine === "===IMAGES===") {
-          currentSection = "images";
+        } else if (trimmedLine === '===IMAGES===') {
+          currentSection = 'images';
           continue;
-        } else if (trimmedLine === "===DANGLING===") {
-          currentSection = "dangling";
+        } else if (trimmedLine === '===DANGLING===') {
+          currentSection = 'dangling';
           continue;
-        } else if (trimmedLine === "===SIZE===") {
-          currentSection = "size";
+        } else if (trimmedLine === '===SIZE===') {
+          currentSection = 'size';
           continue;
         }
-
-        if (trimmedLine && !trimmedLine.includes("REPOSITORY")) {
+        
+        if (trimmedLine && !trimmedLine.includes('REPOSITORY')) {
           switch (currentSection) {
-            case "containers":
+            case 'containers':
               containers.push(trimmedLine);
               break;
-            case "images":
+            case 'images':
               images.push(trimmedLine);
               break;
-            case "dangling":
+            case 'dangling':
               dangling.push(trimmedLine);
               break;
-            case "size":
-              if (trimmedLine.includes("Images")) {
+            case 'size':
+              if (trimmedLine.includes('Images')) {
+
                 const sizeMatch = trimmedLine.match(/(\d+\.?\d*[GMK]?B)/);
                 if (sizeMatch) {
                   size = sizeMatch[1];
@@ -235,11 +280,12 @@ class Docker {
           }
         }
       }
-
+      
       let running = 0;
       let stopped = 0;
       for (const container of containers) {
-        if (container.includes("Up")) {
+        if (container.includes('Up')) {
+
           running++;
         } else {
           stopped++;
@@ -250,13 +296,16 @@ class Docker {
         containers: {
           running,
           stopped,
-          total: running + stopped,
+
+          total: running + stopped
+
         },
         images: {
           local: images.length,
           size,
-          dangling: dangling.length,
-        },
+          dangling: dangling.length
+        }
+
       };
     } catch (error) {
       console.error("Error retrieving Docker data:", error);

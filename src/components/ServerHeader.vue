@@ -6,6 +6,7 @@ import Server from "@/class/Server";
 
 defineProps<{
     server: Server;
+    buttons?:Boolean;
 }>();
 
 const emit = defineEmits<{
@@ -28,7 +29,7 @@ const emit = defineEmits<{
                     </p>
                 </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2" v-if="buttons !== false">
                 <Button
                     variant="ghost"
                     size="icon"
