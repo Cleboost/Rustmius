@@ -26,7 +26,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "embla-carousel-vue": "^8.6.0",
-    "lucide-vue-next": "^0.544.0",
+    "lucide-vue-next": "^0.546.0",
     "pinia": "^3.0.3",
     "reka-ui": "^2.5.0",
     "tailwind-merge": "^3.3.1",
