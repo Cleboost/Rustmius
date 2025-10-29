@@ -40,8 +40,8 @@ const tools = [
         name: "System Monitor",
         desc: "Monitor system resources",
         icon: "mdi:chart-line",
-        disabled: true,
-        click: () => {},
+        tag: "Beta",
+        click: () => router.push(`/server/${server.value?.id}/monitor`),
     },
     {
         name: "Logs Viewer",
