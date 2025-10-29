@@ -246,61 +246,6 @@ async function deployKey() {
             password.value = "";
             keyDeployed.value = true;
             
-            await testConnectionAfterKeyDeployment();
-        }
-    } catch (error) {
-        logLines.value.push(
-            `[install-exception] ${(error as any)?.toString?.() ?? "error"}`,
-        );
-    } finally {
-        deploying.value = false;
-    }
-}
-
-async function testConnectionAfterKeyDeployment() {
-    testing.value = true;
-    connectionStatus.value = "testing";
-    logLines.value = [];
-
-    try {
-        const sshCmd = Command.create("ssh", [
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            "ConnectTimeout=8",
-            "-o",
-            "BatchMode=yes",
-            "-l",
-            username.value.trim(),
-            ip.value.trim(),
-            "exit",
-        ]);
-
-        sshCmd.on("close", ({ code }) => {
-            logLines.value.push(`[exit] code=${code}`);
-        });
-
-        sshCmd.on("error", (err) => {
-            logLines.value.push(`[error] ${String(err)}`);
-        });
-
-        sshCmd.stdout.on("data", (line) => {
-            logLines.value.push(`[out] ${String(line).trimEnd()}`);
-        });
-
-        sshCmd.stderr.on("data", (line) => {
-            const text = String(line);
-            logLines.value.push(`[err] ${text.trimEnd()}`);
-        });
-
-        const status = await sshCmd.execute();
-
-        if (status.stdout)
-            logLines.value.push(`[out] ${status.stdout.trimEnd()}`);
-        if (status.stderr)
-            logLines.value.push(`[err] ${status.stderr.trimEnd()}`);
-
-        if (status.code === 0) {
             await createServer();
             connectionStatus.value = "success";
             successModalOpen.value = true;
@@ -310,12 +255,12 @@ async function testConnectionAfterKeyDeployment() {
         }
     } catch (error) {
         logLines.value.push(
-            `[exception] ${(error as any)?.toString?.() ?? "error"}`,
+            `[install-exception] ${(error as any)?.toString?.() ?? "error"}`,
         );
         connectionStatus.value = "failed";
         errorModalOpen.value = true;
     } finally {
-        testing.value = false;
+        deploying.value = false;
     }
 }
 
