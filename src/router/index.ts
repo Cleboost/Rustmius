@@ -47,6 +47,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import("@/pages/server/docker/container/index.vue"),
   },
   {
+    path: "/server/:id/monitor",
+    name: "system-monitor",
+    component: () => import("@/pages/server/monitor.vue"),
+  },
+  {
     path: "/settings",
     name: "settings",
     component: () => import("@/pages/settings.vue"),
