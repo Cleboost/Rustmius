@@ -70,7 +70,8 @@ const canSave = computed(
     () =>
         name.value.trim().length > 0 &&
         username.value.trim().length > 0 &&
-        ip.value.trim().length > 0,
+        ip.value.trim().length > 0 &&
+        selectedKeyId.value !== null,
 );
 
 const canTestConnection = computed(
