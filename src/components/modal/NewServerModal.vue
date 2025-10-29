@@ -61,20 +61,42 @@ const deploying = ref(false);
 const password = ref("");
 
 const successModalOpen = ref(false);
+const errorModalOpen = ref(false);
 const serverAdded = ref(false);
 const keyDeployed = ref(false);
 const keyAlreadyExists = ref(false);
 const currentServerId = ref<string | null>(null);
 
+function isValidIP(ip: string): boolean {
+    const trimmed = ip.trim();
+    if (!trimmed) return false;
+    
+    // Support IPv4 and hostname
+    const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+    
+    if (ipv4Regex.test(trimmed)) {
+        // Validate IPv4 octets
+        const parts = trimmed.split('.');
+        return parts.every(part => {
+            const num = parseInt(part, 10);
+            return num >= 0 && num <= 255;
+        });
+    }
+    
+    // Allow hostname if not IPv4
+    return hostnameRegex.test(trimmed);
+}
+
 const canSave = computed(
     () =>
         name.value.trim().length > 0 &&
         username.value.trim().length > 0 &&
-        ip.value.trim().length > 0,
+        isValidIP(ip.value),
 );
 
 const canTestConnection = computed(
-    () => username.value.trim().length > 0 && ip.value.trim().length > 0,
+    () => username.value.trim().length > 0 && isValidIP(ip.value),
 );
 
 function resetForm() {
@@ -89,11 +111,23 @@ function resetForm() {
     keyDeployed.value = false;
     keyAlreadyExists.value = false;
     currentServerId.value = null;
+    errorModalOpen.value = false;
 }
 
 function onCancel() {
+    if (testing.value) return;
     open.value = false;
     resetForm();
+}
+
+function handleDialogOpenChange(newValue: boolean) {
+    if (!newValue && testing.value) {
+        return;
+    }
+    open.value = newValue;
+    if (!newValue) {
+        resetForm();
+    }
 }
 
 async function testConnection() {
@@ -210,8 +244,8 @@ async function deployKey() {
             passwordModalOpen.value = false;
             password.value = "";
             keyDeployed.value = true;
-            await testConnection();
-            successModalOpen.value = true;
+            
+            await testConnectionAfterKeyDeployment();
         }
     } catch (error) {
         logLines.value.push(
@@ -219,6 +253,68 @@ async function deployKey() {
         );
     } finally {
         deploying.value = false;
+    }
+}
+
+async function testConnectionAfterKeyDeployment() {
+    testing.value = true;
+    connectionStatus.value = "testing";
+    logLines.value = [];
+
+    try {
+        const sshCmd = Command.create("ssh", [
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "ConnectTimeout=8",
+            "-o",
+            "BatchMode=yes",
+            "-l",
+            username.value.trim(),
+            ip.value.trim(),
+            "exit",
+        ]);
+
+        sshCmd.on("close", ({ code }) => {
+            logLines.value.push(`[exit] code=${code}`);
+        });
+
+        sshCmd.on("error", (err) => {
+            logLines.value.push(`[error] ${String(err)}`);
+        });
+
+        sshCmd.stdout.on("data", (line) => {
+            logLines.value.push(`[out] ${String(line).trimEnd()}`);
+        });
+
+        sshCmd.stderr.on("data", (line) => {
+            const text = String(line);
+            logLines.value.push(`[err] ${text.trimEnd()}`);
+        });
+
+        const status = await sshCmd.execute();
+
+        if (status.stdout)
+            logLines.value.push(`[out] ${status.stdout.trimEnd()}`);
+        if (status.stderr)
+            logLines.value.push(`[err] ${status.stderr.trimEnd()}`);
+
+        if (status.code === 0) {
+            await createServer();
+            connectionStatus.value = "success";
+            successModalOpen.value = true;
+        } else {
+            connectionStatus.value = "failed";
+            errorModalOpen.value = true;
+        }
+    } catch (error) {
+        logLines.value.push(
+            `[exception] ${(error as any)?.toString?.() ?? "error"}`,
+        );
+        connectionStatus.value = "failed";
+        errorModalOpen.value = true;
+    } finally {
+        testing.value = false;
     }
 }
 
@@ -231,32 +327,10 @@ async function getKeyPath(keyId: number): Promise<string | undefined> {
 async function onSave() {
     if (!canSave.value) return;
 
-    const serverId = crypto.randomUUID();
-    const server: ServerType = {
-        id: serverId,
-        name: name.value.trim(),
-        ip: ip.value.trim(),
-        keyID: selectedKeyId.value ? Number(selectedKeyId.value) : 0,
-        username: username.value.trim(),
-    };
-
-    try {
-        await updateSSHConfig(server);
-
-        serverStore.addServer(server);
-
-        serverAdded.value = true;
-        currentServerId.value = serverId;
-
-        open.value = false;
-
-        await testConnectionForSave();
-    } catch (error) {
-        console.error("Error saving server:", error);
-    }
+    await testConnectionBeforeSave();
 }
 
-async function testConnectionForSave() {
+async function testConnectionBeforeSave() {
     if (!canTestConnection.value) return;
 
     testing.value = true;
@@ -302,6 +376,7 @@ async function testConnectionForSave() {
             logLines.value.push(`[err] ${status.stderr.trimEnd()}`);
 
         if (status.code === 0) {
+            await createServer();
             connectionStatus.value = "success";
             if (
                 !keyDeployed.value &&
@@ -316,11 +391,11 @@ async function testConnectionForSave() {
                     /password:/i.test(log) || /permission denied/i.test(log),
             );
             if (needsPassword && selectedKeyId.value) {
-                keyDeploymentConfirmOpen.value = true;
                 connectionStatus.value = "needs-key";
+                keyDeploymentConfirmOpen.value = true;
             } else {
                 connectionStatus.value = "failed";
-                successModalOpen.value = true;
+                errorModalOpen.value = true;
             }
         }
     } catch (error) {
@@ -328,9 +403,31 @@ async function testConnectionForSave() {
             `[exception] ${(error as any)?.toString?.() ?? "error"}`,
         );
         connectionStatus.value = "failed";
-        successModalOpen.value = true;
+        errorModalOpen.value = true;
     } finally {
         testing.value = false;
+    }
+}
+
+async function createServer() {
+    const serverId = crypto.randomUUID();
+    const server: ServerType = {
+        id: serverId,
+        name: name.value.trim(),
+        ip: ip.value.trim(),
+        keyID: selectedKeyId.value ? Number(selectedKeyId.value) : 0,
+        username: username.value.trim(),
+    };
+
+    try {
+        await updateSSHConfig(server);
+        serverStore.addServer(server);
+        serverAdded.value = true;
+        currentServerId.value = serverId;
+        open.value = false;
+    } catch (error) {
+        console.error("Error saving server:", error);
+        throw error;
     }
 }
 
@@ -341,24 +438,12 @@ function agreeToDeployKey() {
 
 async function declineKeyDeployment() {
     keyDeploymentConfirmOpen.value = false;
-
-    if (currentServerId.value && serverAdded.value) {
-        await serverStore.removeServer(currentServerId.value);
-        await removeFromSSHConfig(currentServerId.value);
-    }
-
     resetForm();
 }
 
 async function cancelKeyDeployment() {
     passwordModalOpen.value = false;
     password.value = "";
-
-    if (currentServerId.value && serverAdded.value) {
-        await serverStore.removeServer(currentServerId.value);
-        await removeFromSSHConfig(currentServerId.value);
-    }
-
     resetForm();
 }
 
@@ -434,7 +519,7 @@ async function removeFromSSHConfig(serverId: string) {
 </script>
 
 <template>
-    <Dialog v-model:open="open">
+    <Dialog :open="open" @update:open="handleDialogOpenChange">
         <DialogContent class="sm:max-w-md">
             <DialogHeader>
                 <DialogTitle>New Server</DialogTitle>
@@ -516,13 +601,94 @@ async function removeFromSSHConfig(serverId: string) {
                         </SelectContent>
                     </Select>
                 </div>
+
+                <!-- Zone de statut de connexion -->
+                <div v-if="testing || connectionStatus !== 'idle'" class="mt-4">
+                    <div
+                        class="p-4 bg-muted rounded-lg border"
+                        :class="{
+                            'border-blue-500/50': connectionStatus === 'testing',
+                            'border-green-500/50': connectionStatus === 'success',
+                            'border-red-500/50': connectionStatus === 'failed',
+                            'border-yellow-500/50': connectionStatus === 'needs-key',
+                        }"
+                    >
+                        <div class="flex items-center gap-3 mb-3">
+                            <Loader2
+                                v-if="connectionStatus === 'testing'"
+                                class="size-5 animate-spin text-blue-400"
+                            />
+                            <CheckCircle
+                                v-else-if="connectionStatus === 'success'"
+                                class="size-5 text-green-400"
+                            />
+                            <AlertCircle
+                                v-else-if="connectionStatus === 'failed'"
+                                class="size-5 text-red-400"
+                            />
+                            <AlertCircle
+                                v-else-if="connectionStatus === 'needs-key'"
+                                class="size-5 text-yellow-400"
+                            />
+                            <span class="font-medium text-sm">
+                                <template v-if="connectionStatus === 'testing'"
+                                    >Testing SSH connection...</template
+                                >
+                                <template v-else-if="connectionStatus === 'success'"
+                                    >Connection successful!</template
+                                >
+                                <template v-else-if="connectionStatus === 'failed'"
+                                    >Connection failed</template
+                                >
+                                <template v-else-if="connectionStatus === 'needs-key'"
+                                    >SSH key deployment required</template
+                                >
+                            </span>
+                        </div>
+
+                        <!-- Logs en temps réel -->
+                        <div
+                            v-if="logLines.length > 0"
+                            class="max-h-32 overflow-y-auto bg-black/50 rounded p-2 text-xs font-mono text-muted-foreground space-y-1"
+                        >
+                            <div
+                                v-for="(line, idx) in logLines"
+                                :key="idx"
+                                class="text-left"
+                            >
+                                {{ line }}
+                            </div>
+                        </div>
+                        <div v-else-if="testing" class="text-sm text-muted-foreground animate-pulse">
+                            <div class="flex items-center gap-2">
+                                <Loader2 class="size-4 animate-spin" />
+                                <span>Attempting to connect to {{ ip }}...</span>
+                            </div>
+                            <p class="text-xs mt-2 opacity-75">
+                                This may take a few seconds. Please wait...
+                            </p>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <DialogFooter class="gap-2">
-                <Button variant="outline" @click="onCancel">Cancel</Button>
-                <Button :disabled="!canSave" @click="onSave"
-                    >Save Server</Button
+                <Button
+                    variant="outline"
+                    :disabled="testing"
+                    @click="onCancel"
+                    >Cancel</Button
                 >
+                <Button
+                    :disabled="!canSave || testing"
+                    @click="onSave"
+                >
+                    <template v-if="testing">
+                        <Loader2 class="size-4 mr-2 animate-spin" />
+                        Testing connection...
+                    </template>
+                    <template v-else>Save Server</template>
+                </Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>
@@ -736,6 +902,84 @@ async function removeFromSSHConfig(serverId: string) {
                 <Button
                     @click="
                         successModalOpen = false;
+                        resetForm();
+                    "
+                    class="w-full"
+                >
+                    Close
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="errorModalOpen">
+        <DialogContent class="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle class="flex items-center gap-2">
+                    <AlertCircle class="size-5 text-red-400" />
+                    Connection Failed
+                </DialogTitle>
+                <DialogDescription>
+                    Unable to establish SSH connection to {{ ip }}
+                </DialogDescription>
+            </DialogHeader>
+
+            <div class="space-y-4">
+                <div
+                    class="p-3 bg-red-950/50 rounded-lg border border-red-800/50"
+                >
+                    <div class="flex items-start gap-3">
+                        <AlertCircle class="size-5 text-red-400 mt-0.5" />
+                        <div class="space-y-2">
+                            <p class="text-sm font-medium text-red-100">
+                                SSH connection failed
+                            </p>
+                            <p class="text-sm text-red-200">
+                                The server could not be added because the SSH
+                                connection failed. Please verify:
+                            </p>
+                            <ul class="list-disc list-inside text-sm text-red-200 space-y-1">
+                                <li>The IP address is correct</li>
+                                <li>The server is reachable</li>
+                                <li>SSH is enabled on the server</li>
+                                <li>
+                                    {{
+                                        selectedKeyId
+                                            ? "The SSH key is correctly configured"
+                                            : "A valid SSH key is selected"
+                                    }}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-muted rounded-lg">
+                    <h4 class="font-medium mb-2">Server Details</h4>
+                    <div class="space-y-1 text-sm text-muted-foreground">
+                        <div><strong>Name:</strong> {{ name }}</div>
+                        <div><strong>IP:</strong> {{ ip }}</div>
+                        <div><strong>Username:</strong> {{ username }}</div>
+                    </div>
+                </div>
+
+                <div
+                    v-if="logLines.length > 0"
+                    class="p-3 bg-muted rounded-lg max-h-40 overflow-y-auto"
+                >
+                    <h4 class="font-medium mb-2 text-sm">Connection Logs</h4>
+                    <div class="text-xs font-mono text-muted-foreground space-y-1">
+                        <div v-for="(line, idx) in logLines" :key="idx">
+                            {{ line }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <DialogFooter>
+                <Button
+                    @click="
+                        errorModalOpen = false;
                         resetForm();
                     "
                     class="w-full"
