@@ -1,6 +1,6 @@
 [package]
 name = "rustmius"
-version = "1.4.4"
+version = "1.5.0"
 description = "Full local Termius alternative for Linux"
 authors = ["Cleboost"]
 edition = "2021"
