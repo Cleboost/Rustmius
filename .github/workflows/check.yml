@@ -14,7 +14,7 @@ jobs:
     name: Check Knip
     runs-on: ubuntu-latest
     concurrency:
-      group: pr-${{ github.event.pull_request.number }}
+      group: pr-knip-${{ github.event.pull_request.number }}
       cancel-in-progress: true
 
     steps:
@@ -46,7 +46,7 @@ jobs:
     name: Build Project
     runs-on: ubuntu-latest
     concurrency:
-      group: pr-${{ github.event.pull_request.number }}
+      group: pr-build-${{ github.event.pull_request.number }}
       cancel-in-progress: true
 
     steps:
