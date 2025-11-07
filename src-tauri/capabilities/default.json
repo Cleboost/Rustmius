@@ -32,6 +32,7 @@
         { "name": "ssh", "cmd": "ssh", "args": true },
         { "name": "sshpass", "cmd": "sshpass", "args": true },
         { "name": "ssh-copy-id", "cmd": "ssh-copy-id", "args": true },
+        { "name": "ssh-keygen", "cmd": "ssh-keygen", "args": true },
         { "name": "foot", "cmd": "foot", "args": true },
         { "name": "footclient", "cmd": "footclient", "args": true },
         { "name": "alacritty", "cmd": "alacritty", "args": true },
@@ -49,6 +50,7 @@
       "identifier": "shell:allow-spawn",
       "allow": [
         { "name": "ssh", "cmd": "ssh", "args": true },
+        { "name": "ssh-keygen", "cmd": "ssh-keygen", "args": true },
         { "name": "foot", "cmd": "foot", "args": true },
         { "name": "footclient", "cmd": "footclient", "args": true },
         { "name": "alacritty", "cmd": "alacritty", "args": true },
