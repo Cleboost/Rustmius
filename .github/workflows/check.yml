@@ -53,10 +53,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Cache apt packages
-        uses: actions/cache@v4
+      - name: APT cache (restore)
+        id: apt-cache
+        uses: actions/cache/restore@v4
         with:
-          path: /var/cache/apt
+          path: |
+            /var/cache/apt/archives
+            /var/lib/apt/lists
           key: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/check.yml') }}
           restore-keys: |
             apt-${{ runner.os }}-
@@ -71,8 +74,9 @@ jobs:
         with:
           components: rustfmt #, clippy
 
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
+      - name: Rust deps cache (restore)
+        id: rust-deps-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.cargo/registry
@@ -81,8 +85,9 @@ jobs:
           restore-keys: |
             rust-deps-${{ runner.os }}-
 
-      - name: Cache Rust build artifacts
-        uses: actions/cache@v4
+      - name: Rust target cache (restore)
+        id: rust-build-cache
+        uses: actions/cache/restore@v4
         with:
           path: src-tauri/target
           key: rust-build-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'src-tauri/src/**/*.rs', 'src-tauri/build.rs') }}
@@ -94,13 +99,14 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Cache Bun packages
-        uses: actions/cache@v4
+      - name: Bun cache (restore)
+        id: bun-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             node_modules
             ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('package.json') }}
+          key: bun-${{ runner.os }}-${{ hashFiles('package.json', 'bun.lockb') }}
           restore-keys: |
             bun-${{ runner.os }}-
 
@@ -109,6 +115,40 @@ jobs:
 
       - name: Build project
         run: bun run tauri build --no-bundle
+
+      - name: APT cache (save)
+        if: steps.apt-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            /var/cache/apt/archives
+            /var/lib/apt/lists
+          key: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/check.yml') }}
+
+      - name: Bun cache (save)
+        if: steps.bun-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('package.json', 'bun.lockb') }}
+
+      - name: Rust deps cache (save)
+        if: steps.rust-deps-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: rust-deps-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      - name: Rust target cache (save)
+        if: steps.rust-build-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: src-tauri/target
+          key: rust-build-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'src-tauri/src/**/*.rs', 'src-tauri/build.rs') }}
 
   # eslint:
   #   name: Check ESLint
