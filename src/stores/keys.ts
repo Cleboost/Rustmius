@@ -128,7 +128,9 @@ export const useKeysStore = defineStore("keys", () => {
     }
 
     const discoveredPrivates = new Set(discovered.map((k) => k.private));
-    const byPrivate = new Map(keys.value.map((k) => [k.private, k]));
+    const byPrivate = new Map<string, KeyPair>(
+      keys.value.map((k) => [k.private, k as KeyPair]),
+    );
 
     for (const info of discovered) {
       const existing = byPrivate.get(info.private);

@@ -150,42 +150,42 @@ jobs:
           path: src-tauri/target
           key: rust-build-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'src-tauri/src/**/*.rs', 'src-tauri/build.rs') }}
 
-  # eslint:
-  #   name: Check ESLint
-  #   runs-on: ubuntu-latest
-  #   concurrency:
-  #     group: pr-${{ github.event.pull_request.number }}
-  #     cancel-in-progress: true
-  #   if: |
-  #     !(
-  #       github.event_name == 'push' &&
-  #       startsWith(github.ref, 'refs/tags/')
-  #     )
-  #
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v5
-  #
-  #     - name: Install Bun
-  #       uses: oven-sh/setup-bun@v2
-  #       with:
-  #         bun-version: latest
-  #
-  #     - name: Cache Bun packages
-  #       uses: actions/cache@v4
-  #       with:
-  #         path: |
-  #           node_modules
-  #           ~/.bun/install/cache
-  #         key: bun-${{ runner.os }}-${{ hashFiles('package.json') }}
-  #         restore-keys: |
-  #           bun-${{ runner.os }}-
-  #
-  #     - name: Install Bun Packages
-  #       run: bun install
-  #
-  #     - name: Run ESLint
-  #       run: bun run lint
+  eslint:
+    name: Check ESLint
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pr-eslint-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    if: |
+      !(
+        github.event_name == 'push' &&
+        startsWith(github.ref, 'refs/tags/')
+      )
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache Bun packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('package.json', 'bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install Bun Packages
+        run: bun install
+
+      - name: Run ESLint
+        run: bun run lint
 
   # prettier:
   #   name: Check Prettier
