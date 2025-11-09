@@ -1,7 +1,19 @@
+import { readTextFile } from "@tauri-apps/plugin-fs";
+import { Command } from "@tauri-apps/plugin-shell";
+import SSHManager from "@/core/ssh/SSHManager";
+import {
+  CommandResult,
+  CommandSpec,
+  SSHEventEnvelope,
+  SSHSessionOptions,
+  SSHSubscribeFilter,
+} from "@/core/ssh/types";
+import { CommandCancelledError } from "@/core/ssh/SSHSession";
 import { useServerConfigStore } from "@/stores/servers";
 import { Server as ServerType } from "@/types/server";
-import { Command } from "@tauri-apps/plugin-shell";
 import Key from "./Class";
+
+type CommandOptions = Omit<CommandSpec, "command">;
 
 export default class Server {
   public readonly id: ServerType["id"];
@@ -10,6 +22,7 @@ export default class Server {
   docker: Docker;
   systemMonitor: SystemMonitor;
 
+  private readonly sshManager = SSHManager.getInstance();
   readonly serversStore = useServerConfigStore();
 
   constructor(id: string) {
@@ -18,17 +31,70 @@ export default class Server {
     this.console = new ServerConsole(this);
     this.docker = new Docker(this);
     this.systemMonitor = new SystemMonitor(this);
-
   }
 
   config(): ConfigServer {
     return this.configClass;
+  }
+
+  async selectVPS(): Promise<void> {
+    const options = await this.resolveSessionOptions();
+    await this.sshManager.ensureSession(this.id, options);
+  }
+
+  async runCommand(
+    command: string,
+    options: Partial<CommandOptions> = {},
+  ): Promise<CommandResult> {
+    const sessionOptions = await this.resolveSessionOptions();
+    const spec: CommandSpec = {
+      command,
+      cwd: options.cwd,
+      env: options.env,
+      timeoutMs: options.timeoutMs,
+      abortSignal: options.abortSignal,
+      id: options.id,
+    };
+    return this.sshManager.runCommand(this.id, sessionOptions, spec);
+  }
+
+  async executeCommand(
+    command: string,
+    options: Partial<CommandOptions> = {},
+  ): Promise<CommandResult> {
+    return this.runCommand(command, options);
+  }
+
+  subscribe(
+    filter: Omit<SSHSubscribeFilter, "vpsId">,
+    handler: (event: SSHEventEnvelope) => void,
+  ): { unsubscribe: () => void } {
+    return this.sshManager.subscribe(
+      { ...filter, vpsId: this.id },
+      handler,
+    );
+  }
+
+  subscribeToCommand(
+    commandId: string,
+    handler: (event: SSHEventEnvelope) => void,
+  ): { unsubscribe: () => void } {
+    return this.subscribe({ commandId, event: "command:*" }, handler);
+  }
+
+  async closeSession(): Promise<void> {
+    await this.sshManager.close(this.id);
+  }
+
+  private async resolveSessionOptions(): Promise<SSHSessionOptions> {
+    return this.config().getSSHSessionOptions();
   }
 }
 
 class ConfigServer {
   server: ServerType;
   readonly serversStore = useServerConfigStore();
+  private privateKeyCache?: string;
 
   constructor(server: ServerType | undefined) {
     this.server = server;
@@ -61,6 +127,7 @@ class ConfigServer {
   update(server: ServerType): void {
     this.server = { ...this.server, ...server };
     this.serversStore.updateServer(this.server.id, this.server);
+    this.privateKeyCache = undefined;
   }
 
   isValid(): boolean {
@@ -72,7 +139,7 @@ class ConfigServer {
   }
 
   getSSHUser(): string {
-    return "root";
+    return this.server?.username || "root";
   }
 
   getSSHPort(): number {
@@ -81,6 +148,36 @@ class ConfigServer {
 
   getSSHIdentityFile(): string | undefined {
     return undefined;
+  }
+
+  async getSSHPrivateKey(): Promise<string | undefined> {
+    if (this.privateKeyCache) return this.privateKeyCache;
+    try {
+      const key = this.getKey();
+      const path = await key.getPath();
+      if (!path) return undefined;
+      const content = await readTextFile(path);
+      this.privateKeyCache = content;
+      return content;
+    } catch (error) {
+      console.error("Failed to read SSH private key:", error);
+      return undefined;
+    }
+  }
+
+  async getSSHSessionOptions(): Promise<SSHSessionOptions> {
+    const privateKey = await this.getSSHPrivateKey();
+    return {
+      host: this.getSSHHostname(),
+      port: this.getSSHPort(),
+      username: this.getSSHUser(),
+      privateKey,
+      keepaliveIntervalMs: 15_000,
+      keepaliveCountMax: 5,
+      reconnectBackoffMs: { base: 500, factor: 2, max: 15_000 },
+      queueConcurrency: 1,
+      defaultTimeoutMs: 60_000,
+    };
   }
 }
 
@@ -131,58 +228,59 @@ export class ServerConsole {
   }
 
   async execute(command: string): Promise<string> {
-    const child = Command.create("ssh", [
-      "-tt",
-      "-o",
-      "StrictHostKeyChecking=accept-new",
-      "-i",
-      await this.server.config().getKey().getPath(),
-      `root@${this.server.config().getIP()}`,
-      command,
-    ]);
+    return this.executeWithOptions(command);
+  }
 
-    return new Promise((resolve, reject) => {
-      let stdout = "";
-      let stderr = "";
+  async executeWithOptions(
+    command: string,
+    options: Partial<CommandOptions> = {},
+  ): Promise<string> {
+    try {
+      const result = await this.server.runCommand(command, options);
+      if (result.code !== 0) {
+        throw this.normalizeCommandError(command, result);
+      }
+      return result.stdout;
+    } catch (error) {
+      if (error instanceof CommandCancelledError) {
+        throw new Error(`Command cancelled (${error.reason})`);
+      }
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(`Unknown error executing command: ${String(error)}`);
+    }
+  }
 
-      child.on("close", (data) => {
-        if (data.code === 0) {
-          resolve(stdout);
-        } else {
-          if (stderr.includes("No route to host")) {
-            reject(new Error("Cannot connect to server: No route to host"));
-          } else if (stderr.includes("Connection refused")) {
-            reject(new Error("Cannot connect to server: Connection refused"));
-          } else if (stderr.includes("Permission denied")) {
-            reject(new Error("Cannot connect to server: Permission denied"));
-          } else if (stderr.includes("Host key verification failed")) {
-            reject(
-              new Error(
-                "Cannot connect to server: Host key verification failed",
-              ),
-            );
-          } else {
-            reject(
-              new Error(`Command failed with code ${data.code}: ${stderr}`),
-            );
-          }
-        }
-      });
+  subscribeToCommands(
+    handler: (event: SSHEventEnvelope) => void,
+  ): { unsubscribe: () => void } {
+    return this.server.subscribe({ event: "command:*" }, handler);
+  }
 
-      child.on("error", (error) => {
-        reject(new Error(`Error executing command: ${error}`));
-      });
-
-      child.stdout.on("data", (data) => {
-        stdout += data;
-      });
-
-      child.stderr.on("data", (data) => {
-        stderr += data;
-      });
-
-      child.spawn();
-    });
+  private normalizeCommandError(
+    command: string,
+    result: CommandResult,
+  ): Error {
+    const stderr = result.stderr || "";
+    if (stderr.includes("No route to host")) {
+      return new Error("Cannot connect to server: No route to host");
+    }
+    if (stderr.includes("Connection refused")) {
+      return new Error("Cannot connect to server: Connection refused");
+    }
+    if (stderr.includes("Permission denied")) {
+      return new Error("Cannot connect to server: Permission denied");
+    }
+    if (stderr.includes("Host key verification failed")) {
+      return new Error("Cannot connect to server: Host key verification failed");
+    }
+    if (stderr.includes("Connection lost")) {
+      return new Error("Connection lost during command execution");
+    }
+    const codeLabel = result.code ?? "unknown";
+    const message = stderr || "Command execution failed";
+    return new Error(`Command "${command}" failed with code ${codeLabel}: ${message}`);
   }
 }
 
