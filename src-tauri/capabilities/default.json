@@ -14,6 +14,7 @@
     "fs:allow-read-dir",
     "fs:allow-exists",
     "fs:allow-write-text-file",
+    "fs:allow-remove",
     "fs:scope-home-recursive",
     {
       "identifier": "fs:scope",

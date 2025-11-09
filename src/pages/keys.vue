@@ -44,7 +44,7 @@ import {
   exists as fsExists,
   mkdir as fsMkdir,
 } from "@tauri-apps/plugin-fs";
-import { dirname, join, homeDir } from "@tauri-apps/api/path";
+import { dirname, join, homeDir, BaseDirectory } from "@tauri-apps/api/path";
 import { Command } from "@tauri-apps/plugin-shell";
 import {
   Loader2,
@@ -84,6 +84,80 @@ const keys = computed(() =>
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name)),
 );
+
+let cachedHomeDir: string | null = null;
+
+async function getNormalizedHomeDir(): Promise<string> {
+  if (cachedHomeDir) return cachedHomeDir;
+  const home = await homeDir();
+  cachedHomeDir = home.endsWith("/") ? home : `${home}/`;
+  return cachedHomeDir;
+}
+
+async function toHomeRelative(path: string): Promise<string | null> {
+  const normalizedHome = await getNormalizedHomeDir();
+  return path.startsWith(normalizedHome)
+    ? path.slice(normalizedHome.length)
+    : null;
+}
+
+async function pathExists(path: string): Promise<{
+  exists: boolean;
+  relative: string | null;
+}> {
+  try {
+    if (await fsExists(path)) {
+      return { exists: true, relative: await toHomeRelative(path) };
+    }
+  } catch {
+    // ignore and try relative path fallback
+  }
+
+  const relative = await toHomeRelative(path);
+  if (relative) {
+    try {
+      const exists = await fsExists(relative, {
+        baseDir: BaseDirectory.Home,
+      });
+      if (exists) {
+        return { exists: true, relative };
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return { exists: false, relative };
+}
+
+async function removeFileIfPresent(path?: string | null): Promise<void> {
+  if (!path) return;
+  const { exists, relative } = await pathExists(path);
+  if (!exists) return;
+
+  const attempts: Array<() => Promise<void>> = [
+    () => fsRemove(path),
+  ];
+  if (relative) {
+    attempts.push(() =>
+      fsRemove(relative, { baseDir: BaseDirectory.Home }),
+    );
+  }
+
+  let lastError: unknown = null;
+  for (const attempt of attempts) {
+    try {
+      await attempt();
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+}
 
 function suggestKeyName(): string {
   const base = "id_rsa";
@@ -219,21 +293,8 @@ async function handleDelete(): Promise<void> {
   try {
     deleting.value = true;
 
-    if (deleteTarget.value.public) {
-      const publicExists = await fsExists(deleteTarget.value.public).catch(
-        () => false,
-      );
-      if (publicExists) {
-        await fsRemove(deleteTarget.value.public).catch(() => undefined);
-      }
-    }
-
-    const privateExists = await fsExists(deleteTarget.value.private).catch(
-      () => false,
-    );
-    if (privateExists) {
-      await fsRemove(deleteTarget.value.private).catch(() => undefined);
-    }
+    await removeFileIfPresent(deleteTarget.value.public);
+    await removeFileIfPresent(deleteTarget.value.private);
 
     await keysStore.removeKey(deleteTarget.value.id);
     await keysStore.syncWithFs();
