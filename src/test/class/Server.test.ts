@@ -6,9 +6,9 @@ function isValid(server: Server | undefined): boolean {
   return !!(server?.id && server?.name && server?.ip);
 }
 
-describe('🧪 Tests de Validation de Serveur', () => {
-  describe('Test de Validation de Configuration', () => {
-    it('isValid retourne true pour un serveur valide', () => {
+describe('🧪 Server Validation Tests', () => {
+  describe('Configuration Validation Tests', () => {
+    it('isValid returns true for a valid server', () => {
       const validServer: Server = {
         id: 'server-1',
         name: 'Valid Server',
@@ -19,7 +19,7 @@ describe('🧪 Tests de Validation de Serveur', () => {
       expect(isValid(validServer)).toBe(true);
     });
 
-    it('isValid retourne false si id est manquant', () => {
+    it('isValid returns false when id is missing', () => {
       const invalidServer = {
         name: 'Server without ID',
         ip: '192.168.1.1',
@@ -29,7 +29,7 @@ describe('🧪 Tests de Validation de Serveur', () => {
       expect(isValid(invalidServer)).toBe(false);
     });
 
-    it('isValid retourne false si name est manquant', () => {
+    it('isValid returns false when name is missing', () => {
       const invalidServer = {
         id: 'server-1',
         ip: '192.168.1.1',
@@ -39,7 +39,7 @@ describe('🧪 Tests de Validation de Serveur', () => {
       expect(isValid(invalidServer)).toBe(false);
     });
 
-    it('isValid retourne false si ip est manquant', () => {
+    it('isValid returns false when ip is missing', () => {
       const invalidServer = {
         id: 'server-1',
         name: 'Server without IP',
@@ -49,11 +49,11 @@ describe('🧪 Tests de Validation de Serveur', () => {
       expect(isValid(invalidServer)).toBe(false);
     });
 
-    it('isValid retourne false si le serveur est undefined', () => {
+    it('isValid returns false when the server is undefined', () => {
       expect(isValid(undefined)).toBe(false);
     });
 
-    it('isValid retourne false si tous les champs sont vides', () => {
+    it('isValid returns false when all fields are empty', () => {
       const invalidServer = {
         id: '',
         name: '',
