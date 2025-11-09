@@ -11,7 +11,7 @@ env:
 
 jobs:
   knip:
-    name: Check Knip
+    name: Knip
     runs-on: ubuntu-latest
     concurrency:
       group: pr-knip-${{ github.event.pull_request.number }}
@@ -43,7 +43,7 @@ jobs:
         run: bun run knip
 
   build:
-    name: Build Project
+    name: Build
     runs-on: ubuntu-latest
     concurrency:
       group: pr-build-${{ github.event.pull_request.number }}
@@ -149,6 +149,31 @@ jobs:
         with:
           path: src-tauri/target
           key: rust-build-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'src-tauri/src/**/*.rs', 'src-tauri/build.rs') }}
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pr-test-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Bun Packages
+        run: bun install
+
+      - name: Run Tests
+        run: bun run test
+
+      - name: Run Tests with Coverage
+        run: bun run test:coverage
 
   # eslint:
   #   name: Check ESLint
