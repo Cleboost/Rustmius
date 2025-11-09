@@ -13,7 +13,6 @@
         "tw-animate-css",
         "vaul-vue",
         "vee-validate",
-        "vue-sonner",
         "zod"
     ]
 }

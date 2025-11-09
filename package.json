@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "vue-tsc --noEmit",
-    "knip": "knip"
+    "knip": "knip",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@iconify/vue": "^5.0.0",
@@ -44,9 +47,13 @@
     "@types/bun": "^1.2.22",
     "@types/node": "^24.5.2",
     "@vitejs/plugin-vue": "^6.0.0",
+    "@vitest/coverage-v8": "4.0.8",
+    "happy-dom": "^20.0.10",
+    "jsdom": "^27.1.0",
     "knip": "^5.64.0",
     "typescript": "~5.9.0",
     "vite": "^7.0.0",
+    "vitest": "^4.0.8",
     "vue-tsc": "^3.0.0"
   }
 }
