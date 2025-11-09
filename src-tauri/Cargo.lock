@@ -3264,7 +3264,7 @@ dependencies = [
 
 [[package]]
 name = "rustmius"
-version = "1.5.1"
+version = "1.6.1"
 dependencies = [
  "serde",
  "serde_json",
