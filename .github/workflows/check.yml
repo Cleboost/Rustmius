@@ -27,7 +27,7 @@ jobs:
           bun-version: latest
 
       - name: Cache Bun packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             node_modules
@@ -55,7 +55,7 @@ jobs:
 
       - name: APT cache (restore)
         id: apt-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             /var/cache/apt/archives
@@ -76,7 +76,7 @@ jobs:
 
       - name: Rust deps cache (restore)
         id: rust-deps-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             ~/.cargo/registry
@@ -87,7 +87,7 @@ jobs:
 
       - name: Rust target cache (restore)
         id: rust-build-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: src-tauri/target
           key: rust-build-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'src-tauri/src/**/*.rs', 'src-tauri/build.rs') }}
@@ -101,7 +101,7 @@ jobs:
 
       - name: Bun cache (restore)
         id: bun-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             node_modules
@@ -118,7 +118,7 @@ jobs:
 
       - name: APT cache (save)
         if: steps.apt-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             /var/cache/apt/archives
@@ -127,7 +127,7 @@ jobs:
 
       - name: Bun cache (save)
         if: steps.bun-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             node_modules
@@ -136,7 +136,7 @@ jobs:
 
       - name: Rust deps cache (save)
         if: steps.rust-deps-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             ~/.cargo/registry
@@ -145,7 +145,7 @@ jobs:
 
       - name: Rust target cache (save)
         if: steps.rust-build-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: src-tauri/target
           key: rust-build-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'src-tauri/src/**/*.rs', 'src-tauri/build.rs') }}
