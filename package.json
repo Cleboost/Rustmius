@@ -47,7 +47,7 @@
     "@types/bun": "^1.2.22",
     "@types/node": "^24.5.2",
     "@vitejs/plugin-vue": "^6.0.0",
-    "@vitest/coverage-v8": "4.0.8",
+    "@vitest/coverage-v8": "4.0.16",
     "happy-dom": "^20.0.10",
     "jsdom": "^27.1.0",
     "knip": "^5.64.0",
