@@ -1,11 +1,26 @@
 use std::fs;
-use std::path::Path;
+use directories::UserDirs;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SshHost {
     pub alias: String,
     pub hostname: String,
     pub user: Option<String>,
+}
+
+pub fn get_default_config_path() -> Option<std::path::PathBuf> {
+    UserDirs::new().map(|dirs| dirs.home_dir().join(".ssh").join("config"))
+}
+
+pub fn load_hosts() -> Vec<SshHost> {
+    if let Some(path) = get_default_config_path() {
+        if path.exists() {
+            if let Ok(content) = fs::read_to_string(path) {
+                return parse_ssh_config(&content);
+            }
+        }
+    }
+    Vec::new()
 }
 
 pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
@@ -60,6 +75,36 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
     }
 
     hosts
+}
+
+pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
+    let path = get_default_config_path().ok_or_else(|| anyhow::anyhow!("Could not find SSH config path"))?;
+    
+    // Ensure .ssh directory exists
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let mut content = if path.exists() {
+        std::fs::read_to_string(&path)?
+    } else {
+        String::new()
+    };
+
+    if !content.is_empty() && !content.ends_with('\n') {
+        content.push('\n');
+    }
+
+    let entry = format!(
+        "\nHost {}\n    HostName {}\n    User {}\n",
+        host.alias,
+        host.hostname,
+        host.user.as_deref().unwrap_or("root")
+    );
+
+    content.push_str(&entry);
+    std::fs::write(path, content)?;
+    Ok(())
 }
 
 #[cfg(test)]
