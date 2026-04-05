@@ -1,5 +1,6 @@
 mod config_observer;
 mod ui;
+mod ssh_engine;
 
 use gtk4::prelude::*;
 use crate::ui::window::build_ui;
