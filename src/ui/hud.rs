@@ -62,7 +62,7 @@ impl Hud {
             let text = format!("{} {}", host.alias, host.hostname);
             let text_utf32 = Utf32String::from(text.as_str());
             
-            if let Some(score) = matcher.fuzzy_match(text_utf32.as_ref(), query_utf32.as_ref()) {
+            if let Some(score) = matcher.fuzzy_match(text_utf32.slice(..), query_utf32.slice(..)) {
                 matches.push((score, host));
             }
         }

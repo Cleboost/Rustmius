@@ -1,6 +1,14 @@
 mod config_observer;
 mod ui;
 
+use gtk4::prelude::*;
+use crate::ui::window::build_ui;
+
 fn main() {
-    println!("Hello, Rustmius!");
+    let app = gtk4::Application::builder()
+        .application_id("org.rustmius.Rustmius")
+        .build();
+
+    app.connect_activate(build_ui);
+    app.run();
 }
