@@ -107,6 +107,39 @@ pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub fn delete_host_from_config(alias: &str) -> anyhow::Result<()> {
+    let path = get_default_config_path().ok_or_else(|| anyhow::anyhow!("No config path"))?;
+    if !path.exists() { return Ok(()); }
+    
+    let content = std::fs::read_to_string(&path)?;
+    let mut new_lines = Vec::new();
+    let mut skip = false;
+    let target_alias = alias.to_lowercase();
+
+    for line in content.lines() {
+        let trimmed = line.trim().to_lowercase();
+        if trimmed.starts_with("host ") {
+            let parts: Vec<&str> = trimmed.split_whitespace().collect();
+            if parts.len() > 1 && parts[1] == target_alias {
+                skip = true;
+                continue;
+            } else {
+                skip = false;
+            }
+        }
+        
+        if skip && (line.starts_with(" ") || line.starts_with("\t") || line.is_empty()) {
+            continue;
+        }
+        
+        skip = false;
+        new_lines.push(line);
+    }
+    
+    std::fs::write(path, new_lines.join("\n"))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
