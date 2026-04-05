@@ -81,24 +81,29 @@ pub fn build_ui(app: &gtk4::Application) {
     content_box.append(&header);
     content_box.append(&stack);
 
-    // Terminal
-    let terminal_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-    let terminal = vte4::Terminal::new();
-    terminal.set_vexpand(true);
-    terminal_box.append(&terminal);
+    // Sessions Notebook (Multi-tab)
+    let notebook = gtk4::Notebook::new();
+    notebook.set_vexpand(true);
+    notebook.set_hexpand(true);
+    notebook.set_scrollable(true);
+    notebook.set_show_border(false);
+    
+    let sessions_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+    sessions_box.append(&notebook);
+    stack.add_named(&sessions_box, Some("sessions"));
 
     // Refresh UI logic
     let refresh_ui: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
     
     let stack_clone = stack.clone();
-    let terminal_clone = terminal.clone();
     let window_clone = window.clone();
+    let notebook_clone = notebook.clone();
     let refresh_ui_weak = Rc::downgrade(&refresh_ui);
 
     let do_refresh = Rc::new(move || {
         let stack = stack_clone.clone();
-        let terminal = terminal_clone.clone();
         let window = window_clone.clone();
+        let notebook = notebook_clone.clone();
         let refresh_ui_handle = refresh_ui_weak.upgrade().unwrap();
         
         if let Some(child) = stack.child_by_name("server_grid") {
@@ -106,28 +111,71 @@ pub fn build_ui(app: &gtk4::Application) {
         }
 
         let sl_stack = stack.clone();
-        let sl_terminal = terminal.clone();
         let sl_window = window.clone();
+        let sl_notebook = notebook.clone();
         let sl_refresh_handle = refresh_ui_handle.clone();
 
         let sl = ServerList::new(move |action| {
             let stack = sl_stack.clone();
-            let terminal = sl_terminal.clone();
             let window = sl_window.clone();
+            let notebook = sl_notebook.clone();
             let refresh = sl_refresh_handle.borrow().as_ref().unwrap().clone();
             
             match action {
                 ServerAction::Connect(host) => {
-                    stack.set_visible_child_name("terminal");
+                    stack.set_visible_child_name("sessions");
+                    
+                    let terminal = vte4::Terminal::new();
+                    terminal.set_vexpand(true);
+                    
+                    // Tab label with close button
+                    let tab_label_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+                    let label = gtk4::Label::new(Some(&host.alias));
+                    let close_btn = gtk4::Button::from_icon_name("window-close-symbolic");
+                    close_btn.add_css_class("flat");
+                    
+                    tab_label_box.append(&label);
+                    tab_label_box.append(&close_btn);
+                    
+                    let page_num = notebook.append_page(&terminal, Some(&tab_label_box));
+                    notebook.set_tab_reorderable(&terminal, true);
+                    notebook.set_current_page(Some(page_num));
+                    
+                    // Close tab logic
+                    let nb_close = notebook.clone();
+                    let term_close = terminal.clone();
+                    let stack_close = stack.clone();
+                    close_btn.connect_clicked(move |_| {
+                        let idx = nb_close.page_num(&term_close);
+                        nb_close.remove_page(idx);
+                        if nb_close.n_pages() == 0 {
+                            stack_close.set_visible_child_name("server_grid");
+                        }
+                    });
+
+                    // SSH spawn logic
+                    let host_str = host.hostname.clone();
+                    let user_str = host.user.clone().unwrap_or_else(|| "root".to_string());
+                    let host_alias = host.alias.clone();
                     let exe_path = std::env::current_exe().unwrap_or_default().to_string_lossy().to_string();
                     let mut envv: Vec<String> = std::env::vars().map(|(k, v)| format!("{}={}", k, v)).collect();
                     envv.push(format!("SSH_ASKPASS={}", exe_path));
                     envv.push("SSH_ASKPASS_REQUIRE=force".to_string());
-                    envv.push(format!("RUSTMIUS_ASKPASS_ALIAS={}", host.alias));
+                    envv.push(format!("RUSTMIUS_ASKPASS_ALIAS={}", host_alias));
                     envv.push("DISPLAY=:0".to_string());
                     let env_refs: Vec<&str> = envv.iter().map(|s| s.as_str()).collect();
-                    let user_str = host.user.unwrap_or_else(|| "root".to_string());
-                    terminal.spawn_async(vte4::PtyFlags::DEFAULT, None, &["/usr/bin/ssh", "-o", "StrictHostKeyChecking=no", "-o", "PubkeyAuthentication=no", &format!("{}@{}", user_str, host.hostname)], &env_refs, glib::SpawnFlags::SEARCH_PATH, || {}, -1, None::<&gio::Cancellable>, |_| {});
+                    
+                    terminal.spawn_async(
+                        vte4::PtyFlags::DEFAULT, 
+                        None, 
+                        &["/usr/bin/ssh", "-o", "StrictHostKeyChecking=no", "-o", "PubkeyAuthentication=no", &format!("{}@{}", user_str, host_str)], 
+                        &env_refs, 
+                        glib::SpawnFlags::SEARCH_PATH, 
+                        || {}, 
+                        -1, 
+                        None::<&gio::Cancellable>, 
+                        |_| {}
+                    );
                 },
                 ServerAction::Delete(host) => {
                     let _ = delete_host_from_config(&host.alias);
@@ -178,6 +226,17 @@ pub fn build_ui(app: &gtk4::Application) {
     // Initial load
     do_refresh();
 
+    // Sidebar navigation update for sessions
+    let stack_sessions = stack.clone();
+    let nb_sessions = notebook.clone();
+    btn_servers.connect_clicked(move |_| {
+        if nb_sessions.n_pages() > 0 {
+            stack_sessions.set_visible_child_name("sessions");
+        } else {
+            stack_sessions.set_visible_child_name("server_grid");
+        }
+    });
+
     // Add button
     let refresh_add = do_refresh.clone();
     let window_add = window.clone();
@@ -203,12 +262,12 @@ pub fn build_ui(app: &gtk4::Application) {
         });
     });
 
-    // Navigation
-    let stack_nav = stack.clone();
-    btn_servers.connect_clicked(move |_| { stack_nav.set_visible_child_name("server_grid"); });
+    // Placeholder pages navigation
+    let stack_nav_keys = stack.clone();
+    btn_keys.connect_clicked(move |_| { stack_nav_keys.set_visible_child_name("ssh_keys"); });
+    let stack_nav_settings = stack.clone();
+    btn_settings.connect_clicked(move |_| { stack_nav_settings.set_visible_child_name("settings"); });
 
-    stack.add_named(&terminal_box, Some("terminal"));
-    
     let keys_box = gtk4::Box::new(gtk4::Orientation::Vertical, 24);
     keys_box.set_margin_top(48);
     keys_box.set_margin_bottom(48);
@@ -216,24 +275,19 @@ pub fn build_ui(app: &gtk4::Application) {
     keys_box.set_margin_end(48);
     keys_box.set_halign(gtk4::Align::Center);
     keys_box.set_valign(gtk4::Align::Center);
-    
     let wip_icon = gtk4::Image::from_icon_name("system-shutdown-symbolic");
     wip_icon.set_pixel_size(96);
     wip_icon.add_css_class("dim-label");
-    
     let wip_label = gtk4::Label::new(Some("SSH Keys Management - WIP"));
     wip_label.add_css_class("title-1");
-    
     let wip_subtitle = gtk4::Label::new(Some("This feature is under development"));
     wip_subtitle.add_css_class("dim-label");
     wip_subtitle.add_css_class("title-4");
-    
     keys_box.append(&wip_icon);
     keys_box.append(&wip_label);
     keys_box.append(&wip_subtitle);
-    
     stack.add_named(&keys_box, Some("ssh_keys"));
-    
+
     let settings_box = gtk4::Box::new(gtk4::Orientation::Vertical, 24);
     settings_box.set_margin_top(48);
     settings_box.set_margin_bottom(48);
@@ -241,30 +295,19 @@ pub fn build_ui(app: &gtk4::Application) {
     settings_box.set_margin_end(48);
     settings_box.set_halign(gtk4::Align::Center);
     settings_box.set_valign(gtk4::Align::Center);
-    
     let settings_icon = gtk4::Image::from_icon_name("emblem-system-symbolic");
     settings_icon.set_pixel_size(96);
     settings_icon.add_css_class("dim-label");
-    
     let settings_label = gtk4::Label::new(Some("Settings - WIP"));
     settings_label.add_css_class("title-1");
-    
     let settings_subtitle = gtk4::Label::new(Some("This feature is under development"));
     settings_subtitle.add_css_class("dim-label");
     settings_subtitle.add_css_class("title-4");
-    
     settings_box.append(&settings_icon);
     settings_box.append(&settings_label);
     settings_box.append(&settings_subtitle);
-    
     stack.add_named(&settings_box, Some("settings"));
-    
-    let stack_nav_keys = stack.clone();
-    btn_keys.connect_clicked(move |_| { stack_nav_keys.set_visible_child_name("ssh_keys"); });
-    
-    let stack_nav_settings = stack.clone();
-    btn_settings.connect_clicked(move |_| { stack_nav_settings.set_visible_child_name("settings"); });
-    
+
     root.append(&sidebar);
     root.append(&separator);
     root.append(&content_box);
