@@ -33,10 +33,39 @@ pub fn build_ui(app: &gtk4::Application) {
     btn_servers.set_margin_end(6);
     btn_servers.set_margin_top(0);
     btn_servers.set_margin_bottom(0);
+    let btn_keys = gtk4::Button::from_icon_name("changes-prevent-symbolic");
+    btn_keys.add_css_class("flat");
+    btn_keys.set_halign(gtk4::Align::Center);
+    btn_keys.set_valign(gtk4::Align::Start);
+    btn_keys.set_hexpand(false);
+    btn_keys.set_vexpand(false);
+    btn_keys.set_width_request(36);
+    btn_keys.set_height_request(36);
+    btn_keys.set_margin_start(6);
+    btn_keys.set_margin_end(6);
+    btn_keys.set_margin_top(0);
+    btn_keys.set_margin_bottom(0);
+    
     let spacer = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
     spacer.set_vexpand(true);
+    
+    let btn_settings = gtk4::Button::from_icon_name("applications-system-symbolic");
+    btn_settings.add_css_class("flat");
+    btn_settings.set_halign(gtk4::Align::Center);
+    btn_settings.set_valign(gtk4::Align::Start);
+    btn_settings.set_hexpand(false);
+    btn_settings.set_vexpand(false);
+    btn_settings.set_width_request(36);
+    btn_settings.set_height_request(36);
+    btn_settings.set_margin_start(6);
+    btn_settings.set_margin_end(6);
+    btn_settings.set_margin_top(0);
+    btn_settings.set_margin_bottom(6);
+    
     sidebar.append(&btn_servers);
+    sidebar.append(&btn_keys);
     sidebar.append(&spacer);
+    sidebar.append(&btn_settings);
 
     let separator = gtk4::Separator::new(gtk4::Orientation::Vertical);
 
@@ -179,6 +208,63 @@ pub fn build_ui(app: &gtk4::Application) {
     btn_servers.connect_clicked(move |_| { stack_nav.set_visible_child_name("server_grid"); });
 
     stack.add_named(&terminal_box, Some("terminal"));
+    
+    let keys_box = gtk4::Box::new(gtk4::Orientation::Vertical, 24);
+    keys_box.set_margin_top(48);
+    keys_box.set_margin_bottom(48);
+    keys_box.set_margin_start(48);
+    keys_box.set_margin_end(48);
+    keys_box.set_halign(gtk4::Align::Center);
+    keys_box.set_valign(gtk4::Align::Center);
+    
+    let wip_icon = gtk4::Image::from_icon_name("system-shutdown-symbolic");
+    wip_icon.set_pixel_size(96);
+    wip_icon.add_css_class("dim-label");
+    
+    let wip_label = gtk4::Label::new(Some("SSH Keys Management - WIP"));
+    wip_label.add_css_class("title-1");
+    
+    let wip_subtitle = gtk4::Label::new(Some("This feature is under development"));
+    wip_subtitle.add_css_class("dim-label");
+    wip_subtitle.add_css_class("title-4");
+    
+    keys_box.append(&wip_icon);
+    keys_box.append(&wip_label);
+    keys_box.append(&wip_subtitle);
+    
+    stack.add_named(&keys_box, Some("ssh_keys"));
+    
+    let settings_box = gtk4::Box::new(gtk4::Orientation::Vertical, 24);
+    settings_box.set_margin_top(48);
+    settings_box.set_margin_bottom(48);
+    settings_box.set_margin_start(48);
+    settings_box.set_margin_end(48);
+    settings_box.set_halign(gtk4::Align::Center);
+    settings_box.set_valign(gtk4::Align::Center);
+    
+    let settings_icon = gtk4::Image::from_icon_name("emblem-system-symbolic");
+    settings_icon.set_pixel_size(96);
+    settings_icon.add_css_class("dim-label");
+    
+    let settings_label = gtk4::Label::new(Some("Settings - WIP"));
+    settings_label.add_css_class("title-1");
+    
+    let settings_subtitle = gtk4::Label::new(Some("This feature is under development"));
+    settings_subtitle.add_css_class("dim-label");
+    settings_subtitle.add_css_class("title-4");
+    
+    settings_box.append(&settings_icon);
+    settings_box.append(&settings_label);
+    settings_box.append(&settings_subtitle);
+    
+    stack.add_named(&settings_box, Some("settings"));
+    
+    let stack_nav_keys = stack.clone();
+    btn_keys.connect_clicked(move |_| { stack_nav_keys.set_visible_child_name("ssh_keys"); });
+    
+    let stack_nav_settings = stack.clone();
+    btn_settings.connect_clicked(move |_| { stack_nav_settings.set_visible_child_name("settings"); });
+    
     root.append(&sidebar);
     root.append(&separator);
     root.append(&content_box);
