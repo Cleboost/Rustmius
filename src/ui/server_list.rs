@@ -55,7 +55,7 @@ impl ServerList {
     }
 
     fn add_host_row<F>(&self, host: &SshHost, on_action: F) 
-    where F: Fn(ServerAction) + 'static
+    where F: Fn(ServerAction) + 'static + Clone
     {
         let frame = gtk4::Frame::new(None);
         frame.add_css_class("card");

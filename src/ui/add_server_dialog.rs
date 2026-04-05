@@ -1,7 +1,12 @@
 use gtk4::prelude::*;
 use crate::config_observer::SshHost;
 
-pub fn show_server_dialog<F>(parent: &gtk4::Window, initial_host: Option<&SshHost>, on_save: F)
+pub fn show_server_dialog<F>(
+    parent: &gtk4::Window, 
+    initial_host: Option<&SshHost>, 
+    existing_aliases: Vec<String>,
+    on_save: F
+)
 where F: Fn(SshHost, String) + 'static
 {
     let dialog = gtk4::Dialog::builder()
@@ -26,6 +31,13 @@ where F: Fn(SshHost, String) + 'static
         .show_peek_icon(true)
         .build();
 
+    let error_label = gtk4::Label::builder()
+        .label("Alias already exists!")
+        .halign(gtk4::Align::Start)
+        .visible(false)
+        .build();
+    error_label.add_css_class("error");
+
     if let Some(host) = initial_host {
         alias_entry.set_text(&host.alias);
         host_entry.set_text(&host.hostname);
@@ -36,6 +48,7 @@ where F: Fn(SshHost, String) + 'static
 
     content.append(&gtk4::Label::builder().label("Alias").halign(gtk4::Align::Start).build());
     content.append(&alias_entry);
+    content.append(&error_label);
     content.append(&gtk4::Label::builder().label("Hostname").halign(gtk4::Align::Start).build());
     content.append(&host_entry);
     content.append(&gtk4::Label::builder().label("User").halign(gtk4::Align::Start).build());
@@ -43,15 +56,32 @@ where F: Fn(SshHost, String) + 'static
     content.append(&gtk4::Label::builder().label("Password").halign(gtk4::Align::Start).build());
     content.append(&pass_entry);
 
+    let ok_button = dialog.add_button(if initial_host.is_some() { "Save" } else { "Add" }, gtk4::ResponseType::Ok);
     dialog.add_button("Cancel", gtk4::ResponseType::Cancel);
-    dialog.add_button(if initial_host.is_some() { "Save" } else { "Add" }, gtk4::ResponseType::Ok);
+
+    // Dynamic validation
+    let existing_aliases = Rc::new(existing_aliases);
+    let initial_alias = initial_host.map(|h| h.alias.to_lowercase());
+    
+    let alias_entry_clone = alias_entry.clone();
+    let error_label_clone = error_label.clone();
+    let ok_button_clone = ok_button.clone();
+    let existing_aliases_clone = existing_aliases.clone();
+    
+    alias_entry.connect_changed(move |e| {
+        let text = e.text().to_string().trim().to_lowercase();
+        let is_duplicate = existing_aliases_clone.contains(&text) && Some(text.clone()) != initial_alias;
+        
+        error_label_clone.set_visible(is_duplicate);
+        ok_button_clone.set_sensitive(!is_duplicate && !text.is_empty());
+    });
 
     dialog.connect_response(move |d, res| {
         if res == gtk4::ResponseType::Ok {
             let host = SshHost {
-                alias: alias_entry.text().to_string(),
-                hostname: host_entry.text().to_string(),
-                user: Some(user_entry.text().to_string()).filter(|s| !s.is_empty()),
+                alias: alias_entry_clone.text().to_string().trim().to_string(),
+                hostname: host_entry.text().to_string().trim().to_string(),
+                user: Some(user_entry.text().to_string().trim().to_string()).filter(|s| !s.is_empty()),
             };
             let password = pass_entry.text().to_string();
             
@@ -64,3 +94,5 @@ where F: Fn(SshHost, String) + 'static
 
     dialog.present();
 }
+
+use std::rc::Rc;

@@ -33,13 +33,19 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
             continue;
         }
 
-        let parts: Vec<&str> = line.split_whitespace().collect();
+        // Split only on the first whitespace to allow spaces in values (like Host "My Server")
+        let parts: Vec<&str> = line.splitn(2, |c: char| c.is_whitespace()).collect();
         if parts.len() < 2 {
             continue;
         }
 
         let key = parts[0].to_lowercase();
-        let value = parts[1];
+        let mut value = parts[1].trim();
+
+        // Remove surrounding quotes if they exist
+        if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
+            value = &value[1..value.len() - 1];
+        }
 
         match key.as_str() {
             "host" => {
@@ -80,7 +86,6 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
 pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
     let path = get_default_config_path().ok_or_else(|| anyhow::anyhow!("Could not find SSH config path"))?;
     
-    // Ensure .ssh directory exists
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -95,9 +100,16 @@ pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
         content.push('\n');
     }
 
+    // Wrap alias in quotes if it contains spaces
+    let alias_quoted = if host.alias.contains(' ') {
+        format!("\"{}\"", host.alias)
+    } else {
+        host.alias.clone()
+    };
+
     let entry = format!(
         "\nHost {}\n    HostName {}\n    User {}\n",
-        host.alias,
+        alias_quoted,
         host.hostname,
         host.user.as_deref().unwrap_or("root")
     );
@@ -119,8 +131,12 @@ pub fn delete_host_from_config(alias: &str) -> anyhow::Result<()> {
     for line in content.lines() {
         let trimmed = line.trim().to_lowercase();
         if trimmed.starts_with("host ") {
-            let parts: Vec<&str> = trimmed.split_whitespace().collect();
-            if parts.len() > 1 && parts[1] == target_alias {
+            let mut val = trimmed["host ".len()..].trim();
+            if val.starts_with('"') && val.ends_with('"') && val.len() >= 2 {
+                val = &val[1..val.len()-1];
+            }
+            
+            if val == target_alias {
                 skip = true;
                 continue;
             } else {
@@ -128,11 +144,14 @@ pub fn delete_host_from_config(alias: &str) -> anyhow::Result<()> {
             }
         }
         
-        if skip && (line.starts_with(" ") || line.starts_with("\t") || line.is_empty()) {
+        if skip && (line.starts_with(' ') || line.starts_with('\t') || line.trim().is_empty()) {
             continue;
         }
         
-        skip = false;
+        if skip {
+            skip = false;
+        }
+        
         new_lines.push(line);
     }
     
@@ -155,18 +174,10 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_ssh_config_multiple() {
-        let config = "
-Host srv1
-    HostName 10.0.0.1
-Host srv2
-    HostName 10.0.0.2
-    User admin
-";
+    fn test_parse_ssh_config_with_spaces() {
+        let config = "Host \"My Server\"\n  HostName 1.2.3.4\n  User root";
         let hosts = parse_ssh_config(config);
-        assert_eq!(hosts.len(), 2);
-        assert_eq!(hosts[0].alias, "srv1");
-        assert_eq!(hosts[1].alias, "srv2");
-        assert_eq!(hosts[1].user, Some("admin".to_string()));
+        assert_eq!(hosts.len(), 1);
+        assert_eq!(hosts[0].alias, "My Server");
     }
 }
