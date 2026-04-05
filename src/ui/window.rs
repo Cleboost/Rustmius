@@ -1,4 +1,5 @@
 use gtk4::prelude::*;
+use gtk4::{glib, gio};
 use crate::ui::server_list::ServerList;
 use vte4::prelude::*;
 
@@ -47,6 +48,42 @@ pub fn build_ui(app: &gtk4::Application) {
     
     let stack = gtk4::Stack::new();
     stack.set_transition_type(gtk4::StackTransitionType::Crossfade);
+
+    // Terminal View
+    let terminal_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+    let terminal = vte4::Terminal::new();
+    terminal.set_vexpand(true);
+    terminal_box.append(&terminal);
+
+    // Navigation logic
+    let stack_clone = stack.clone();
+    btn_servers.connect_clicked(move |_| {
+        stack_clone.set_visible_child_name("server_grid");
+    });
+
+    let terminal_clone = terminal.clone();
+    let stack_clone_2 = stack.clone();
+    let server_list = ServerList::new(move |host| {
+        let host_str = host.hostname.clone();
+        let user_str = host.user.clone().unwrap_or_else(|| "root".to_string());
+        
+        stack_clone_2.set_visible_child_name("terminal");
+        
+        terminal_clone.spawn_async(
+            vte4::PtyFlags::DEFAULT,
+            None,
+            &["/usr/bin/ssh", &format!("{}@{}", user_str, host_str)],
+            &[],
+            glib::SpawnFlags::SEARCH_PATH,
+            || {},
+            -1,
+            None::<&gio::Cancellable>,
+            |_| {}
+        );
+    });
+
+    stack.add_named(&server_list.container, Some("server_grid"));
+    stack.add_named(&terminal_box, Some("terminal"));
 
     content_box.append(&header);
     content_box.append(&stack);
