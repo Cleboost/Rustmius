@@ -41,6 +41,7 @@ pub fn build_ui(app: &gtk4::Application) {
     btn_settings.set_valign(gtk4::Align::Start);
     btn_settings.set_width_request(36);
     btn_settings.set_height_request(36);
+    btn_settings.set_margin_bottom(12);
     sidebar.append(&btn_servers);
     sidebar.append(&btn_keys);
     sidebar.append(&spacer);
