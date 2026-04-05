@@ -1,7 +1,11 @@
 use gtk4::prelude::*;
 use gtk4::{glib, gio};
 use crate::ui::server_list::ServerList;
+use crate::ui::add_server_dialog::show_add_server_dialog;
+use crate::config_observer::{add_host_to_config, SshHost};
 use vte4::prelude::*;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 pub fn build_ui(app: &gtk4::Application) {
     let window = gtk4::ApplicationWindow::builder()
@@ -55,19 +59,14 @@ pub fn build_ui(app: &gtk4::Application) {
     terminal.set_vexpand(true);
     terminal_box.append(&terminal);
 
-    // Navigation logic
+    // Shared connection logic
     let stack_clone = stack.clone();
-    btn_servers.connect_clicked(move |_| {
-        stack_clone.set_visible_child_name("server_grid");
-    });
-
     let terminal_clone = terminal.clone();
-    let stack_clone_2 = stack.clone();
-    let server_list = ServerList::new(move |host| {
+    let connect_fn = move |host: &SshHost| {
         let host_str = host.hostname.clone();
         let user_str = host.user.clone().unwrap_or_else(|| "root".to_string());
         
-        stack_clone_2.set_visible_child_name("terminal");
+        stack_clone.set_visible_child_name("terminal");
         
         terminal_clone.spawn_async(
             vte4::PtyFlags::DEFAULT,
@@ -80,6 +79,33 @@ pub fn build_ui(app: &gtk4::Application) {
             None::<&gio::Cancellable>,
             |_| {}
         );
+    };
+
+    let connect_rc = Rc::new(connect_fn);
+    let server_list = Rc::new(ServerList::new({
+        let connect_rc = connect_rc.clone();
+        move |h| connect_rc(h)
+    }));
+
+    // Navigation logic
+    let stack_clone_nav = stack.clone();
+    btn_servers.connect_clicked(move |_| {
+        stack_clone_nav.set_visible_child_name("server_grid");
+    });
+
+    // Add button logic
+    let server_list_clone = server_list.clone();
+    let window_clone = window.clone();
+    let connect_rc_add = connect_rc.clone();
+    add_btn.connect_clicked(move |_| {
+        let sl_clone = server_list_clone.clone();
+        let connect_rc_inner = connect_rc_add.clone();
+        show_add_server_dialog(&window_clone, move |new_host| {
+            if let Ok(_) = add_host_to_config(&new_host) {
+                let connect_rc_refresh = connect_rc_inner.clone();
+                sl_clone.refresh(move |h| connect_rc_refresh(h));
+            }
+        });
     });
 
     stack.add_named(&server_list.container, Some("server_grid"));
