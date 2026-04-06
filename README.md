@@ -1,3 +1,6 @@
+> [!WARNING]
+> I am currently rebuilding Rustmius entirely in native Rust using GTK. This version will initially support only Linux, and will later be ported to Windows and macOS. This change in the tech stack will be the final one, allowing me to focus on features and later refine the UI.
+
 <div align="center">
     <table>
         <tr>
