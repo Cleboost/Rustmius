@@ -2,6 +2,10 @@ name: Continuous Integration
 
 on:
   push:
+    files:
+      - '**/*.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
 
 permissions:
   contents: read
