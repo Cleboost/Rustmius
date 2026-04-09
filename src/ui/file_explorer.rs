@@ -139,19 +139,16 @@ impl FileExplorer {
                 }
             }
 
-            if paths.is_empty() {
-                if let Ok(bytes) = value.get::<glib::Bytes>() {
-                    if let Ok(uris_str) = std::str::from_utf8(bytes.as_ref()) {
+            if paths.is_empty()
+                && let Ok(bytes) = value.get::<glib::Bytes>()
+                    && let Ok(uris_str) = std::str::from_utf8(bytes.as_ref()) {
                         paths.extend(parse_uri_list_paths(uris_str));
                     }
-                }
-            }
             
-            if paths.is_empty() {
-                if let Ok(uris_str) = value.get::<String>() {
+            if paths.is_empty()
+                && let Ok(uris_str) = value.get::<String>() {
                     paths.extend(parse_uri_list_paths(&uris_str));
                 }
-            }
 
             if paths.is_empty() {
                 h.status_label.set_text("Drop: no valid files found.");
@@ -188,8 +185,8 @@ impl FileExplorer {
         list_box.connect_row_activated(move |_, row| {
             let idx = row.index() as usize;
             let files_ref = files_activate.borrow();
-            if let Some(f) = files_ref.get(idx) {
-                if f.is_dir {
+            if let Some(f) = files_ref.get(idx)
+                && f.is_dir {
                     let mut path = h_activate.current_path.borrow_mut();
                     if !path.ends_with('/') { path.push('/'); }
                     path.push_str(&f.name); path.push('/');
@@ -198,7 +195,6 @@ impl FileExplorer {
                     drop(files_ref);
                     h_activate.refresh();
                 }
-            }
         });
 
         let sl_back = explorer.clone_handle();
@@ -488,15 +484,14 @@ impl ExplorerHandle {
                 group.add_action(&nd_action);
             }
 
-            if let Some(widget) = gesture_self.widget() {
-                if let Some(parent_row) = row_content_ancestor::<gtk4::ListBoxRow>(&widget) {
+            if let Some(widget) = gesture_self.widget()
+                && let Some(parent_row) = row_content_ancestor::<gtk4::ListBoxRow>(&widget) {
                     let popover = gtk4::PopoverMenu::builder().menu_model(&menu).has_arrow(false).build();
                     popover.insert_action_group("row", Some(&group));
                     popover.set_parent(&parent_row);
                     popover.set_pointing_to(Some(&gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
                     popover.popup();
                 }
-            }
         });
         row_content.add_controller(gesture);
 

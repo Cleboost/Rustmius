@@ -26,16 +26,14 @@ async fn main() {
             attributes.insert("rustmius-server-alias", normalized_alias.as_str());
             if let Ok(items) = keyring.search_items(&attributes).await {
                 log_debug(&format!("Found {} items in keyring", items.len()));
-                if let Some(item) = items.first() {
-                    if let Ok(password) = item.secret().await {
-                        if let Ok(pass_str) = std::str::from_utf8(&password) {
+                if let Some(item) = items.first()
+                    && let Ok(password) = item.secret().await
+                        && let Ok(pass_str) = std::str::from_utf8(&password) {
                             log_debug("Password retrieved successfully, sending to SSH");
                             
                             print!("{}", pass_str);
                             std::process::exit(0);
                         }
-                    }
-                }
             }
         }
         log_debug("Failed to retrieve password from keyring");

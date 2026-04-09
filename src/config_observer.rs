@@ -13,13 +13,11 @@ pub fn get_default_config_path() -> Option<std::path::PathBuf> {
 }
 
 pub fn load_hosts() -> Vec<SshHost> {
-    if let Some(path) = get_default_config_path() {
-        if path.exists() {
-            if let Ok(content) = fs::read_to_string(path) {
+    if let Some(path) = get_default_config_path()
+        && path.exists()
+            && let Ok(content) = fs::read_to_string(path) {
                 return parse_ssh_config(&content);
             }
-        }
-    }
     Vec::new()
 }
 
@@ -47,11 +45,10 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
 
         match key.as_str() {
             "host" => {
-                if let Some(host) = current_host.take() {
-                    if !host.alias.is_empty() && !host.hostname.is_empty() {
+                if let Some(host) = current_host.take()
+                    && !host.alias.is_empty() && !host.hostname.is_empty() {
                         hosts.push(host);
                     }
-                }
                 current_host = Some(SshHost {
                     alias: value.to_string(),
                     hostname: String::new(),
@@ -72,11 +69,10 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
         }
     }
 
-    if let Some(host) = current_host {
-        if !host.alias.is_empty() && !host.hostname.is_empty() {
+    if let Some(host) = current_host
+        && !host.alias.is_empty() && !host.hostname.is_empty() {
             hosts.push(host);
         }
-    }
 
     hosts
 }

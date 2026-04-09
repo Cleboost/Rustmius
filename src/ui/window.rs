@@ -148,11 +148,10 @@ pub fn build_ui(app: &gtk4::Application) {
 
                     let mut count = 0;
                     for i in 0..notebook.n_pages() {
-                        if let Some(p) = notebook.nth_page(Some(i)) {
-                            if p.widget_name().starts_with(&format!("session:{}", host.alias)) {
+                        if let Some(p) = notebook.nth_page(Some(i))
+                            && p.widget_name().starts_with(&format!("session:{}", host.alias)) {
                                 count += 1;
                             }
-                        }
                     }
                     session_box.set_widget_name(&format!("session:{}:{}", host.alias, count));
 
@@ -166,9 +165,8 @@ pub fn build_ui(app: &gtk4::Application) {
                     
                     let mut insert_pos = notebook.n_pages();
                     for i in 0..notebook.n_pages() {
-                        if let Some(c) = notebook.nth_page(Some(i)) {
-                            if c.widget_name() == "plus_tab_dummy" { insert_pos = i; break; }
-                        }
+                        if let Some(c) = notebook.nth_page(Some(i))
+                            && c.widget_name() == "plus_tab_dummy" { insert_pos = i; break; }
                     }
                     notebook.insert_page(&session_box, Some(&tab_label_box), Some(insert_pos));
                     notebook.set_tab_reorderable(&session_box, true);
@@ -203,24 +201,21 @@ pub fn build_ui(app: &gtk4::Application) {
                                 let mut attr = std::collections::HashMap::new();
                                 let alias_lower = h_alias.to_lowercase();
                                 attr.insert("rustmius-server-alias", alias_lower.as_str());
-                                if let Ok(items) = keyring.search_items(&attr).await {
-                                    if let Some(item) = items.first() {
-                                        if let Ok(pass) = item.secret().await {
+                                if let Ok(items) = keyring.search_items(&attr).await
+                                    && let Some(item) = items.first()
+                                        && let Ok(pass) = item.secret().await {
                                             password = Some(String::from_utf8_lossy(&pass).to_string());
                                         }
-                                    }
-                                }
                             }
 
                             let explorer = FileExplorer::new(h_exp, password);
 
                             let mut count = 0;
                             for i in 0..nb_spawn.n_pages() {
-                                if let Some(p) = nb_spawn.nth_page(Some(i)) {
-                                    if p.widget_name().starts_with(&format!("explorer:{}", h_alias)) {
+                                if let Some(p) = nb_spawn.nth_page(Some(i))
+                                    && p.widget_name().starts_with(&format!("explorer:{}", h_alias)) {
                                         count += 1;
                                     }
-                                }
                             }
                             explorer.container.set_widget_name(&format!("explorer:{}:{}", h_alias, count));
 
@@ -233,9 +228,8 @@ pub fn build_ui(app: &gtk4::Application) {
 
                             let mut ins_pos = nb_spawn.n_pages();
                             for i in 0..nb_spawn.n_pages() {
-                                if let Some(c) = nb_spawn.nth_page(Some(i)) {
-                                    if c.widget_name() == "plus_tab_dummy" { ins_pos = i; break; }
-                                }
+                                if let Some(c) = nb_spawn.nth_page(Some(i))
+                                    && c.widget_name() == "plus_tab_dummy" { ins_pos = i; break; }
                             }
                             nb_spawn.insert_page(&explorer.container, Some(&exp_tab_box), Some(ins_pos));
                             nb_spawn.set_tab_reorderable(&explorer.container, true);
@@ -310,9 +304,8 @@ pub fn build_ui(app: &gtk4::Application) {
         });
         let mut server_list_idx = None;
         for i in 0..notebook.n_pages() {
-            if let Some(c) = notebook.nth_page(Some(i)) {
-                if c.widget_name() == "server_list_tab" { server_list_idx = Some(i); break; }
-            }
+            if let Some(c) = notebook.nth_page(Some(i))
+                && c.widget_name() == "server_list_tab" { server_list_idx = Some(i); break; }
         }
         
         sl.container.set_widget_name("server_list_tab");
@@ -340,9 +333,8 @@ pub fn build_ui(app: &gtk4::Application) {
     btn_servers.connect_clicked(move |_| {
         let mut sl_idx = None;
         for i in 0..nb_sessions.n_pages() {
-            if let Some(c) = nb_sessions.nth_page(Some(i)) {
-                if c.widget_name() == "server_list_tab" { sl_idx = Some(i); break; }
-            }
+            if let Some(c) = nb_sessions.nth_page(Some(i))
+                && c.widget_name() == "server_list_tab" { sl_idx = Some(i); break; }
         }
         if let Some(idx) = sl_idx {
             nb_sessions.set_current_page(Some(idx));
