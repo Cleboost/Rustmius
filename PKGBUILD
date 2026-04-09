@@ -6,7 +6,7 @@ pkgdesc="Une alternative locale complète à Termius pour Linux (GTK4)"
 arch=('x86_64')
 url="https://github.com/Cleboost/Rustmius"
 license=('MIT')
-depends=('libadwaita' 'gtk4' 'vte4')
+depends=('gtk4' 'vte4')
 provides=("$_pkgname")
 conflicts=("$_pkgname")
 
