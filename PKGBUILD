@@ -1,7 +1,7 @@
 pkgname=rustmius-bin
 _pkgname=rustmius
 pkgver=2.0.0
-pkgrel=1
+pkgrel=2
 pkgdesc="Une alternative locale complète à Termius pour Linux (GTK4)"
 arch=('x86_64')
 url="https://github.com/Cleboost/Rustmius"
