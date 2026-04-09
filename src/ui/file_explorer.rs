@@ -352,7 +352,10 @@ impl ExplorerHandle {
                 let h = h_drag.clone();
                 let f = f_drag.clone();
                 let remote_path = format!("{}{}", h.current_path.borrow(), f.name);
-                let local_tmp = format!("/tmp/rustmius_dnd_{}", f.name);
+                
+                let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros();
+                let local_tmp_part = format!("/tmp/rustmius_dnd_{}_{}.part", ts, f.name);
+                let local_tmp = format!("/tmp/rustmius_dnd_{}_{}", ts, f.name);
 
                 let paintable = gtk4::IconTheme::for_display(&gdk::Display::default().unwrap())
                     .lookup_by_gicon(
@@ -364,16 +367,18 @@ impl ExplorerHandle {
                     );
                 src.set_icon(Some(&paintable), 16, 16);
 
-                h.status_label.set_text(&format!("Downloading {}...", f.name));
-
                 let host = h.host.clone();
                 let password = h.password.clone();
                 let rp = remote_path.clone();
-                let lp = local_tmp.clone();
+                
+                let lp_part = local_tmp_part.clone();
+                let lp_final = local_tmp.clone();
 
                 h.status_label.set_text(&format!("Preparing {}...", f.name));
                 std::thread::spawn(move || {
-                    let _ = download_file_sync(host, password, rp, lp);
+                    if let Ok(_) = crate::sftp_engine::download_file_sync(host, password, rp, lp_part.clone()) {
+                        let _ = std::fs::rename(lp_part, lp_final);
+                    }
                 });
 
                 let uri = format!("file://{}\r\n", local_tmp);
@@ -396,6 +401,9 @@ impl ExplorerHandle {
             let h = h_menu.clone();
             let f = f_menu.clone();
             let menu = gio::Menu::new();
+            if !f.is_dir {
+                menu.append(Some("Download"), Some("row.download"));
+            }
             menu.append(Some("Rename"), Some("row.rename"));
             menu.append(Some("Delete"), Some("row.delete"));
             if f.is_dir {
@@ -404,6 +412,44 @@ impl ExplorerHandle {
             }
 
             let group = gio::SimpleActionGroup::new();
+
+            if !f.is_dir {
+                let h_dl = h.clone(); let f_dl = f.clone();
+                let dl_action = gio::SimpleAction::new("download", None);
+                dl_action.connect_activate(move |_, _| {
+                    let hi = h_dl.clone(); let fi = f_dl.clone();
+                    let rp = format!("{}{}", hi.current_path.borrow(), fi.name);
+                    let parent_window = hi.list_box.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
+                    
+                    let dialog = gtk4::FileDialog::builder()
+                        .title("Save As")
+                        .initial_name(&fi.name)
+                        .build();
+                        
+                    let hii = hi.clone();
+                    if let Some(w) = parent_window {
+                        dialog.save(Some(&w), gio::Cancellable::NONE, move |res| {
+                            if let Ok(file) = res {
+                                if let Some(path) = file.path() {
+                                    let lp = path.to_string_lossy().to_string();
+                                    hii.status_label.set_text(&format!("Downloading {}...", fi.name));
+                                    let hiii = hii.clone();
+                                    let host = hiii.host.clone();
+                                    let pass = hiii.password.clone();
+                                    glib::MainContext::default().spawn_local(async move {
+                                        let rp = rp.clone();
+                                        match crate::sftp_engine::download_file(host, pass, rp, lp).await {
+                                            Ok(_) => hiii.status_label.set_text("Download complete."),
+                                            Err(e) => hiii.status_label.set_text(&format!("Download error: {}", e)),
+                                        }
+                                    });
+                                }
+                            }
+                        });
+                    }
+                });
+                group.add_action(&dl_action);
+            }
 
             let h_del = h.clone(); let f_del = f.clone();
             let del_action = gio::SimpleAction::new("delete", None);
