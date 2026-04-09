@@ -66,7 +66,6 @@ impl ServerList {
         content_box.set_margin_start(12);
         content_box.set_margin_end(12);
 
-        // Header with Alias and Actions
         let header_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
         
         let alias_label = gtk4::Label::builder()

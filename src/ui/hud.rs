@@ -41,7 +41,7 @@ impl Hud {
     }
 
     pub fn update_results(&self, hosts: &[SshHost], query: &str) {
-        // Clear existing results
+        
         while let Some(row) = self.list_box.first_child() {
             self.list_box.remove(&row);
         }

@@ -18,7 +18,6 @@ pub fn build_ui(app: &gtk4::Application) {
 
     let root = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
 
-    // Sidebar
     let sidebar = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
     sidebar.set_width_request(60);
     sidebar.set_margin_top(12);
@@ -50,7 +49,6 @@ pub fn build_ui(app: &gtk4::Application) {
 
     let separator = gtk4::Separator::new(gtk4::Orientation::Vertical);
 
-    // Content area
     let content_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
     content_box.set_hexpand(true);
     let header = gtk4::HeaderBar::new();
@@ -62,7 +60,6 @@ pub fn build_ui(app: &gtk4::Application) {
     content_box.append(&header);
     content_box.append(&stack);
 
-    // Sessions Notebook
     let notebook = gtk4::Notebook::new();
     notebook.set_vexpand(true);
     notebook.set_hexpand(true);
@@ -72,10 +69,8 @@ pub fn build_ui(app: &gtk4::Application) {
     sessions_box.append(&notebook);
     stack.add_named(&sessions_box, Some("sessions"));
 
-    // State to keep track of the last real session page
     let last_session_page = Rc::new(RefCell::new(0u32));
 
-    // Handle Notebook page switches (especially for the "Plus" tab)
     let stack_switch = stack.clone();
     let last_pg = last_session_page.clone();
     notebook.connect_switch_page(move |nb, page, idx| {
@@ -90,7 +85,6 @@ pub fn build_ui(app: &gtk4::Application) {
         }
     });
 
-    // Helper to ensure the "plus" tab is at the end
     let ensure_plus_tab = move |nb: &gtk4::Notebook| {
         let mut plus_idx: Option<u32> = None;
         for i in 0..nb.n_pages() {
@@ -109,7 +103,6 @@ pub fn build_ui(app: &gtk4::Application) {
         }
     };
 
-    // Refresh UI logic
     let refresh_ui: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
     let stack_clone = stack.clone();
     let window_clone = window.clone();
@@ -190,7 +183,6 @@ pub fn build_ui(app: &gtk4::Application) {
                         }
                     });
 
-                    // Explorer logic
                     let nb_exp = notebook.clone();
                     let host_exp = host.clone();
                     explorer_btn.connect_clicked(move |_| {

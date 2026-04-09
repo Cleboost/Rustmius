@@ -13,8 +13,5 @@ pub fn connect(host: &str, _user: &str) -> anyhow::Result<Session> {
     sess.handshake()
         .context("SSH handshake failed")?;
 
-    // Note: Authentication will be handled in a later task (MVP 0.8)
-    // but the engine is ready for it.
-    
     Ok(sess)
 }

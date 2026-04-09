@@ -33,7 +33,6 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
             continue;
         }
 
-        // Split only on the first whitespace to allow spaces in values (like Host "My Server")
         let parts: Vec<&str> = line.splitn(2, |c: char| c.is_whitespace()).collect();
         if parts.len() < 2 {
             continue;
@@ -42,7 +41,6 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
         let key = parts[0].to_lowercase();
         let mut value = parts[1].trim();
 
-        // Remove surrounding quotes if they exist
         if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
             value = &value[1..value.len() - 1];
         }
@@ -100,7 +98,6 @@ pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
         content.push('\n');
     }
 
-    // Wrap alias in quotes if it contains spaces
     let alias_quoted = if host.alias.contains(' ') {
         format!("\"{}\"", host.alias)
     } else {

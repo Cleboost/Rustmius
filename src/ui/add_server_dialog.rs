@@ -59,7 +59,6 @@ where F: Fn(SshHost, String) + 'static
     let ok_button = dialog.add_button(if initial_host.is_some() { "Save" } else { "Add" }, gtk4::ResponseType::Ok);
     dialog.add_button("Cancel", gtk4::ResponseType::Cancel);
 
-    // Dynamic validation
     let existing_aliases = Rc::new(existing_aliases);
     let initial_alias = initial_host.map(|h| h.alias.to_lowercase());
     

@@ -13,7 +13,7 @@ pub struct FileExplorer {
     status_label: gtk4::Label,
     host: SshHost,
     password: Option<String>,
-    /// Keeps track of the files currently displayed, so we can map row index -> RemoteFile
+    
     files: Rc<RefCell<Vec<RemoteFile>>>,
 }
 
@@ -45,7 +45,6 @@ impl FileExplorer {
         let current_path = Rc::new(RefCell::new(initial_path.clone()));
         let files: Rc<RefCell<Vec<RemoteFile>>> = Rc::new(RefCell::new(Vec::new()));
 
-        // --- Path bar ---
         let path_bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
         path_bar.set_margin_top(6); path_bar.set_margin_bottom(6);
         path_bar.set_margin_start(8); path_bar.set_margin_end(8);
@@ -70,7 +69,6 @@ impl FileExplorer {
         path_bar.append(&refresh_btn);
         container.append(&path_bar);
 
-        // --- File list (ListBox for native selection) ---
         let scrolled = gtk4::ScrolledWindow::builder().vexpand(true).build();
         let list_box = gtk4::ListBox::new();
         list_box.set_selection_mode(gtk4::SelectionMode::Single);
@@ -79,7 +77,6 @@ impl FileExplorer {
         scrolled.set_child(Some(&list_box));
         container.append(&scrolled);
 
-        // --- Status bar ---
         let status_label = gtk4::Label::builder()
             .label("Ready")
             .halign(gtk4::Align::Start)
@@ -102,12 +99,6 @@ impl FileExplorer {
             files: files.clone(),
         };
 
-        // ============================================================
-        // UPLOAD: Drop files from local file manager -> remote SFTP
-        // Thunar / XDnD often send text/uri-list as GBytes, not GObject String.
-        // DropTarget on ListBox with default (bubble) phase misses drops over rows;
-        // CAPTURE lets the list handle drops before child rows consume hit-testing.
-        // ============================================================
         let formats = gdk::ContentFormats::builder()
             .add_type(gdk::FileList::static_type())
             .add_type(glib::Bytes::static_type())
@@ -124,7 +115,6 @@ impl FileExplorer {
             .build();
         drop_target.set_propagation_phase(gtk4::PropagationPhase::Capture);
 
-        // Visual feedback when dragging over the drop zone
         let h_enter = explorer.clone_handle();
         drop_target.connect_enter(move |_, _, _| {
             h_enter.status_label.set_text("Drop here to upload...");
@@ -142,14 +132,12 @@ impl FileExplorer {
             let remote_dir = h.current_path.borrow().clone();
             let mut paths: Vec<std::path::PathBuf> = Vec::new();
 
-            // Try gdk::FileList (standard GTK4 type for files)
             if let Ok(file_list) = value.get::<gdk::FileList>() {
                 for file in file_list.files() {
                     if let Some(p) = file.path() { paths.push(p); }
                 }
             }
 
-            // text/uri-list as UTF-8 bytes (common from Thunar / X11 / some Wayland paths)
             if paths.is_empty() {
                 if let Ok(bytes) = value.get::<glib::Bytes>() {
                     if let Ok(uris_str) = std::str::from_utf8(bytes.as_ref()) {
@@ -157,7 +145,7 @@ impl FileExplorer {
                     }
                 }
             }
-            // GObject string (some GTK sources deserialize uri-list to gchararray)
+            
             if paths.is_empty() {
                 if let Ok(uris_str) = value.get::<String>() {
                     paths.extend(parse_uri_list_paths(&uris_str));
@@ -194,7 +182,6 @@ impl FileExplorer {
         });
         list_box.add_controller(drop_target);
 
-        // --- Double-click to navigate into folders ---
         let h_activate = explorer.clone_handle();
         let files_activate = files.clone();
         list_box.connect_row_activated(move |_, row| {
@@ -213,7 +200,6 @@ impl FileExplorer {
             }
         });
 
-        // --- Navigation ---
         let sl_back = explorer.clone_handle();
         let pe_back = path_entry.clone();
         back_btn.connect_clicked(move |_| {
@@ -292,7 +278,6 @@ impl ExplorerHandle {
         let p = self.current_path.borrow().clone();
         let handle = self.clone();
 
-        // Clear
         while let Some(row) = lb.row_at_index(0) { lb.remove(&row); }
         let loading = gtk4::Label::builder().label("Loading...").margin_top(12).margin_bottom(12).build();
         lb.append(&loading);
@@ -323,7 +308,6 @@ impl ExplorerHandle {
         let row_content = gtk4::Box::new(gtk4::Orientation::Horizontal, 10);
         row_content.set_margin_top(4); row_content.set_margin_bottom(4);
 
-        // Icon (Force regular full-color theme icons)
         let theme = gtk4::IconTheme::for_display(&gdk::Display::default().unwrap());
         let paintable = theme.lookup_by_gicon(
             &file_icon(&file),
@@ -336,7 +320,6 @@ impl ExplorerHandle {
         icon.set_pixel_size(32);
         row_content.append(&icon);
 
-        // Name
         let name_label = gtk4::Label::builder()
             .label(&file.name)
             .halign(gtk4::Align::Start)
@@ -345,7 +328,6 @@ impl ExplorerHandle {
             .build();
         row_content.append(&name_label);
 
-        // Size (files only)
         if !file.is_dir {
             let size_str = format_file_size(file.size);
             let size_label = gtk4::Label::builder()
@@ -356,10 +338,6 @@ impl ExplorerHandle {
             row_content.append(&size_label);
         }
 
-        // ============================================================
-        // DOWNLOAD: Drag files from remote SFTP -> local file manager
-        // Download happens in background thread so drag starts instantly
-        // ============================================================
         if !file.is_dir {
             let source = gtk4::DragSource::new();
             source.set_actions(gdk::DragAction::COPY);
@@ -372,7 +350,6 @@ impl ExplorerHandle {
                 let remote_path = format!("{}{}", h.current_path.borrow(), f.name);
                 let local_tmp = format!("/tmp/rustmius_dnd_{}", f.name);
 
-                // Set a drag icon representing the file
                 let paintable = gtk4::IconTheme::for_display(&gdk::Display::default().unwrap())
                     .lookup_by_gicon(
                         &file_icon(&f),
@@ -385,21 +362,16 @@ impl ExplorerHandle {
 
                 h.status_label.set_text(&format!("Downloading {}...", f.name));
 
-                // Extract Send-safe data for the background thread
                 let host = h.host.clone();
                 let password = h.password.clone();
                 let rp = remote_path.clone();
                 let lp = local_tmp.clone();
 
-                // Start download in background thread - drag operation starts instantly
                 h.status_label.set_text(&format!("Preparing {}...", f.name));
                 std::thread::spawn(move || {
                     let _ = download_file_sync(host, password, rp, lp);
                 });
 
-                // Provide the URI immediately. Most file managers (Thunar/Nautilus)
-                // handle the file appearance/wait gracefully for small files, 
-                // or we win the race because the user takes time to move the mouse.
                 let uri = format!("file://{}\r\n", local_tmp);
                 let bytes = glib::Bytes::from(uri.as_bytes());
                 Some(gdk::ContentProvider::for_bytes("text/uri-list", &bytes))
@@ -413,7 +385,6 @@ impl ExplorerHandle {
             row_content.add_controller(source);
         }
 
-        // --- Right-click context menu ---
         let gesture = gtk4::GestureClick::builder().button(3).build();
         let h_menu = self.clone();
         let f_menu = file.clone();
@@ -430,7 +401,6 @@ impl ExplorerHandle {
 
             let group = gio::SimpleActionGroup::new();
 
-            // Delete
             let h_del = h.clone(); let f_del = f.clone();
             let del_action = gio::SimpleAction::new("delete", None);
             del_action.connect_activate(move |_, _| {
@@ -448,7 +418,6 @@ impl ExplorerHandle {
             });
             group.add_action(&del_action);
 
-            // Rename
             let h_ren = h.clone(); let f_ren = f.clone();
             let ren_action = gio::SimpleAction::new("rename", None);
             ren_action.connect_activate(move |_, _| {
@@ -471,7 +440,7 @@ impl ExplorerHandle {
             group.add_action(&ren_action);
 
             if f.is_dir {
-                // New File
+                
                 let h_nf = h.clone(); let f_nf = f.clone();
                 let nf_action = gio::SimpleAction::new("new_file", None);
                 nf_action.connect_activate(move |_, _| {
@@ -489,7 +458,6 @@ impl ExplorerHandle {
                 });
                 group.add_action(&nf_action);
 
-                // New Folder
                 let h_nd = h.clone(); let f_nd = f.clone();
                 let nd_action = gio::SimpleAction::new("new_folder", None);
                 nd_action.connect_activate(move |_, _| {
@@ -508,7 +476,6 @@ impl ExplorerHandle {
                 group.add_action(&nd_action);
             }
 
-            // Find the row widget wrapping our content to parent the popover
             if let Some(widget) = gesture_self.widget() {
                 if let Some(parent_row) = row_content_ancestor::<gtk4::ListBoxRow>(&widget) {
                     let popover = gtk4::PopoverMenu::builder().menu_model(&menu).has_arrow(false).build();
@@ -525,7 +492,6 @@ impl ExplorerHandle {
     }
 }
 
-/// Parse `text/uri-list` body (NUL- or newline-separated `file://` URIs).
 fn parse_uri_list_paths(uris_str: &str) -> Vec<std::path::PathBuf> {
     let mut paths = Vec::new();
     for uri in uris_str.split(['\n', '\r', '\0']).map(str::trim) {
@@ -540,7 +506,6 @@ fn parse_uri_list_paths(uris_str: &str) -> Vec<std::path::PathBuf> {
     paths
 }
 
-// --- Helper: find ancestor of a specific type ---
 fn row_content_ancestor<T: IsA<gtk4::Widget>>(widget: &gtk4::Widget) -> Option<T> {
     let mut current = widget.parent();
     while let Some(w) = current {
@@ -552,7 +517,6 @@ fn row_content_ancestor<T: IsA<gtk4::Widget>>(widget: &gtk4::Widget) -> Option<T
     None
 }
 
-// --- Determine icon based on file type using system theme ---
 fn file_icon(file: &RemoteFile) -> gio::Icon {
     let content_type = if file.is_dir {
         "inode/directory".into()
@@ -564,7 +528,6 @@ fn file_icon(file: &RemoteFile) -> gio::Icon {
     gio::content_type_get_icon(&content_type)
 }
 
-// --- Format file size to human readable string ---
 fn format_file_size(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = 1024 * 1024;

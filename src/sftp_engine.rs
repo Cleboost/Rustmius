@@ -113,7 +113,6 @@ pub async fn download_file(host: SshHost, password: Option<String>, remote_path:
     }).await?
 }
 
-/// Synchronous version for contexts where async is not possible (e.g. DnD prepare callback)
 pub fn download_file_sync(host: SshHost, password: Option<String>, remote_path: String, local_path: String) -> anyhow::Result<()> {
     let sftp = connect_sftp(host, password)?;
     let mut remote_file = sftp.open(Path::new(&remote_path))?;

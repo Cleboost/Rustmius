@@ -18,7 +18,6 @@ fn log_debug(msg: &str) {
 async fn main() {
     let args: Vec<String> = std::env::args().collect();
     
-    // DETECT ASKPASS MODE FIRST
     if let Ok(alias) = std::env::var("RUSTMIUS_ASKPASS_ALIAS") {
         log_debug(&format!("AskPass triggered for alias: {}", alias));
         if let Ok(keyring) = oo7::Keyring::new().await {
@@ -31,8 +30,7 @@ async fn main() {
                     if let Ok(password) = item.secret().await {
                         if let Ok(pass_str) = std::str::from_utf8(&password) {
                             log_debug("Password retrieved successfully, sending to SSH");
-                            // SSH askpass usually expects NO newline or exactly one. 
-                            // Let's try print! first as it's more standard.
+                            
                             print!("{}", pass_str);
                             std::process::exit(0);
                         }
@@ -44,7 +42,6 @@ async fn main() {
         std::process::exit(1);
     }
 
-    // Normal GUI Mode
     let app = gtk4::Application::builder()
         .application_id("org.rustmius.Rustmius")
         .flags(gtk4::gio::ApplicationFlags::NON_UNIQUE)
