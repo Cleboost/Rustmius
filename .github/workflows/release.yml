@@ -117,21 +117,35 @@ jobs:
         run: |
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
             sudo dpkg --add-architecture arm64
-            sudo sed -i "s|http://archive.ubuntu.com/ubuntu/|http://ports.ubuntu.com/ubuntu-ports/|g" /etc/apt/sources.list
-            sudo sed -i "s|http://security.ubuntu.com/ubuntu/|http://ports.ubuntu.com/ubuntu-ports/|g" /etc/apt/sources.list
-            
-            echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ $(lsb_release -sc) main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/amd64.list
-            echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ $(lsb_release -sc)-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/amd64.list
-            echo "deb [arch=amd64] http://security.ubuntu.com/ubuntu/ $(lsb_release -sc)-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/amd64.list
-            
-            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -sc) main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64.list
-            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -sc)-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
-            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -sc)-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
-            
-            sudo rm /etc/apt/sources.list
-
+          
+            # Nettoyage des sources pour éviter les conflits d'architecture
+            sudo rm -f /etc/apt/sources.list
+            sudo rm -f /etc/apt/sources.list.d/*.list
+          
+            SUITE=$(lsb_release -sc)
+          
+            # Configuration AMD64 (Hôte)
+            sudo tee /etc/apt/sources.list.d/amd64.list > /dev/null <<EOF
+          deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ $SUITE main restricted universe multiverse
+          deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ $SUITE-updates main restricted universe multiverse
+          deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ $SUITE-backports main restricted universe multiverse
+          deb [arch=amd64] http://security.ubuntu.com/ubuntu/ $SUITE-security main restricted universe multiverse
+          EOF
+          
+            # Configuration ARM64 (Cible)
+            sudo tee /etc/apt/sources.list.d/arm64.list > /dev/null <<EOF
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $SUITE main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $SUITE-updates main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $SUITE-security main restricted universe multiverse
+          EOF
+          
             sudo apt-get update
-            sudo apt-get install -y libgtk-4-dev:arm64 libvte-2.91-gtk4-dev:arm64 libadwaita-1-dev:arm64 gcc-aarch64-linux-gnu pkg-config
+            sudo apt-get install -y \
+              libgtk-4-dev:arm64 \
+              libvte-2.91-gtk4-dev:arm64 \
+              libadwaita-1-dev:arm64 \
+              gcc-aarch64-linux-gnu \
+              pkg-config
           else
             sudo apt-get update
             sudo apt-get install -y libgtk-4-dev libvte-2.91-gtk4-dev libadwaita-1-dev
@@ -148,7 +162,7 @@ jobs:
       - name: Build (Performance optimized)
         run: |
           export RUSTFLAGS="-C target-cpu=${{ matrix.cpu }}"
-          # On désactive les flags spécifiques si CPU == generic (x86_64 standard ou aarch64)
+          # Désactivation des flags spécifiques si generic
           if [ "${{ matrix.cpu }}" = "generic" ]; then export RUSTFLAGS=""; fi
           
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
