@@ -71,75 +71,43 @@ pub fn build_ui(app: &gtk4::Application) {
 
     let last_session_page = Rc::new(RefCell::new(0u32));
 
-    let stack_switch = stack.clone();
     let last_pg = last_session_page.clone();
-    notebook.connect_switch_page(move |nb, page, idx| {
-        if page.widget_name() == "plus_tab_dummy" {
-            let mut real_pages = 0;
-            for i in 0..nb.n_pages() {
-                if let Some(c) = nb.nth_page(Some(i)) {
-                    if c.widget_name() != "plus_tab_dummy" { real_pages += 1; }
-                }
-            }
-            if real_pages == 0 {
-                stack_switch.set_visible_child_name("server_grid");
-            } else {
-                let prev_idx = *last_pg.borrow();
-                if let Some(p) = nb.nth_page(Some(prev_idx)) {
-                    if p.widget_name() != "plus_tab_dummy" {
-                        nb.set_current_page(Some(prev_idx));
-                    }
-                }
-                stack_switch.set_visible_child_name("server_grid");
-            }
-        } else {
-            *last_pg.borrow_mut() = idx;
-        }
-    });
-
-    let ensure_plus_tab = move |nb: &gtk4::Notebook| {
-        let mut plus_idx: Option<u32> = None;
-        for i in 0..nb.n_pages() {
-            if let Some(child) = nb.nth_page(Some(i)) {
-                if child.widget_name() == "plus_tab_dummy" { plus_idx = Some(i); break; }
-            }
-        }
-        if let Some(idx) = plus_idx { nb.remove_page(Some(idx)); }
-
-        if nb.n_pages() > 0 {
-            let dummy = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-            dummy.set_widget_name("plus_tab_dummy");
-            let plus_img = gtk4::Image::from_icon_name("list-add-symbolic");
-            nb.append_page(&dummy, Some(&plus_img));
-            nb.set_tab_reorderable(&dummy, false);
-        }
-    };
 
     let refresh_ui: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
     let stack_clone = stack.clone();
     let window_clone = window.clone();
     let notebook_clone = notebook.clone();
     let refresh_ui_weak = Rc::downgrade(&refresh_ui);
+    
 
-    let do_refresh = Rc::new(move || {
-        let stack = stack_clone.clone();
-        let window = window_clone.clone();
-        let notebook = notebook_clone.clone();
-        let refresh_ui_handle = refresh_ui_weak.upgrade().unwrap();
-        if let Some(child) = stack.child_by_name("server_grid") { stack.remove(&child); }
+    notebook.connect_switch_page(move |nb, _, _| {
+        *last_pg.borrow_mut() = nb.current_page().unwrap_or(0);
+    });
 
-        let sl_stack = stack.clone();
-        let sl_window = window.clone();
-        let sl_notebook = notebook.clone();
-        let sl_refresh_handle = refresh_ui_handle.clone();
-        let ep = ensure_plus_tab.clone();
+
+
+
+
+    let do_refresh = {
+        let sc = stack_clone.clone();
+        let wc = window_clone.clone();
+        let nc = notebook_clone.clone();
+        let rwh = refresh_ui_weak.clone();
+        Rc::new(move || {
+            let stack = sc.clone();
+            let window = wc.clone();
+            let notebook = nc.clone();
+            let refresh_ui_handle = rwh.upgrade().unwrap();
+            let sl_stack = stack.clone();
+            let sl_window = window.clone();
+            let sl_notebook = notebook.clone();
+            let sl_refresh_handle = refresh_ui_handle.clone();
 
         let sl = ServerList::new(move |action| {
             let stack = sl_stack.clone();
             let window = sl_window.clone();
             let notebook = sl_notebook.clone();
             let refresh = sl_refresh_handle.borrow().as_ref().unwrap().clone();
-            let ep_inner = ep.clone();
             
             match action {
                 ServerAction::Connect(host) => {
@@ -191,7 +159,7 @@ pub fn build_ui(app: &gtk4::Application) {
                     
                     let nb_close = notebook.clone();
                     let sb_close = session_box.clone();
-                    let stack_close = stack.clone();
+
                     close_btn.connect_clicked(move |_| {
                         let idx = nb_close.page_num(&sb_close);
                         if let Some(i) = idx {
@@ -202,16 +170,6 @@ pub fn build_ui(app: &gtk4::Application) {
                             }
                             nb_close.remove_page(Some(i));
                         }
-                        if nb_close.n_pages() == 1 {
-                            if let Some(child) = nb_close.nth_page(Some(0)) {
-                                if child.widget_name() == "plus_tab_dummy" {
-                                    nb_close.remove_page(Some(0));
-                                    stack_close.set_visible_child_name("server_grid");
-                                }
-                            }
-                        } else if nb_close.n_pages() == 0 {
-                            stack_close.set_visible_child_name("server_grid");
-                        }
                     });
 
                     let nb_exp = notebook.clone();
@@ -220,7 +178,7 @@ pub fn build_ui(app: &gtk4::Application) {
                         let h_exp = host_exp.clone();
                         let h_alias = h_exp.alias.clone();
                         let nb_spawn = nb_exp.clone();
-                        let stack_spawn = stack.clone();
+
                         
                         glib::MainContext::default().spawn_local(async move {
                             let mut password = None;
@@ -265,21 +223,11 @@ pub fn build_ui(app: &gtk4::Application) {
                                     }
                                     nb_c.remove_page(Some(i));
                                 }
-                                if nb_c.n_pages() == 1 {
-                                    if let Some(child) = nb_c.nth_page(Some(0)) {
-                                        if child.widget_name() == "plus_tab_dummy" {
-                                            nb_c.remove_page(Some(0));
-                                            stack_spawn.set_visible_child_name("server_grid");
-                                        }
-                                    }
-                                } else if nb_c.n_pages() == 0 {
-                                    stack_spawn.set_visible_child_name("server_grid");
-                                }
                             });
                         });
                     });
 
-                    ep_inner(&notebook);
+
 
                     let host_str = host.hostname.clone();
                     let user_str = host.user.clone().unwrap_or_else(|| "root".to_string());
@@ -330,9 +278,28 @@ pub fn build_ui(app: &gtk4::Application) {
                 }
             }
         });
-        stack.add_named(&sl.container, Some("server_grid"));
-        stack.set_visible_child_name("server_grid");
-    });
+        let mut server_list_idx = None;
+        for i in 0..notebook.n_pages() {
+            if let Some(c) = notebook.nth_page(Some(i)) {
+                if c.widget_name() == "server_list_tab" { server_list_idx = Some(i); break; }
+            }
+        }
+        
+        sl.container.set_widget_name("server_list_tab");
+        let tab_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+        tab_box.append(&gtk4::Image::from_icon_name("view-grid-symbolic"));
+        tab_box.append(&gtk4::Label::new(Some("Connect")));
+        
+        if let Some(idx) = server_list_idx {
+            notebook.remove_page(Some(idx));
+            notebook.insert_page(&sl.container, Some(&tab_box), Some(idx));
+        } else {
+            notebook.insert_page(&sl.container, Some(&tab_box), Some(0));
+            notebook.set_current_page(Some(0));
+        }
+
+        })
+    };
 
     *refresh_ui.borrow_mut() = Some(do_refresh.clone());
     do_refresh();
@@ -340,13 +307,19 @@ pub fn build_ui(app: &gtk4::Application) {
     let stack_sessions = stack.clone();
     let nb_sessions = notebook.clone();
     btn_servers.connect_clicked(move |_| {
-        let mut real_pages = 0;
+        let mut sl_idx = None;
         for i in 0..nb_sessions.n_pages() {
             if let Some(c) = nb_sessions.nth_page(Some(i)) {
-                if c.widget_name() != "plus_tab_dummy" { real_pages += 1; }
+                if c.widget_name() == "server_list_tab" { sl_idx = Some(i); break; }
             }
         }
-        if real_pages > 0 { stack_sessions.set_visible_child_name("sessions"); } else { stack_sessions.set_visible_child_name("server_grid"); }
+        if let Some(idx) = sl_idx {
+            nb_sessions.set_current_page(Some(idx));
+        } else {
+            let refresh_h = refresh_ui_weak.upgrade().unwrap();
+            if let Some(r) = refresh_h.borrow().as_ref() { r(); }
+        }
+        stack_sessions.set_visible_child_name("sessions");
     });
 
     let stack_nav_keys = stack.clone();
