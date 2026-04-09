@@ -231,7 +231,8 @@ impl FileExplorer {
         let sl_new_btn = explorer.clone_handle();
         new_folder_btn.connect_clicked(move |_| {
             let sl = sl_new_btn.clone(); let cur = sl.current_path.borrow().clone();
-            show_input_dialog("New Folder", "Name:", "", move |n| {
+            let parent_window = sl.list_box.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
+            show_input_dialog(parent_window.as_ref(), "New Folder", "Name:", "", move |n| {
                 let sli = sl.clone(); let p = format!("{}{}", cur, n);
                 glib::MainContext::default().spawn_local(async move {
                     if let Ok(_) = create_dir(sli.host.clone(), sli.password.clone(), p).await { sli.refresh(); }
@@ -245,6 +246,7 @@ impl FileExplorer {
 
     fn clone_handle(&self) -> ExplorerHandle {
         ExplorerHandle {
+            container: self.container.clone(),
             list_box: self.list_box.clone(),
             current_path: self.current_path.clone(),
             path_entry: self.path_entry.clone(),
@@ -262,6 +264,7 @@ impl FileExplorer {
 
 #[derive(Clone)]
 struct ExplorerHandle {
+    container: gtk4::Box,
     list_box: gtk4::ListBox,
     current_path: Rc<RefCell<String>>,
     path_entry: gtk4::Entry,
@@ -279,14 +282,20 @@ impl ExplorerHandle {
         let p = self.current_path.borrow().clone();
         let handle = self.clone();
 
-        while let Some(row) = lb.row_at_index(0) { lb.remove(&row); }
+        while let Some(row) = lb.row_at_index(0) {
+            unparent_children(&row);
+            lb.remove(&row);
+        }
         let loading = gtk4::Label::builder().label("Loading...").margin_top(12).margin_bottom(12).build();
         lb.append(&loading);
 
         glib::MainContext::default().spawn_local(async move {
             match list_files(h, pw, p).await {
                 Ok(files) => {
-                    while let Some(row) = lb.row_at_index(0) { lb.remove(&row); }
+                    while let Some(row) = lb.row_at_index(0) {
+                        unparent_children(&row);
+                        lb.remove(&row);
+                    }
                     *handle.files.borrow_mut() = files.clone();
                     let count = files.len();
                     for f in files {
@@ -407,7 +416,8 @@ impl ExplorerHandle {
             del_action.connect_activate(move |_, _| {
                 let hi = h_del.clone(); let fi = f_del.clone();
                 let path = format!("{}{}", hi.current_path.borrow(), fi.name);
-                show_confirm_dialog("Confirm Delete", &format!("Delete '{}'?", fi.name), move || {
+                let parent_window = hi.list_box.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
+                show_confirm_dialog(parent_window.as_ref(), "Confirm Delete", &format!("Delete '{}'?", fi.name), move || {
                     let hii = hi.clone(); let p = path.clone(); let isd = fi.is_dir;
                     glib::MainContext::default().spawn_local(async move {
                         match delete_file(hii.host.clone(), hii.password.clone(), p, isd).await {
@@ -426,7 +436,8 @@ impl ExplorerHandle {
                 let cur = hi.current_path.borrow().clone();
                 let old_name = fi.name.clone();
                 let old_name_cloned = old_name.clone();
-                show_input_dialog("Rename", "New name:", &old_name, move |new_n| {
+                let parent_window = hi.list_box.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
+                show_input_dialog(parent_window.as_ref(), "Rename", "New name:", &old_name, move |new_n| {
                     let hii = hi.clone();
                     let old_p = format!("{}{}", cur, old_name_cloned);
                     let new_p = format!("{}{}", cur, new_n);
@@ -447,7 +458,8 @@ impl ExplorerHandle {
                 nf_action.connect_activate(move |_, _| {
                     let hi = h_nf.clone(); let fi = f_nf.clone();
                     let pb = format!("{}{}/", hi.current_path.borrow(), fi.name);
-                    show_input_dialog("New File", "Name:", "", move |n| {
+                    let parent_window = hi.list_box.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
+                    show_input_dialog(parent_window.as_ref(), "New File", "Name:", "", move |n| {
                         let hii = hi.clone(); let p = format!("{}{}", pb, n);
                         glib::MainContext::default().spawn_local(async move {
                             match create_file(hii.host.clone(), hii.password.clone(), p).await {
@@ -464,7 +476,8 @@ impl ExplorerHandle {
                 nd_action.connect_activate(move |_, _| {
                     let hi = h_nd.clone(); let f_i = f_nd.clone();
                     let pb = format!("{}{}/", hi.current_path.borrow(), f_i.name);
-                    show_input_dialog("New Folder", "Name:", "", move |n| {
+                    let parent_window = hi.list_box.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
+                    show_input_dialog(parent_window.as_ref(), "New Folder", "Name:", "", move |n| {
                         let hii = hi.clone(); let p = format!("{}{}", pb, n);
                         glib::MainContext::default().spawn_local(async move {
                             match create_dir(hii.host.clone(), hii.password.clone(), p).await {
@@ -507,6 +520,17 @@ fn parse_uri_list_paths(uris_str: &str) -> Vec<std::path::PathBuf> {
     paths
 }
 
+fn unparent_children(widget: &impl IsA<gtk4::Widget>) {
+    let mut child = widget.first_child();
+    while let Some(c) = child {
+        let next = c.next_sibling();
+        if c.is::<gtk4::Popover>() || c.is::<gtk4::PopoverMenu>() {
+            c.unparent();
+        }
+        child = next;
+    }
+}
+
 fn row_content_ancestor<T: IsA<gtk4::Widget>>(widget: &gtk4::Widget) -> Option<T> {
     let mut current = widget.parent();
     while let Some(w) = current {
@@ -544,19 +568,28 @@ fn format_file_size(bytes: u64) -> String {
     }
 }
 
-fn show_input_dialog<F>(title: &str, label: &str, initial: &str, on_submit: F)
+fn show_input_dialog<F>(parent: Option<&gtk4::Window>, title: &str, label: &str, initial: &str, on_submit: F)
 where F: Fn(String) + 'static
 {
-    let dialog = gtk4::Dialog::builder().title(title).modal(true).build();
+    let dialog = gtk4::Dialog::new();
+    dialog.set_title(Some(title));
+    dialog.set_modal(true);
+    if let Some(p) = parent {
+        dialog.set_transient_for(Some(p));
+    }
+    
     let content = dialog.content_area();
     content.set_margin_top(12); content.set_margin_bottom(12);
     content.set_margin_start(12); content.set_margin_end(12);
     content.set_spacing(12);
     content.append(&gtk4::Label::new(Some(label)));
+    
     let entry = gtk4::Entry::builder().text(initial).build();
     content.append(&entry);
+    
     dialog.add_button("Cancel", gtk4::ResponseType::Cancel);
     dialog.add_button("OK", gtk4::ResponseType::Ok);
+    
     dialog.connect_response(move |d, res| {
         if res == gtk4::ResponseType::Ok {
             let text = entry.text().to_string();
@@ -567,16 +600,17 @@ where F: Fn(String) + 'static
     dialog.present();
 }
 
-fn show_confirm_dialog<F>(title: &str, message: &str, on_confirm: F)
+fn show_confirm_dialog<F>(parent: Option<&gtk4::Window>, title: &str, message: &str, on_confirm: F)
 where F: Fn() + 'static
 {
-    let dialog = gtk4::MessageDialog::builder()
-        .title(title)
-        .text(message)
-        .message_type(gtk4::MessageType::Question)
-        .buttons(gtk4::ButtonsType::YesNo)
-        .modal(true)
-        .build();
+    let dialog = gtk4::MessageDialog::new(
+        parent,
+        gtk4::DialogFlags::MODAL,
+        gtk4::MessageType::Question,
+        gtk4::ButtonsType::YesNo,
+        message
+    );
+    dialog.set_title(Some(title));
     dialog.connect_response(move |d, res| {
         if res == gtk4::ResponseType::Yes { on_confirm(); }
         d.close();
