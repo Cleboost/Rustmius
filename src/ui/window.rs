@@ -84,6 +84,12 @@ pub fn build_ui(app: &gtk4::Application) {
         *last_pg.borrow_mut() = nb.current_page().unwrap_or(0);
     });
 
+    notebook.connect_page_reordered(|nb, child, page_num| {
+        if page_num == 0 && child.widget_name() != "server_list_tab" {
+            nb.reorder_child(child, Some(1));
+        }
+    });
+
 
 
 
@@ -209,6 +215,7 @@ pub fn build_ui(app: &gtk4::Application) {
                                 }
                             }
                             nb_spawn.insert_page(&explorer.container, Some(&exp_tab_box), Some(ins_pos));
+                            nb_spawn.set_tab_reorderable(&explorer.container, true);
                             nb_spawn.set_current_page(Some(ins_pos));
 
                             let nb_c = nb_spawn.clone();
@@ -297,6 +304,7 @@ pub fn build_ui(app: &gtk4::Application) {
             notebook.insert_page(&sl.container, Some(&tab_box), Some(0));
             notebook.set_current_page(Some(0));
         }
+        notebook.set_tab_reorderable(&sl.container, false);
 
         })
     };
