@@ -1,31 +1,29 @@
-pkgname=rustmius
-pkgver=1.6.1
+pkgname=rustmius-bin
+_pkgname=rustmius
+pkgver=2.0.0
 pkgrel=1
-pkgdesc="Full local Termius alternative for Linux"
-arch=('x86_64')
+pkgdesc="Une alternative locale complète à Termius pour Linux (GTK4)"
+arch=('x86_64' 'aarch64')
 url="https://github.com/Cleboost/Rustmius"
 license=('MIT')
-depends=('cairo' 'desktop-file-utils' 'gdk-pixbuf2' 'glib2' 'gtk3' 'hicolor-icon-theme' 'libsoup' 'pango' 'webkit2gtk-4.1')
-makedepends=('git' 'openssl' 'appmenu-gtk-module' 'libappindicator-gtk3' 'librsvg' 'cargo' 'nodejs' 'pnpm')
-source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+depends=('libadwaita' 'gtk4' 'vte4')
+provides=("$_pkgname")
+conflicts=("$_pkgname")
 
-prepare() {
-    mv "Rustmius-$pkgver" "$pkgname-$pkgver"
-    cd "$pkgname-$pkgver"
-    pnpm i
-}
+source_x86_64=("$url/releases/download/v$pkgver/$_pkgname-x86_64")
+source_aarch64=("$url/releases/download/v$pkgver/$_pkgname-aarch64")
 
-build() {
-  cd "$pkgname-$pkgver"
-  pnpm tauri build --no-bundle
-}
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
 
 package() {
-    cd "$pkgname-$pkgver"
-    install -Dm755 src-tauri/target/release/rustmius "$pkgdir/usr/bin/$pkgname"
-    install -Dm644 $pkgname.desktop "$pkgdir/usr/share/applications/$pkgname.desktop"
-    install -Dm644 $pkgname.png "$pkgdir/usr/share/icons/hicolor/512x512/apps/$pkgname.png"
-    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
-    #install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    if [ "$CARCH" == "x86_64" ]; then
+        local _bin="$_pkgname-x86_64"
+    else
+        local _bin="$_pkgname-aarch64"
+    fi
+
+    install -Dm755 "$_bin" "$pkgdir/usr/bin/$_pkgname"
+    install -Dm644 "$_pkgname.desktop" "$pkgdir/usr/share/applications/$_pkgname.desktop"
+    install -Dm644 "$_pkgname.png" "$pkgdir/usr/share/icons/hicolor/512x512/apps/$_pkgname.png"
 }
