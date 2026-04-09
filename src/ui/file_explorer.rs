@@ -246,7 +246,6 @@ impl FileExplorer {
 
     fn clone_handle(&self) -> ExplorerHandle {
         ExplorerHandle {
-            container: self.container.clone(),
             list_box: self.list_box.clone(),
             current_path: self.current_path.clone(),
             path_entry: self.path_entry.clone(),
@@ -264,7 +263,6 @@ impl FileExplorer {
 
 #[derive(Clone)]
 struct ExplorerHandle {
-    container: gtk4::Box,
     list_box: gtk4::ListBox,
     current_path: Rc<RefCell<String>>,
     path_entry: gtk4::Entry,
