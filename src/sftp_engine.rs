@@ -76,6 +76,14 @@ pub async fn create_dir(host: SshHost, password: Option<String>, path: String) -
     }).await?
 }
 
+pub async fn create_file(host: SshHost, password: Option<String>, path: String) -> anyhow::Result<()> {
+    tokio::task::spawn_blocking(move || {
+        let sftp = connect_sftp(host, password)?;
+        sftp.create(Path::new(&path))?;
+        Ok(())
+    }).await?
+}
+
 pub async fn rename_file(host: SshHost, password: Option<String>, old_path: String, new_path: String) -> anyhow::Result<()> {
     tokio::task::spawn_blocking(move || {
         let sftp = connect_sftp(host, password)?;
@@ -101,15 +109,20 @@ pub async fn upload_file(host: SshHost, password: Option<String>, local_path: St
 
 pub async fn download_file(host: SshHost, password: Option<String>, remote_path: String, local_path: String) -> anyhow::Result<()> {
     tokio::task::spawn_blocking(move || {
-        let sftp = connect_sftp(host, password)?;
-        let mut remote_file = sftp.open(Path::new(&remote_path))?;
-        let mut local_file = std::fs::File::create(local_path)?;
-        
-        let mut buffer = [0; 16384];
-        while let Ok(n) = remote_file.read(&mut buffer) {
-            if n == 0 { break; }
-            local_file.write_all(&buffer[..n])?;
-        }
-        Ok(())
+        download_file_sync(host, password, remote_path, local_path)
     }).await?
+}
+
+/// Synchronous version for contexts where async is not possible (e.g. DnD prepare callback)
+pub fn download_file_sync(host: SshHost, password: Option<String>, remote_path: String, local_path: String) -> anyhow::Result<()> {
+    let sftp = connect_sftp(host, password)?;
+    let mut remote_file = sftp.open(Path::new(&remote_path))?;
+    let mut local_file = std::fs::File::create(local_path)?;
+
+    let mut buffer = [0; 16384];
+    while let Ok(n) = remote_file.read(&mut buffer) {
+        if n == 0 { break; }
+        local_file.write_all(&buffer[..n])?;
+    }
+    Ok(())
 }
