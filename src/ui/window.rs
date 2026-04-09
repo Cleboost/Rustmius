@@ -153,7 +153,19 @@ pub fn build_ui(app: &gtk4::Application) {
                     
                     let explorer_btn = gtk4::Button::from_icon_name("folder-remote-symbolic");
                     explorer_btn.add_css_class("flat");
+                    explorer_btn.set_tooltip_text(Some("File Explorer"));
+
+                    let monitor_btn = gtk4::Button::from_icon_name("utilities-system-monitor-symbolic");
+                    monitor_btn.add_css_class("flat");
+                    monitor_btn.set_tooltip_text(Some("System Monitor (WIP)"));
+
+                    let docker_btn = gtk4::Button::from_icon_name("view-grid-symbolic");
+                    docker_btn.add_css_class("flat");
+                    docker_btn.set_tooltip_text(Some("Docker Management (WIP)"));
+
                     toolbar.append(&explorer_btn);
+                    toolbar.append(&monitor_btn);
+                    toolbar.append(&docker_btn);
                     session_box.append(&toolbar);
 
                     let terminal = vte4::Terminal::new();
