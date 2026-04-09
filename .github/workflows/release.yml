@@ -141,7 +141,7 @@ jobs:
           mv rustmius rustmius-${{ matrix.suffix }}
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: binary-${{ matrix.suffix }}
           path: target/${{ matrix.target }}/release/rustmius-${{ matrix.suffix }}
