@@ -323,10 +323,17 @@ impl ExplorerHandle {
         let row_content = gtk4::Box::new(gtk4::Orientation::Horizontal, 10);
         row_content.set_margin_top(4); row_content.set_margin_bottom(4);
 
-        // Icon
-        let icon_name = file_icon_name(&file);
-        let icon = gtk4::Image::from_icon_name(icon_name);
-        icon.set_pixel_size(20);
+        // Icon (Force regular full-color theme icons)
+        let theme = gtk4::IconTheme::for_display(&gdk::Display::default().unwrap());
+        let paintable = theme.lookup_by_gicon(
+            &file_icon(&file),
+            32,
+            1,
+            gtk4::TextDirection::None,
+            gtk4::IconLookupFlags::FORCE_REGULAR,
+        );
+        let icon = gtk4::Image::from_paintable(Some(&paintable));
+        icon.set_pixel_size(32);
         row_content.append(&icon);
 
         // Name
@@ -367,13 +374,12 @@ impl ExplorerHandle {
 
                 // Set a drag icon representing the file
                 let paintable = gtk4::IconTheme::for_display(&gdk::Display::default().unwrap())
-                    .lookup_icon(
-                        file_icon_name(&f),
-                        &[],
+                    .lookup_by_gicon(
+                        &file_icon(&f),
                         32,
                         1,
                         gtk4::TextDirection::None,
-                        gtk4::IconLookupFlags::empty(),
+                        gtk4::IconLookupFlags::FORCE_REGULAR,
                     );
                 src.set_icon(Some(&paintable), 16, 16);
 
@@ -546,32 +552,16 @@ fn row_content_ancestor<T: IsA<gtk4::Widget>>(widget: &gtk4::Widget) -> Option<T
     None
 }
 
-// --- Determine icon name based on file type ---
-fn file_icon_name(file: &RemoteFile) -> &'static str {
-    if file.is_dir {
-        return "folder-symbolic";
-    }
-    let name_lower = file.name.to_lowercase();
-    if let Some(ext) = name_lower.rsplit('.').next() {
-        match ext {
-            "png" | "jpg" | "jpeg" | "gif" | "bmp" | "svg" | "webp" | "ico" => "image-x-generic-symbolic",
-            "mp3" | "wav" | "flac" | "ogg" | "aac" | "m4a" => "audio-x-generic-symbolic",
-            "mp4" | "mkv" | "avi" | "mov" | "webm" | "flv" => "video-x-generic-symbolic",
-            "zip" | "tar" | "gz" | "bz2" | "xz" | "7z" | "rar" | "zst" => "package-x-generic-symbolic",
-            "rs" | "py" | "js" | "ts" | "c" | "cpp" | "h" | "java" | "go" | "rb" |
-            "sh" | "bash" | "zsh" | "fish" | "lua" | "php" | "html" | "css" | "json" |
-            "xml" | "yaml" | "yml" | "toml" | "ini" | "sql" | "md" => "text-x-script-symbolic",
-            "pdf" => "x-office-document-symbolic",
-            "doc" | "docx" | "odt" | "rtf" => "x-office-document-symbolic",
-            "xls" | "xlsx" | "ods" | "csv" => "x-office-spreadsheet-symbolic",
-            "ppt" | "pptx" | "odp" => "x-office-presentation-symbolic",
-            "txt" | "log" | "conf" | "cfg" => "text-x-generic-symbolic",
-            "deb" | "rpm" => "application-x-executable-symbolic",
-            _ => "text-x-generic-symbolic",
-        }
+// --- Determine icon based on file type using system theme ---
+fn file_icon(file: &RemoteFile) -> gio::Icon {
+    let content_type = if file.is_dir {
+        "inode/directory".into()
     } else {
-        "text-x-generic-symbolic"
-    }
+        let (guess, _) = gio::content_type_guess(Some(&file.name), None::<&[u8]>);
+        guess
+    };
+
+    gio::content_type_get_icon(&content_type)
 }
 
 // --- Format file size to human readable string ---
