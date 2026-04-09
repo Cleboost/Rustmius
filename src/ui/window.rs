@@ -146,8 +146,19 @@ pub fn build_ui(app: &gtk4::Application) {
                     terminal.set_vexpand(true);
                     session_box.append(&terminal);
 
+                    let mut count = 0;
+                    for i in 0..notebook.n_pages() {
+                        if let Some(p) = notebook.nth_page(Some(i)) {
+                            if p.widget_name().starts_with(&format!("session:{}", host.alias)) {
+                                count += 1;
+                            }
+                        }
+                    }
+                    session_box.set_widget_name(&format!("session:{}:{}", host.alias, count));
+
+                    let display_name = if count > 0 { format!("{} ({})", host.alias, count) } else { host.alias.clone() };
                     let tab_label_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-                    let label = gtk4::Label::new(Some(&host.alias));
+                    let label = gtk4::Label::new(Some(&display_name));
                     let close_btn = gtk4::Button::from_icon_name("window-close-symbolic");
                     close_btn.add_css_class("flat");
                     tab_label_box.append(&label);
@@ -202,8 +213,20 @@ pub fn build_ui(app: &gtk4::Application) {
                             }
 
                             let explorer = FileExplorer::new(h_exp, password);
+
+                            let mut count = 0;
+                            for i in 0..nb_spawn.n_pages() {
+                                if let Some(p) = nb_spawn.nth_page(Some(i)) {
+                                    if p.widget_name().starts_with(&format!("explorer:{}", h_alias)) {
+                                        count += 1;
+                                    }
+                                }
+                            }
+                            explorer.container.set_widget_name(&format!("explorer:{}:{}", h_alias, count));
+
+                            let display_name = if count > 0 { format!("📁 {} ({})", h_alias, count) } else { format!("📁 {}", h_alias) };
                             let exp_tab_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-                            exp_tab_box.append(&gtk4::Label::new(Some(&format!("📁 {}", h_alias))));
+                            exp_tab_box.append(&gtk4::Label::new(Some(&display_name)));
                             let exp_close = gtk4::Button::from_icon_name("window-close-symbolic");
                             exp_close.add_css_class("flat");
                             exp_tab_box.append(&exp_close);
