@@ -67,9 +67,7 @@ jobs:
       - name: Update Cargo.toml
         run: |
           VERSION="${{ steps.bump.outputs.version_only }}"
-          # Utilisation de awk pour ne modifier que la version dans le bloc [package]
           awk '/^\[package\]/ {print; p=1; next} p && /^version =/ {print "version = \"'$VERSION'\""; p=0; next} {print}' Cargo.toml > Cargo.toml.tmp && mv Cargo.toml.tmp Cargo.toml
-          # Mettre à jour proprement le Cargo.lock
           cargo update --workspace
 
       - name: Commit and Push
@@ -103,9 +101,6 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             cpu: x86-64-v3
             suffix: x86_64-v3
-          - target: aarch64-unknown-linux-gnu
-            cpu: generic
-            suffix: aarch64
 
     steps:
       - name: Checkout code
@@ -113,43 +108,10 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.sha }}
 
-      - name: Install dependencies (Multi-Arch ARM supported)
+      - name: Install dependencies
         run: |
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            sudo dpkg --add-architecture arm64
-          
-            # Nettoyage des sources pour éviter les conflits d'architecture
-            sudo rm -f /etc/apt/sources.list
-            sudo rm -f /etc/apt/sources.list.d/*.list
-          
-            SUITE=$(lsb_release -sc)
-          
-            # Configuration AMD64 (Hôte)
-            sudo tee /etc/apt/sources.list.d/amd64.list > /dev/null <<EOF
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ $SUITE main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ $SUITE-updates main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ $SUITE-backports main restricted universe multiverse
-          deb [arch=amd64] http://security.ubuntu.com/ubuntu/ $SUITE-security main restricted universe multiverse
-          EOF
-          
-            # Configuration ARM64 (Cible)
-            sudo tee /etc/apt/sources.list.d/arm64.list > /dev/null <<EOF
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $SUITE main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $SUITE-updates main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $SUITE-security main restricted universe multiverse
-          EOF
-          
-            sudo apt-get update
-            sudo apt-get install -y \
-              libgtk-4-dev:arm64 \
-              libvte-2.91-gtk4-dev:arm64 \
-              libadwaita-1-dev:arm64 \
-              gcc-aarch64-linux-gnu \
-              pkg-config
-          else
-            sudo apt-get update
-            sudo apt-get install -y libgtk-4-dev libvte-2.91-gtk4-dev libadwaita-1-dev
-          fi
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libvte-2.91-gtk4-dev libadwaita-1-dev
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -162,15 +124,7 @@ jobs:
       - name: Build (Performance optimized)
         run: |
           export RUSTFLAGS="-C target-cpu=${{ matrix.cpu }}"
-          # Désactivation des flags spécifiques si generic
           if [ "${{ matrix.cpu }}" = "generic" ]; then export RUSTFLAGS=""; fi
-          
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
-            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-            export CC=aarch64-linux-gnu-gcc
-          fi
-          
           cargo build --release --target ${{ matrix.target }}
 
       - name: Prepare binary
