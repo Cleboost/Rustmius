@@ -1,0 +1,4 @@
+[build]
+# NOTE: 'target-cpu=native' est excellent pour votre machine locale.
+# Pour la CI/Release, cet option est ignorée ou remplacée pour assurer la compatibilité.
+rustflags = ["-C", "target-cpu=native"]

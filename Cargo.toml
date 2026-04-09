@@ -17,3 +17,11 @@ directories = "5.0"
 futures = "0.3"
 oo7 = "0.3"
 chrono = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+incremental = false
