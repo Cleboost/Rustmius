@@ -3,6 +3,8 @@ use std::net::TcpStream;
 use crate::config_observer::SshHost;
 use std::path::Path;
 use std::io::{Read, Write};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct RemoteFile {
@@ -11,26 +13,58 @@ pub struct RemoteFile {
     pub size: u64,
 }
 
-fn connect_sftp(host: SshHost, password: Option<String>) -> anyhow::Result<ssh2::Sftp> {
+pub struct ActiveSession {
+    _sess: Session, // Keep the session alive for the Sftp pointer
+    pub sftp: ssh2::Sftp,
+}
+
+fn get_session_pool() -> &'static Mutex<HashMap<String, Arc<ActiveSession>>> {
+    static POOL: OnceLock<Mutex<HashMap<String, Arc<ActiveSession>>>> = OnceLock::new();
+    POOL.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn get_or_connect_sftp(host: &SshHost, password: &Option<String>) -> anyhow::Result<Arc<ActiveSession>> {
+    let host_key = format!("{}@{}", host.user.as_deref().unwrap_or("root"), host.hostname);
+    
+    if let Ok(mut pool) = get_session_pool().lock() {
+        if let Some(active) = pool.get(&host_key) {
+            // Check if connection is still alive using a basic stat
+            if active.sftp.stat(Path::new(".")).is_ok() {
+                return Ok(active.clone());
+            } else {
+                // Connection died, remove it to force reconnect
+                pool.remove(&host_key);
+            }
+        }
+    }
+
     let tcp = TcpStream::connect(format!("{}:22", host.hostname))?;
     let mut sess = Session::new()?;
     sess.set_tcp_stream(tcp);
     sess.handshake()?;
 
-    let user = host.user.unwrap_or_else(|| "root".to_string());
+    let user = host.user.as_deref().unwrap_or("root");
     if let Some(pass) = password {
-        sess.userauth_password(&user, &pass)?;
+        sess.userauth_password(user, pass)?;
     } else {
-        sess.userauth_agent(&user)?;
+        sess.userauth_agent(user)?;
     }
 
-    Ok(sess.sftp()?)
+    let sftp = sess.sftp()?;
+    
+    let active = Arc::new(ActiveSession { _sess: sess, sftp });
+    
+    if let Ok(mut pool) = get_session_pool().lock() {
+        pool.insert(host_key, active.clone());
+    }
+    
+    Ok(active)
 }
 
 pub async fn list_files(host: SshHost, password: Option<String>, path: String) -> anyhow::Result<Vec<RemoteFile>> {
     tokio::task::spawn_blocking(move || {
-        let sftp = connect_sftp(host, password)?;
-        let dir = sftp.readdir(Path::new(&path))?;
+        let active = get_or_connect_sftp(&host, &password)?;
+        let dir = active.sftp.readdir(Path::new(&path))?;
         
         let mut files = Vec::new();
         for (path, stat) in dir {
@@ -57,12 +91,12 @@ pub async fn list_files(host: SshHost, password: Option<String>, path: String) -
 
 pub async fn delete_file(host: SshHost, password: Option<String>, path: String, is_dir: bool) -> anyhow::Result<()> {
     tokio::task::spawn_blocking(move || {
-        let sftp = connect_sftp(host, password)?;
+        let active = get_or_connect_sftp(&host, &password)?;
         let p = Path::new(&path);
         if is_dir {
-            sftp.rmdir(p)?;
+            active.sftp.rmdir(p)?;
         } else {
-            sftp.unlink(p)?;
+            active.sftp.unlink(p)?;
         }
         Ok(())
     }).await?
@@ -70,33 +104,33 @@ pub async fn delete_file(host: SshHost, password: Option<String>, path: String, 
 
 pub async fn create_dir(host: SshHost, password: Option<String>, path: String) -> anyhow::Result<()> {
     tokio::task::spawn_blocking(move || {
-        let sftp = connect_sftp(host, password)?;
-        sftp.mkdir(Path::new(&path), 0o755)?;
+        let active = get_or_connect_sftp(&host, &password)?;
+        active.sftp.mkdir(Path::new(&path), 0o755)?;
         Ok(())
     }).await?
 }
 
 pub async fn create_file(host: SshHost, password: Option<String>, path: String) -> anyhow::Result<()> {
     tokio::task::spawn_blocking(move || {
-        let sftp = connect_sftp(host, password)?;
-        sftp.create(Path::new(&path))?;
+        let active = get_or_connect_sftp(&host, &password)?;
+        active.sftp.create(Path::new(&path))?;
         Ok(())
     }).await?
 }
 
 pub async fn rename_file(host: SshHost, password: Option<String>, old_path: String, new_path: String) -> anyhow::Result<()> {
     tokio::task::spawn_blocking(move || {
-        let sftp = connect_sftp(host, password)?;
-        sftp.rename(Path::new(&old_path), Path::new(&new_path), None)?;
+        let active = get_or_connect_sftp(&host, &password)?;
+        active.sftp.rename(Path::new(&old_path), Path::new(&new_path), None)?;
         Ok(())
     }).await?
 }
 
 pub async fn upload_file(host: SshHost, password: Option<String>, local_path: String, remote_path: String) -> anyhow::Result<()> {
     tokio::task::spawn_blocking(move || {
-        let sftp = connect_sftp(host, password)?;
+        let active = get_or_connect_sftp(&host, &password)?;
         let mut local_file = std::fs::File::open(local_path)?;
-        let mut remote_file = sftp.create(Path::new(&remote_path))?;
+        let mut remote_file = active.sftp.create(Path::new(&remote_path))?;
         
         let mut buffer = [0; 16384];
         while let Ok(n) = local_file.read(&mut buffer) {
@@ -115,8 +149,8 @@ pub async fn download_file(host: SshHost, password: Option<String>, remote_path:
 }
 
 pub fn download_file_sync(host: SshHost, password: Option<String>, remote_path: String, local_path: String) -> anyhow::Result<()> {
-    let sftp = connect_sftp(host, password)?;
-    let mut remote_file = sftp.open(Path::new(&remote_path))?;
+    let active = get_or_connect_sftp(&host, &password)?;
+    let mut remote_file = active.sftp.open(Path::new(&remote_path))?;
     let mut local_file = std::fs::File::create(local_path)?;
 
     let mut buffer = [0; 16384];
