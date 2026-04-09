@@ -2,7 +2,7 @@
 use gtk4::prelude::*;
 use gtk4::{glib, gio, gdk};
 use crate::config_observer::SshHost;
-use crate::sftp_engine::{list_files, delete_file, rename_file, create_dir, create_file, upload_file, download_file_sync, RemoteFile};
+use crate::sftp_engine::{list_files, delete_file, rename_file, create_dir, create_file, upload_file, RemoteFile};
 use std::rc::Rc;
 use std::cell::RefCell;
 
