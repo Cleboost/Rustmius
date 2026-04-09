@@ -4,20 +4,28 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   build:
-    name: Build (${{ matrix.target }})
+    name: Build (${{ matrix.suffix }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
+        include:
+          - target: x86_64-unknown-linux-gnu
+            cpu: generic
+            suffix: x86_64
+          - target: x86_64-unknown-linux-gnu
+            cpu: x86-64-v3
+            suffix: x86_64-v3
+          - target: aarch64-unknown-linux-gnu
+            cpu: generic
+            suffix: aarch64
 
     steps:
       - name: Checkout code
@@ -41,13 +49,12 @@ jobs:
 
       - name: Build (Super Optimized)
         run: |
-          # Note: target-cpu=native is removed for CI to ensure compatibility 
-          # but we keep all other Cargo.toml optimizations.
+          export RUSTFLAGS="-C target-cpu=${{ matrix.cpu }}"
+          if [ "${{ matrix.cpu }}" = "generic" ]; then export RUSTFLAGS=""; fi
+          
           if [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
             cargo build --release --target ${{ matrix.target }}
           else
-            # For cross-compilation of GTK apps, complex sysroots are needed.
-            # This is a simplified call, might need custom Cross.toml for sysroots.
             cross build --release --target ${{ matrix.target }}
           fi
 
@@ -55,13 +62,13 @@ jobs:
         run: |
           cd target/${{ matrix.target }}/release
           strip rustmius || true
-          tar -czvf rustmius-${{ matrix.target }}.tar.gz rustmius
+          mv rustmius rustmius-${{ matrix.suffix }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: binary-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/rustmius-${{ matrix.target }}.tar.gz
+          name: binary-${{ matrix.suffix }}
+          path: target/${{ matrix.target }}/release/rustmius-${{ matrix.suffix }}
 
   release:
     name: Create Release
@@ -78,7 +85,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*.tar.gz
+          files: artifacts/rustmius-*
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
