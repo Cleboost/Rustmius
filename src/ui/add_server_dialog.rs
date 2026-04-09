@@ -26,6 +26,7 @@ where F: Fn(SshHost, String) + 'static
 
     let alias_entry = gtk4::Entry::builder().placeholder_text("Alias (e.g. My VPS)").build();
     let host_entry = gtk4::Entry::builder().placeholder_text("Hostname or IP").build();
+    let port_entry = gtk4::Entry::builder().placeholder_text("Port (default: 22)").build();
     let user_entry = gtk4::Entry::builder().placeholder_text("User (default: root)").build();
     let pass_entry = gtk4::PasswordEntry::builder()
         .placeholder_text("Password (leave empty to keep current or no password)")
@@ -45,6 +46,9 @@ where F: Fn(SshHost, String) + 'static
         if let Some(ref user) = host.user {
             user_entry.set_text(user);
         }
+        if let Some(port) = host.port {
+            port_entry.set_text(&port.to_string());
+        }
     }
 
     content.append(&gtk4::Label::builder().label("Alias").halign(gtk4::Align::Start).build());
@@ -52,6 +56,8 @@ where F: Fn(SshHost, String) + 'static
     content.append(&error_label);
     content.append(&gtk4::Label::builder().label("Hostname").halign(gtk4::Align::Start).build());
     content.append(&host_entry);
+    content.append(&gtk4::Label::builder().label("Port").halign(gtk4::Align::Start).build());
+    content.append(&port_entry);
     content.append(&gtk4::Label::builder().label("User").halign(gtk4::Align::Start).build());
     content.append(&user_entry);
     content.append(&gtk4::Label::builder().label("Password").halign(gtk4::Align::Start).build());
@@ -82,6 +88,7 @@ where F: Fn(SshHost, String) + 'static
                 alias: alias_entry_clone.text().to_string().trim().to_string(),
                 hostname: host_entry.text().to_string().trim().to_string(),
                 user: Some(user_entry.text().to_string().trim().to_string()).filter(|s| !s.is_empty()),
+                port: port_entry.text().to_string().trim().parse::<u16>().ok(),
             };
             let password = pass_entry.text().to_string();
             

@@ -6,6 +6,7 @@ pub struct SshHost {
     pub alias: String,
     pub hostname: String,
     pub user: Option<String>,
+    pub port: Option<u16>,
 }
 
 pub fn get_default_config_path() -> Option<std::path::PathBuf> {
@@ -53,6 +54,7 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
                     alias: value.to_string(),
                     hostname: String::new(),
                     user: None,
+                    port: None,
                 });
             }
             "hostname" => {
@@ -63,6 +65,13 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
             "user" => {
                 if let Some(ref mut host) = current_host {
                     host.user = Some(value.to_string());
+                }
+            }
+            "port" => {
+                if let Some(ref mut host) = current_host {
+                    if let Ok(p) = value.parse::<u16>() {
+                        host.port = Some(p);
+                    }
                 }
             }
             _ => {}
@@ -101,10 +110,11 @@ pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
     };
 
     let entry = format!(
-        "\nHost {}\n    HostName {}\n    User {}\n",
+        "\nHost {}\n    HostName {}\n    User {}\n    Port {}\n",
         alias_quoted,
         host.hostname,
-        host.user.as_deref().unwrap_or("root")
+        host.user.as_deref().unwrap_or("root"),
+        host.port.unwrap_or(22)
     );
 
     content.push_str(&entry);
@@ -158,12 +168,13 @@ mod tests {
 
     #[test]
     fn test_parse_ssh_config_simple() {
-        let config = "Host my-server\n  HostName 1.2.3.4\n  User root";
+        let config = "Host my-server\n  HostName 1.2.3.4\n  User root\n  Port 2222";
         let hosts = parse_ssh_config(config);
         assert_eq!(hosts.len(), 1);
         assert_eq!(hosts[0].alias, "my-server");
         assert_eq!(hosts[0].hostname, "1.2.3.4");
         assert_eq!(hosts[0].user, Some("root".to_string()));
+        assert_eq!(hosts[0].port, Some(2222));
     }
 
     #[test]

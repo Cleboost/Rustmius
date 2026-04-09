@@ -38,7 +38,8 @@ fn get_or_connect_sftp(host: &SshHost, password: &Option<String>) -> anyhow::Res
         }
     }
 
-    let tcp = TcpStream::connect(format!("{}:22", host.hostname))?;
+    let port = host.port.unwrap_or(22);
+    let tcp = TcpStream::connect(format!("{}:{}", host.hostname, port))?;
     let mut sess = Session::new()?;
     sess.set_tcp_stream(tcp);
     sess.handshake()?;

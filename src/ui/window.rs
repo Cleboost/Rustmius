@@ -263,7 +263,8 @@ pub fn build_ui(app: &gtk4::Application) {
                     envv.push(format!("RUSTMIUS_ASKPASS_ALIAS={}", host_alias));
                     envv.push("DISPLAY=:0".to_string());
                     let env_refs: Vec<&str> = envv.iter().map(|s| s.as_str()).collect();
-                    terminal.spawn_async(vte4::PtyFlags::DEFAULT, None, &["/usr/bin/ssh", "-o", "StrictHostKeyChecking=no", "-o", "PubkeyAuthentication=no", &format!("{}@{}", user_str, host_str)], &env_refs, glib::SpawnFlags::SEARCH_PATH, || {}, -1, None::<&gio::Cancellable>, |_| {});
+                    let port_str = host.port.unwrap_or(22).to_string();
+                    terminal.spawn_async(vte4::PtyFlags::DEFAULT, None, &["/usr/bin/ssh", "-p", &port_str, "-o", "StrictHostKeyChecking=no", "-o", "PubkeyAuthentication=no", &format!("{}@{}", user_str, host_str)], &env_refs, glib::SpawnFlags::SEARCH_PATH, || {}, -1, None::<&gio::Cancellable>, |_| {});
                 },
                 ServerAction::Delete(host) => {
                     let _ = delete_host_from_config(&host.alias);

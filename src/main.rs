@@ -8,8 +8,10 @@ use crate::ui::window::build_ui;
 use std::fs::OpenOptions;
 use std::io::Write;
 
+use std::os::unix::fs::OpenOptionsExt;
+
 fn log_debug(msg: &str) {
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("/tmp/rustmius_debug.log") {
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).mode(0o600).open("/tmp/rustmius_debug.log") {
         let _ = writeln!(file, "[{}] {}", chrono::Local::now(), msg);
     }
 }
