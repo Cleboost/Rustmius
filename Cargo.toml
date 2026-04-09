@@ -4,7 +4,7 @@ version = "0.8.0"
 edition = "2024"
 
 [dependencies]
-gtk4 = "0.10"
+gtk4 = { version = "0.10", features = ["v4_12"] }
 vte4 = "0.9"
 ssh2 = "0.9"
 tokio = { version = "1", features = ["full"] }
