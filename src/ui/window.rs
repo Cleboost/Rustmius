@@ -329,6 +329,30 @@ pub fn build_ui(app: &gtk4::Application) {
     settings_box.append(&settings_icon); settings_box.append(&settings_label); settings_box.append(&settings_subtitle);
     stack.add_named(&settings_box, Some("settings"));
 
+    let window_add = window.clone();
+    let refresh_add = do_refresh.clone();
+    add_btn.connect_clicked(move |_| {
+        let refresh = refresh_add.clone();
+        let existing_hosts = load_hosts();
+        let existing_aliases: Vec<String> = existing_hosts.iter().map(|h| h.alias.to_lowercase()).collect();
+        show_server_dialog(window_add.upcast_ref(), None, existing_aliases, move |new_host, password| {
+            if let Ok(_) = add_host_to_config(&new_host) {
+                if !password.is_empty() {
+                    let host_alias = new_host.alias.clone();
+                    glib::MainContext::default().spawn_local(async move {
+                        if let Ok(keyring) = oo7::Keyring::new().await {
+                            let mut attr = std::collections::HashMap::new();
+                            let alias_lower = host_alias.to_lowercase();
+                            attr.insert("rustmius-server-alias", alias_lower.as_str());
+                            let _ = keyring.create_item(&format!("Rustmius: SSH Password for {}", host_alias), &attr, password.as_bytes(), true).await;
+                        }
+                    });
+                }
+                refresh();
+            }
+        });
+    });
+
     root.append(&sidebar); root.append(&separator); root.append(&content_box);
     window.set_child(Some(&root)); window.present();
 }
