@@ -11,7 +11,7 @@ provides=("$_pkgname")
 conflicts=("$_pkgname")
 
 source_x86_64=("$url/releases/download/v$pkgver/$_pkgname-x86_64")
-sha256sums_x86_64=('SKIP')
+sha256sums_x86_64=('039e842bf0d81d136aa0fac2fd7e8ad9ce3e61abcc1f0cef96af06082ff561e8')
 
 package() {
     install -Dm755 "$_pkgname-x86_64" "$pkgdir/usr/bin/$_pkgname"
