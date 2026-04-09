@@ -75,10 +75,22 @@ pub fn build_ui(app: &gtk4::Application) {
     let last_pg = last_session_page.clone();
     notebook.connect_switch_page(move |nb, page, idx| {
         if page.widget_name() == "plus_tab_dummy" {
-            stack_switch.set_visible_child_name("server_grid");
-            let prev_idx = *last_pg.borrow();
-            if nb.n_pages() > 1 && idx != prev_idx {
-                nb.set_current_page(Some(prev_idx));
+            let mut real_pages = 0;
+            for i in 0..nb.n_pages() {
+                if let Some(c) = nb.nth_page(Some(i)) {
+                    if c.widget_name() != "plus_tab_dummy" { real_pages += 1; }
+                }
+            }
+            if real_pages == 0 {
+                stack_switch.set_visible_child_name("server_grid");
+            } else {
+                let prev_idx = *last_pg.borrow();
+                if let Some(p) = nb.nth_page(Some(prev_idx)) {
+                    if p.widget_name() != "plus_tab_dummy" {
+                        nb.set_current_page(Some(prev_idx));
+                    }
+                }
+                stack_switch.set_visible_child_name("server_grid");
             }
         } else {
             *last_pg.borrow_mut() = idx;
@@ -170,7 +182,14 @@ pub fn build_ui(app: &gtk4::Application) {
                     let stack_close = stack.clone();
                     close_btn.connect_clicked(move |_| {
                         let idx = nb_close.page_num(&sb_close);
-                        nb_close.remove_page(idx);
+                        if let Some(i) = idx {
+                            let current = nb_close.current_page();
+                            if current == Some(i) && nb_close.n_pages() > 2 {
+                                let target = if i > 0 { i - 1 } else { 1 };
+                                nb_close.set_current_page(Some(target));
+                            }
+                            nb_close.remove_page(Some(i));
+                        }
                         if nb_close.n_pages() == 1 {
                             if let Some(child) = nb_close.nth_page(Some(0)) {
                                 if child.widget_name() == "plus_tab_dummy" {
@@ -189,6 +208,7 @@ pub fn build_ui(app: &gtk4::Application) {
                         let h_exp = host_exp.clone();
                         let h_alias = h_exp.alias.clone();
                         let nb_spawn = nb_exp.clone();
+                        let stack_spawn = stack.clone();
                         
                         glib::MainContext::default().spawn_local(async move {
                             let mut password = None;
@@ -225,7 +245,24 @@ pub fn build_ui(app: &gtk4::Application) {
                             let ex_c = explorer.container.clone();
                             exp_close.connect_clicked(move |_| {
                                 let idx = nb_c.page_num(&ex_c);
-                                nb_c.remove_page(idx);
+                                if let Some(i) = idx {
+                                    let current = nb_c.current_page();
+                                    if current == Some(i) && nb_c.n_pages() > 2 {
+                                        let target = if i > 0 { i - 1 } else { 1 };
+                                        nb_c.set_current_page(Some(target));
+                                    }
+                                    nb_c.remove_page(Some(i));
+                                }
+                                if nb_c.n_pages() == 1 {
+                                    if let Some(child) = nb_c.nth_page(Some(0)) {
+                                        if child.widget_name() == "plus_tab_dummy" {
+                                            nb_c.remove_page(Some(0));
+                                            stack_spawn.set_visible_child_name("server_grid");
+                                        }
+                                    }
+                                } else if nb_c.n_pages() == 0 {
+                                    stack_spawn.set_visible_child_name("server_grid");
+                                }
                             });
                         });
                     });
