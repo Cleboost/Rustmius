@@ -13,19 +13,19 @@ on:
           - minor
           - major
 
-permissions:
-  contents: write
-
 jobs:
   prepare:
     name: Prepare Version
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       new_version: ${{ steps.bump.outputs.new_version }}
+      version_only: ${{ steps.bump.outputs.version_only }}
       sha: ${{ steps.commit.outputs.sha }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -61,15 +61,16 @@ jobs:
           NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
           VERSION_ONLY="$MAJOR.$MINOR.$PATCH"
           
-          echo "Bumping $LATEST_TAG -> $NEW_VERSION ($LEVEL)"
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "version_only=$VERSION_ONLY" >> $GITHUB_OUTPUT
 
       - name: Update Cargo.toml
         run: |
           VERSION="${{ steps.bump.outputs.version_only }}"
-          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
-          cargo metadata --format-version 1 > /dev/null # Updates Cargo.lock if needed
+          # Utilisation de awk pour ne modifier que la version dans le bloc [package]
+          awk '/^\[package\]/ {print; p=1; next} p && /^version =/ {print "version = \"'$VERSION'\""; p=0; next} {print}' Cargo.toml > Cargo.toml.tmp && mv Cargo.toml.tmp Cargo.toml
+          # Mettre à jour proprement le Cargo.lock
+          cargo update --workspace
 
       - name: Commit and Push
         id: commit
@@ -80,7 +81,7 @@ jobs:
           git add Cargo.toml Cargo.lock
           
           if [ -z "$(git status --porcelain)" ]; then
-            echo "Pas de changements dans Cargo.toml, skip du commit."
+            echo "nothing to commit"
           else
             git commit -m "chore: bump version to ${{ steps.bump.outputs.new_version }}"
             git push
@@ -112,10 +113,29 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.sha }}
 
-      - name: Install dependencies
+      - name: Install dependencies (Multi-Arch ARM supported)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libvte-2.91-gtk4-dev libadwaita-1-dev
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            sudo dpkg --add-architecture arm64
+            sudo sed -i "s|http://archive.ubuntu.com/ubuntu/|http://ports.ubuntu.com/ubuntu-ports/|g" /etc/apt/sources.list
+            sudo sed -i "s|http://security.ubuntu.com/ubuntu/|http://ports.ubuntu.com/ubuntu-ports/|g" /etc/apt/sources.list
+            
+            echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ $(lsb_release -sc) main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/amd64.list
+            echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ $(lsb_release -sc)-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/amd64.list
+            echo "deb [arch=amd64] http://security.ubuntu.com/ubuntu/ $(lsb_release -sc)-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/amd64.list
+            
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -sc) main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64.list
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -sc)-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ $(lsb_release -sc)-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64.list
+            
+            sudo rm /etc/apt/sources.list
+
+            sudo apt-get update
+            sudo apt-get install -y libgtk-4-dev:arm64 libvte-2.91-gtk4-dev:arm64 libadwaita-1-dev:arm64 gcc-aarch64-linux-gnu pkg-config
+          else
+            sudo apt-get update
+            sudo apt-get install -y libgtk-4-dev libvte-2.91-gtk4-dev libadwaita-1-dev
+          fi
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -125,19 +145,19 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Install Cross
-        run: cargo install cross --git https://github.com/cross-rs/cross.git
-
-      - name: Build (Super Optimized)
+      - name: Build (Performance optimized)
         run: |
           export RUSTFLAGS="-C target-cpu=${{ matrix.cpu }}"
+          # On désactive les flags spécifiques si CPU == generic (x86_64 standard ou aarch64)
           if [ "${{ matrix.cpu }}" = "generic" ]; then export RUSTFLAGS=""; fi
           
-          if [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
-            cargo build --release --target ${{ matrix.target }}
-          else
-            cross build --release --target ${{ matrix.target }}
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+            export CC=aarch64-linux-gnu-gcc
           fi
+          
+          cargo build --release --target ${{ matrix.target }}
 
       - name: Prepare binary
         run: |
@@ -155,6 +175,8 @@ jobs:
     name: Create Release
     needs: [build, prepare]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
