@@ -111,7 +111,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libvte-2.91-gtk4-dev libadwaita-1-dev
+          sudo apt-get install -y libgtk-4-dev libvte-2.91-gtk4-dev
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
