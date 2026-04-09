@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use gtk4::prelude::*;
 use crate::config_observer::SshHost;
 

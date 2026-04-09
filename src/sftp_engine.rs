@@ -107,6 +107,7 @@ pub async fn upload_file(host: SshHost, password: Option<String>, local_path: St
     }).await?
 }
 
+#[allow(dead_code)]
 pub async fn download_file(host: SshHost, password: Option<String>, remote_path: String, local_path: String) -> anyhow::Result<()> {
     tokio::task::spawn_blocking(move || {
         download_file_sync(host, password, remote_path, local_path)

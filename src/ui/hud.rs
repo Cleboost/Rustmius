@@ -2,6 +2,7 @@ use gtk4::prelude::*;
 use crate::config_observer::SshHost;
 use nucleo_matcher::{Matcher, Config, Utf32String};
 
+#[allow(dead_code)]
 pub struct Hud {
     pub popover: gtk4::Popover,
     pub entry: gtk4::Entry,
@@ -9,6 +10,7 @@ pub struct Hud {
     matcher: Matcher,
 }
 
+#[allow(dead_code)]
 impl Hud {
     pub fn new() -> Self {
         let popover = gtk4::Popover::new();

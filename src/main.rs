@@ -16,7 +16,7 @@ fn log_debug(msg: &str) {
 
 #[tokio::main]
 async fn main() {
-    let args: Vec<String> = std::env::args().collect();
+    let _args: Vec<String> = std::env::args().collect();
     
     if let Ok(alias) = std::env::var("RUSTMIUS_ASKPASS_ALIAS") {
         log_debug(&format!("AskPass triggered for alias: {}", alias));
