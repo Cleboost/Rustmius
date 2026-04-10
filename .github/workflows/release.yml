@@ -166,3 +166,65 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  aur:
+    name: Update AUR
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-x86_64
+          path: .
+
+      - name: Update PKGBUILD
+        run: |
+          VERSION="${{ needs.prepare.outputs.version_only }}"
+          HASH_DESKTOP=$(sha256sum rustmius.desktop | cut -d' ' -f1)
+          HASH_PNG=$(sha256sum rustmius.png | cut -d' ' -f1)
+          HASH_BINARY=$(sha256sum rustmius-x86_64 | cut -d' ' -f1)
+
+          # Update version, pkgrel and hashes using AWK (more portable than updpkgsums on Ubuntu runners)
+          awk -v v="$VERSION" -v d="$HASH_DESKTOP" -v p="$HASH_PNG" -v b="$HASH_BINARY" '
+          BEGIN { h[0]=d; h[1]=p; h[2]=b; i=0 }
+          /^pkgver=/ { $0="pkgver=" v }
+          /^pkgrel=/ { $0="pkgrel=1" }
+          /'\''[0-9a-f]{64}'\''/ && i < 3 {
+            sub(/'\''[0-9a-f]{64}'\''/, "'\''" h[i++] "'\''")
+          }
+          { print }
+          ' PKGBUILD > PKGBUILD.tmp && mv PKGBUILD.tmp PKGBUILD
+
+      - name: Commit and Push PKGBUILD
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add PKGBUILD
+          
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "nothing to commit"
+          else
+            git commit -m "chore: update PKGBUILD to ${{ needs.prepare.outputs.new_version }}"
+            git push
+          fi
+
+      - name: Publish AUR package
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.2
+        with:
+          pkgname: rustmius-bin
+          pkgbuild: ./PKGBUILD
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ needs.prepare.outputs.new_version }}"
+          ssh_keyscan_types: rsa,ecdsa,ed25519
