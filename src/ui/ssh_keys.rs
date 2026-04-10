@@ -7,6 +7,18 @@ use directories::UserDirs;
 use std::path::PathBuf;
 use crate::config_observer::load_hosts;
 
+/// Returns true iff `name` is a simple file name with no path components,
+/// no `..`, no absolute path, and no NUL bytes – safe to join onto `~/.ssh/`.
+fn is_valid_key_name(name: &str) -> bool {
+    if name.is_empty() || name.contains('\0') {
+        return false;
+    }
+    let p = std::path::Path::new(name);
+    // Must be a single component, identical to the original name.
+    p.components().count() == 1
+        && p.file_name().map(|n| n == std::ffi::OsStr::new(name)).unwrap_or(false)
+}
+
 #[derive(Clone)]
 pub struct SshKeyPair {
     pub name: String,
@@ -140,11 +152,39 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
                         let p1 = key_clone1.pub_path.clone();
                         let p2 = key_clone1.priv_path.clone();
                         let h = handle.clone();
+                        let w_del = w_clone.clone();
 
                         dialog.connect_response(move |d, res| {
                             if res == gtk4::ResponseType::Ok {
-                                let _ = std::fs::remove_file(&p1);
-                                let _ = std::fs::remove_file(&p2);
+                                // Delete private key first; only delete public key if that succeeds.
+                                if let Err(e) = std::fs::remove_file(&p2) {
+                                    let alert = gtk4::MessageDialog::builder()
+                                        .transient_for(&w_del)
+                                        .modal(true)
+                                        .message_type(gtk4::MessageType::Error)
+                                        .buttons(gtk4::ButtonsType::Ok)
+                                        .text("Failed to Delete Key")
+                                        .secondary_text(&format!("Could not delete private key: {}", e))
+                                        .build();
+                                    alert.connect_response(|a, _| a.close());
+                                    alert.present();
+                                    d.close();
+                                    return;
+                                }
+                                if let Err(e) = std::fs::remove_file(&p1) {
+                                    let alert = gtk4::MessageDialog::builder()
+                                        .transient_for(&w_del)
+                                        .modal(true)
+                                        .message_type(gtk4::MessageType::Error)
+                                        .buttons(gtk4::ButtonsType::Ok)
+                                        .text("Failed to Delete Key")
+                                        .secondary_text(&format!("Private key deleted, but could not delete public key: {}", e))
+                                        .build();
+                                    alert.connect_response(|a, _| a.close());
+                                    alert.present();
+                                    d.close();
+                                    return;
+                                }
                                 if let Some(rc) = h.upgrade() {
                                     if let Some(r) = rc.borrow().as_ref() { r(); }
                                 }
@@ -243,7 +283,24 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
             if idx < hosts.len() as u32 {
                 let host = hosts[idx as usize].clone();
                 let password = pass_entry.text().to_string();
-                let pubkey = std::fs::read_to_string(&key_path).unwrap_or_default();
+                let pubkey = match std::fs::read_to_string(&key_path) {
+                    Ok(content) => content,
+                    Err(e) => {
+                        let md = gtk4::MessageDialog::builder()
+                            .modal(true)
+                            .message_type(gtk4::MessageType::Error)
+                            .buttons(gtk4::ButtonsType::Ok)
+                            .text("Failed to Read Public Key")
+                            .secondary_text(&format!("Could not read '{}': {}", key_path.display(), e))
+                            .build();
+                        if let Some(w) = d.transient_for() {
+                            md.set_transient_for(Some(&w));
+                        }
+                        md.connect_response(|md, _| md.close());
+                        md.present();
+                        return;
+                    }
+                };
                 
                 let parent_win_weak = d.transient_for().map(|w| w.downcast::<gtk4::Window>().unwrap());
                 let close_dialog = d.clone();
@@ -349,6 +406,20 @@ fn show_generate_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>)
             let name = name_entry.text().to_string();
             let pass = pass_entry.text().to_string();
             let comment = comment_entry.text().to_string();
+
+            if !is_valid_key_name(&name) {
+                let alert = gtk4::MessageDialog::builder()
+                    .transient_for(d.transient_for().as_ref().unwrap())
+                    .modal(true)
+                    .message_type(gtk4::MessageType::Error)
+                    .buttons(gtk4::ButtonsType::Ok)
+                    .text("Invalid Key Name")
+                    .secondary_text("The key name must be a simple filename with no path separators or special components.")
+                    .build();
+                alert.connect_response(|a, _| a.close());
+                alert.present();
+                return;
+            }
             
             if let Some(ssh_dir) = get_ssh_dir() {
                 let file_path = ssh_dir.join(name);
@@ -435,6 +506,20 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
             let name = name_entry.text().to_string();
             let (start, end) = text_buffer.bounds();
             let key_content = text_buffer.text(&start, &end, false).to_string();
+
+            if !is_valid_key_name(&name) {
+                let alert = gtk4::MessageDialog::builder()
+                    .transient_for(d.transient_for().as_ref().unwrap())
+                    .modal(true)
+                    .message_type(gtk4::MessageType::Error)
+                    .buttons(gtk4::ButtonsType::Ok)
+                    .text("Invalid Key Name")
+                    .secondary_text("The key name must be a simple filename with no path separators or special components.")
+                    .build();
+                alert.connect_response(|a, _| a.close());
+                alert.present();
+                return;
+            }
             
             if let Some(ssh_dir) = get_ssh_dir() {
                 let file_path = ssh_dir.join(&name);

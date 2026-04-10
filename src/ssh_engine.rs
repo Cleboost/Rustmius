@@ -4,6 +4,20 @@ use std::io::Write;
 use anyhow::Context;
 use crate::config_observer::SshHost;
 
+/// Expand a leading `~/` or lone `~` to the user's home directory.
+fn expand_tilde(path: &str) -> std::path::PathBuf {
+    if path == "~" {
+        if let Some(home) = directories::UserDirs::new().map(|d| d.home_dir().to_path_buf()) {
+            return home;
+        }
+    } else if let Some(rest) = path.strip_prefix("~/") {
+        if let Some(home) = directories::UserDirs::new().map(|d| d.home_dir().to_path_buf()) {
+            return home.join(rest);
+        }
+    }
+    std::path::PathBuf::from(path)
+}
+
 #[allow(dead_code)]
 pub fn connect(host: &str, _user: &str) -> anyhow::Result<Session> {
     let tcp = TcpStream::connect(format!("{}:22", host))
@@ -30,8 +44,8 @@ pub fn deploy_pubkey(host: &SshHost, password: Option<String>, pubkey_content: &
     let mut authenticated = false;
     
     if let Some(ref key_path) = host.identity_file {
-        let path = std::path::Path::new(key_path);
-        if sess.userauth_pubkey_file(user, None, path, None).is_ok() {
+        let path = expand_tilde(key_path);
+        if sess.userauth_pubkey_file(user, None, &path, None).is_ok() {
             println!("[DEBUG] SSH deploy connected to {} via Configure SSH Key ({})", host.hostname, key_path);
             authenticated = true;
         }
@@ -59,8 +73,14 @@ pub fn deploy_pubkey(host: &SshHost, password: Option<String>, pubkey_content: &
     
     let mut channel = sess.channel_session()?;
     channel.exec("mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys")?;
-    
-    channel.write_all(pubkey_content.as_bytes())?;
+
+    // Ensure the entry is terminated by a newline so it forms a valid line
+    // even when appended to a file that doesn't end with one.
+    let mut content = pubkey_content.to_owned();
+    if !content.ends_with('\n') {
+        content.push('\n');
+    }
+    channel.write_all(content.as_bytes())?;
     channel.send_eof()?;
     channel.wait_eof()?;
     channel.close()?;

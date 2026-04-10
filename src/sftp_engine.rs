@@ -6,6 +6,20 @@ use std::io::{Read, Write};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::collections::HashMap;
 
+/// Expand a leading `~/` or lone `~` to the user's home directory.
+fn expand_tilde(path: &str) -> std::path::PathBuf {
+    if path == "~" {
+        if let Some(home) = directories::UserDirs::new().map(|d| d.home_dir().to_path_buf()) {
+            return home;
+        }
+    } else if let Some(rest) = path.strip_prefix("~/") {
+        if let Some(home) = directories::UserDirs::new().map(|d| d.home_dir().to_path_buf()) {
+            return home.join(rest);
+        }
+    }
+    std::path::PathBuf::from(path)
+}
+
 #[derive(Debug, Clone)]
 pub struct RemoteFile {
     pub name: String,
@@ -48,8 +62,8 @@ fn get_or_connect_sftp(host: &SshHost, password: &Option<String>) -> anyhow::Res
     let mut authenticated = false;
     
     if let Some(ref key_path) = host.identity_file {
-        let path = Path::new(key_path);
-        if sess.userauth_pubkey_file(user, None, path, None).is_ok() {
+        let path = expand_tilde(key_path);
+        if sess.userauth_pubkey_file(user, None, &path, None).is_ok() {
             println!("[DEBUG] SFTP connected to {} via Configure SSH Key ({})", host.hostname, key_path);
             authenticated = true;
         }

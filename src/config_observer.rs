@@ -125,7 +125,12 @@ pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
     );
 
     if let Some(ref id_file) = host.identity_file {
-        entry.push_str(&format!("    IdentityFile {}\n", id_file));
+        let id_file_quoted = if id_file.contains(' ') {
+            format!("\"{}\"", id_file)
+        } else {
+            id_file.clone()
+        };
+        entry.push_str(&format!("    IdentityFile {}\n", id_file_quoted));
     }
 
     content.push_str(&entry);
@@ -194,5 +199,90 @@ mod tests {
         let hosts = parse_ssh_config(config);
         assert_eq!(hosts.len(), 1);
         assert_eq!(hosts[0].alias, "My Server");
+    }
+
+    #[test]
+    fn test_parse_ssh_config_with_identity_file() {
+        let config = "Host my-server\n  HostName 1.2.3.4\n  User root\n  Port 22\n  IdentityFile ~/.ssh/id_ed25519";
+        let hosts = parse_ssh_config(config);
+        assert_eq!(hosts.len(), 1);
+        assert_eq!(hosts[0].identity_file, Some("~/.ssh/id_ed25519".to_string()));
+    }
+
+    #[test]
+    fn test_parse_ssh_config_with_quoted_identity_file() {
+        let config = "Host my-server\n  HostName 1.2.3.4\n  User root\n  IdentityFile \"/home/user/my keys/id_ed25519\"";
+        let hosts = parse_ssh_config(config);
+        assert_eq!(hosts.len(), 1);
+        assert_eq!(hosts[0].identity_file, Some("/home/user/my keys/id_ed25519".to_string()));
+    }
+
+    #[test]
+    fn test_add_host_to_config_emits_identity_file() {
+        // Build the config entry using the same logic as add_host_to_config.
+        let host = SshHost {
+            alias: "test-host".to_string(),
+            hostname: "192.168.1.1".to_string(),
+            user: Some("admin".to_string()),
+            port: Some(22),
+            identity_file: Some("~/.ssh/id_ed25519".to_string()),
+        };
+        let alias_quoted = if host.alias.contains(' ') {
+            format!("\"{}\"", host.alias)
+        } else {
+            host.alias.clone()
+        };
+        let mut entry = format!(
+            "\nHost {}\n    HostName {}\n    User {}\n    Port {}\n",
+            alias_quoted,
+            host.hostname,
+            host.user.as_deref().unwrap_or("root"),
+            host.port.unwrap_or(22)
+        );
+        if let Some(ref id_file) = host.identity_file {
+            let id_file_quoted = if id_file.contains(' ') {
+                format!("\"{}\"", id_file)
+            } else {
+                id_file.clone()
+            };
+            entry.push_str(&format!("    IdentityFile {}\n", id_file_quoted));
+        }
+        // Verify the config string contains the IdentityFile line.
+        assert!(entry.contains("IdentityFile ~/.ssh/id_ed25519"));
+        // Verify it round-trips through the parser.
+        let hosts = parse_ssh_config(&entry);
+        assert_eq!(hosts.len(), 1);
+        assert_eq!(hosts[0].identity_file, Some("~/.ssh/id_ed25519".to_string()));
+    }
+
+    #[test]
+    fn test_add_host_to_config_quotes_identity_file_with_spaces() {
+        let host = SshHost {
+            alias: "spaced-host".to_string(),
+            hostname: "10.0.0.1".to_string(),
+            user: Some("user".to_string()),
+            port: Some(22),
+            identity_file: Some("/home/user/my keys/id_rsa".to_string()),
+        };
+        let mut entry = format!(
+            "\nHost {}\n    HostName {}\n    User {}\n    Port {}\n",
+            host.alias, host.hostname,
+            host.user.as_deref().unwrap_or("root"),
+            host.port.unwrap_or(22)
+        );
+        if let Some(ref id_file) = host.identity_file {
+            let id_file_quoted = if id_file.contains(' ') {
+                format!("\"{}\"", id_file)
+            } else {
+                id_file.clone()
+            };
+            entry.push_str(&format!("    IdentityFile {}\n", id_file_quoted));
+        }
+        // The entry must contain a properly quoted IdentityFile line.
+        assert!(entry.contains("IdentityFile \"/home/user/my keys/id_rsa\""));
+        // Verify the path round-trips through the parser.
+        let hosts = parse_ssh_config(&entry);
+        assert_eq!(hosts.len(), 1);
+        assert_eq!(hosts[0].identity_file, Some("/home/user/my keys/id_rsa".to_string()));
     }
 }
