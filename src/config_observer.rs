@@ -1,5 +1,21 @@
 use std::fs;
+use std::path::PathBuf;
 use directories::UserDirs;
+
+/// Expand a leading `~/` or lone `~` to the user's home directory.
+/// If no home directory can be determined, the original path is returned unchanged.
+pub fn expand_tilde(path: &str) -> PathBuf {
+    if path == "~" {
+        if let Some(home) = UserDirs::new().map(|d| d.home_dir().to_path_buf()) {
+            return home;
+        }
+    } else if let Some(rest) = path.strip_prefix("~/") {
+        if let Some(home) = UserDirs::new().map(|d| d.home_dir().to_path_buf()) {
+            return home.join(rest);
+        }
+    }
+    PathBuf::from(path)
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SshHost {

@@ -422,34 +422,70 @@ fn show_generate_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>)
             }
             
             if let Some(ssh_dir) = get_ssh_dir() {
-                let file_path = ssh_dir.join(name);
-                let mut cmd = std::process::Command::new("ssh-keygen");
-                cmd.arg("-t").arg("ed25519")
-                   .arg("-f").arg(&file_path)
-                   .arg("-N").arg(&pass)
-                   .arg("-q"); // quiet
-                
-                if !comment.is_empty() {
-                    cmd.arg("-C").arg(&comment);
+                let file_path = ssh_dir.join(&name);
+
+                // Refuse to overwrite an existing key without asking.
+                if file_path.exists() {
+                    let alert = gtk4::MessageDialog::builder()
+                        .transient_for(d.transient_for().as_ref().unwrap())
+                        .modal(true)
+                        .message_type(gtk4::MessageType::Error)
+                        .buttons(gtk4::ButtonsType::Ok)
+                        .text("Key Already Exists")
+                        .secondary_text(&format!("A file named '{}' already exists in ~/.ssh/. Choose a different name.", name))
+                        .build();
+                    alert.connect_response(|a, _| a.close());
+                    alert.present();
+                    return;
                 }
 
-                if let Ok(status) = cmd.status() {
-                    if status.success() {
+                // Capture a weak reference to the parent window for the
+                // result dialog shown after the blocking keygen finishes.
+                let parent_win = d.transient_for()
+                    .and_then(|w| w.downcast::<gtk4::ApplicationWindow>().ok());
+                d.close();
+
+                glib::MainContext::default().spawn_local(async move {
+                    let result = tokio::task::spawn_blocking(move || {
+                        let mut cmd = std::process::Command::new("ssh-keygen");
+                        cmd.arg("-t").arg("ed25519")
+                           .arg("-f").arg(&file_path)
+                           .arg("-N").arg(&pass)
+                           .arg("-q");
+                        if !comment.is_empty() {
+                            cmd.arg("-C").arg(&comment);
+                        }
+                        cmd.output()
+                    }).await;
+
+                    let (success, stderr_msg) = match result {
+                        Ok(Ok(output)) => (output.status.success(), String::from_utf8_lossy(&output.stderr).to_string()),
+                        Ok(Err(e)) => (false, e.to_string()),
+                        Err(e) => (false, e.to_string()),
+                    };
+
+                    if success {
                         on_save();
-                        d.close();
-                        return;
+                    } else {
+                        let secondary = if stderr_msg.is_empty() {
+                            "ssh-keygen exited with a non-zero status.".to_string()
+                        } else {
+                            stderr_msg
+                        };
+                        let alert = gtk4::MessageDialog::builder()
+                            .modal(true)
+                            .message_type(gtk4::MessageType::Error)
+                            .buttons(gtk4::ButtonsType::Ok)
+                            .text("Key Generation Failed!")
+                            .secondary_text(&secondary)
+                            .build();
+                        if let Some(ref w) = parent_win {
+                            alert.set_transient_for(Some(w.upcast_ref::<gtk4::Window>()));
+                        }
+                        alert.connect_response(|a, _| a.close());
+                        alert.present();
                     }
-                }
-                
-                let alert = gtk4::MessageDialog::builder()
-                    .transient_for(d.transient_for().as_ref().unwrap())
-                    .modal(true)
-                    .message_type(gtk4::MessageType::Error)
-                    .buttons(gtk4::ButtonsType::Ok)
-                    .text("Key Generation Failed!")
-                    .build();
-                alert.connect_response(|a, _| a.close());
-                alert.present();
+                });
             }
         } else {
             d.close();
@@ -523,41 +559,101 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
             
             if let Some(ssh_dir) = get_ssh_dir() {
                 let file_path = ssh_dir.join(&name);
-                
+
+                // Write the private key on all platforms before invoking ssh-keygen.
+                if let Err(e) = std::fs::write(&file_path, &key_content) {
+                    let alert = gtk4::MessageDialog::builder()
+                        .transient_for(d.transient_for().as_ref().unwrap())
+                        .modal(true)
+                        .message_type(gtk4::MessageType::Error)
+                        .buttons(gtk4::ButtonsType::Ok)
+                        .text("Failed to Write Key File")
+                        .secondary_text(&e.to_string())
+                        .build();
+                    alert.connect_response(|a, _| a.close());
+                    alert.present();
+                    return;
+                }
+
+                // On Unix, restrict permissions to owner-read/write (0600).
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt;
-                    let _ = std::fs::write(&file_path, key_content);
                     if let Ok(mut perms) = std::fs::metadata(&file_path).map(|m| m.permissions()) {
                         perms.set_mode(0o600);
                         let _ = std::fs::set_permissions(&file_path, perms);
                     }
                 }
-                
-                let mut cmd = std::process::Command::new("ssh-keygen");
-                cmd.arg("-y")
-                   .arg("-f").arg(&file_path);
-                
-                if let Ok(output) = cmd.output() {
-                    if output.status.success() {
-                        let pub_path = ssh_dir.join(format!("{}.pub", name));
-                        let _ = std::fs::write(pub_path, output.stdout);
-                        on_save();
-                        d.close();
-                        return;
+
+                let parent_win = d.transient_for()
+                    .and_then(|w| w.downcast::<gtk4::ApplicationWindow>().ok());
+                d.close();
+
+                glib::MainContext::default().spawn_local(async move {
+                    let pub_path = ssh_dir.join(format!("{}.pub", name));
+                    let result = tokio::task::spawn_blocking(move || {
+                        std::process::Command::new("ssh-keygen")
+                            .arg("-y")
+                            .arg("-f").arg(&file_path)
+                            .output()
+                    }).await;
+
+                    let make_error_dialog = |text: &str, secondary: &str| {
+                        let alert = gtk4::MessageDialog::builder()
+                            .modal(true)
+                            .message_type(gtk4::MessageType::Error)
+                            .buttons(gtk4::ButtonsType::Ok)
+                            .text(text)
+                            .secondary_text(secondary)
+                            .build();
+                        alert
+                    };
+
+                    match result {
+                        Ok(Ok(output)) if output.status.success() => {
+                            if let Err(e) = std::fs::write(&pub_path, output.stdout) {
+                                let alert = make_error_dialog("Failed to Write Public Key", &e.to_string());
+                                if let Some(ref w) = parent_win {
+                                    alert.set_transient_for(Some(w.upcast_ref::<gtk4::Window>()));
+                                }
+                                alert.connect_response(|a, _| a.close());
+                                alert.present();
+                            } else {
+                                on_save();
+                            }
+                        }
+                        Ok(Ok(output)) => {
+                            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                            let secondary = if stderr.is_empty() {
+                                "Check if the pasted key is a valid private key or if it is encrypted.".to_string()
+                            } else {
+                                stderr
+                            };
+                            let alert = make_error_dialog("Key Import Failed!", &secondary);
+                            if let Some(ref w) = parent_win {
+                                alert.set_transient_for(Some(w.upcast_ref::<gtk4::Window>()));
+                            }
+                            alert.connect_response(|a, _| a.close());
+                            alert.present();
+                        }
+                        Ok(Err(e)) => {
+                            let alert = make_error_dialog("Key Import Failed!", &e.to_string());
+                            if let Some(ref w) = parent_win {
+                                alert.set_transient_for(Some(w.upcast_ref::<gtk4::Window>()));
+                            }
+                            alert.connect_response(|a, _| a.close());
+                            alert.present();
+                        }
+                        Err(e) => {
+                            let alert = make_error_dialog("Key Import Failed!", &e.to_string());
+                            if let Some(ref w) = parent_win {
+                                alert.set_transient_for(Some(w.upcast_ref::<gtk4::Window>()));
+                            }
+                            alert.connect_response(|a, _| a.close());
+                            alert.present();
+                        }
                     }
-                }
-                
-                let alert = gtk4::MessageDialog::builder()
-                    .transient_for(d.transient_for().as_ref().unwrap())
-                    .modal(true)
-                    .message_type(gtk4::MessageType::Error)
-                    .buttons(gtk4::ButtonsType::Ok)
-                    .text("Key Import Failed!")
-                    .secondary_text("Check if the pasted key is a valid private key or if it is encrypted.")
-                    .build();
-                alert.connect_response(|a, _| a.close());
-                alert.present();
+                });
             }
         } else {
             d.close();

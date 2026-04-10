@@ -1,24 +1,10 @@
 use ssh2::Session;
 use std::net::TcpStream;
-use crate::config_observer::SshHost;
+use crate::config_observer::{SshHost, expand_tilde};
 use std::path::Path;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::collections::HashMap;
-
-/// Expand a leading `~/` or lone `~` to the user's home directory.
-fn expand_tilde(path: &str) -> std::path::PathBuf {
-    if path == "~" {
-        if let Some(home) = directories::UserDirs::new().map(|d| d.home_dir().to_path_buf()) {
-            return home;
-        }
-    } else if let Some(rest) = path.strip_prefix("~/") {
-        if let Some(home) = directories::UserDirs::new().map(|d| d.home_dir().to_path_buf()) {
-            return home.join(rest);
-        }
-    }
-    std::path::PathBuf::from(path)
-}
 
 #[derive(Debug, Clone)]
 pub struct RemoteFile {
@@ -69,19 +55,20 @@ fn get_or_connect_sftp(host: &SshHost, password: &Option<String>) -> anyhow::Res
         }
     }
     
+    // Try ssh-agent next: it handles passphrase-protected keys transparently.
+    if !authenticated {
+        if sess.userauth_agent(user).is_ok() {
+            println!("[DEBUG] SFTP connected to {} via SSH Agent", host.hostname);
+            authenticated = true;
+        }
+    }
+
     if !authenticated {
         if let Some(pass) = password {
             if sess.userauth_password(user, pass).is_ok() {
                 println!("[DEBUG] SFTP connected to {} via Password", host.hostname);
                 authenticated = true;
             }
-        }
-    }
-    
-    if !authenticated {
-        if sess.userauth_agent(user).is_ok() {
-            println!("[DEBUG] SFTP connected to {} via SSH Agent", host.hostname);
-            authenticated = true;
         }
     }
     

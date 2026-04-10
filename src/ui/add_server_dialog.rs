@@ -62,8 +62,12 @@ where F: Fn(SshHost, String) + 'static
 
     if let Some(host) = initial_host {
         if let Some(ref id_file) = host.identity_file {
+            // Normalize the stored path (which may contain `~`) to an absolute
+            // path so it compares correctly with the absolute priv_path from
+            // load_ssh_keys().
+            let id_file_expanded = crate::config_observer::expand_tilde(id_file);
             for (i, k) in keys.iter().enumerate() {
-                if k.priv_path.to_string_lossy() == *id_file {
+                if k.priv_path == id_file_expanded {
                     key_dropdown.set_selected((i + 1) as u32);
                     break;
                 }

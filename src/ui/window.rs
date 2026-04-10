@@ -259,9 +259,16 @@ pub fn build_ui(app: &gtk4::Application) {
                     let host_alias = host.alias.clone();
                     let exe_path = std::env::current_exe().unwrap_or_default().to_string_lossy().to_string();
                     let mut envv: Vec<String> = std::env::vars().map(|(k, v)| format!("{}={}", k, v)).collect();
-                    envv.push(format!("SSH_ASKPASS={}", exe_path));
-                    envv.push("SSH_ASKPASS_REQUIRE=force".to_string());
-                    envv.push(format!("RUSTMIUS_ASKPASS_ALIAS={}", host_alias));
+                    // Only force ASKPASS when no identity file is configured.
+                    // When key-based auth is in use, let ssh handle passphrase
+                    // prompts natively in the terminal instead of routing them
+                    // through the app's askpass helper (which returns the server
+                    // password, not the key passphrase).
+                    if host.identity_file.is_none() {
+                        envv.push(format!("SSH_ASKPASS={}", exe_path));
+                        envv.push("SSH_ASKPASS_REQUIRE=force".to_string());
+                        envv.push(format!("RUSTMIUS_ASKPASS_ALIAS={}", host_alias));
+                    }
                     envv.push("DISPLAY=:0".to_string());
                     let env_refs: Vec<&str> = envv.iter().map(|s| s.as_str()).collect();
                     let port_str = host.port.unwrap_or(22).to_string();
