@@ -91,6 +91,10 @@ jobs:
     name: Build (${{ matrix.suffix }})
     needs: prepare
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      id-token: none
     strategy:
       fail-fast: false
       matrix:
