@@ -1,6 +1,7 @@
 #![allow(deprecated)]
 use gtk4::prelude::*;
 use crate::config_observer::SshHost;
+use crate::ui::ssh_keys::load_ssh_keys;
 
 pub fn show_server_dialog<F>(
     parent: &gtk4::Window, 
@@ -51,6 +52,25 @@ where F: Fn(SshHost, String) + 'static
         }
     }
 
+    let keys = load_ssh_keys();
+    let key_model = gtk4::StringList::new(&[]);
+    key_model.append("None (Default Auth)");
+    for k in &keys {
+        key_model.append(&k.name);
+    }
+    let key_dropdown = gtk4::DropDown::new(Some(key_model), gtk4::Expression::NONE);
+
+    if let Some(host) = initial_host {
+        if let Some(ref id_file) = host.identity_file {
+            for (i, k) in keys.iter().enumerate() {
+                if k.priv_path.to_string_lossy() == *id_file {
+                    key_dropdown.set_selected((i + 1) as u32);
+                    break;
+                }
+            }
+        }
+    }
+
     content.append(&gtk4::Label::builder().label("Alias").halign(gtk4::Align::Start).build());
     content.append(&alias_entry);
     content.append(&error_label);
@@ -62,6 +82,8 @@ where F: Fn(SshHost, String) + 'static
     content.append(&user_entry);
     content.append(&gtk4::Label::builder().label("Password").halign(gtk4::Align::Start).build());
     content.append(&pass_entry);
+    content.append(&gtk4::Label::builder().label("SSH Key").halign(gtk4::Align::Start).build());
+    content.append(&key_dropdown);
 
     let ok_button = dialog.add_button(if initial_host.is_some() { "Save" } else { "Add" }, gtk4::ResponseType::Ok);
     dialog.add_button("Cancel", gtk4::ResponseType::Cancel);
@@ -84,11 +106,20 @@ where F: Fn(SshHost, String) + 'static
 
     dialog.connect_response(move |d, res| {
         if res == gtk4::ResponseType::Ok {
+            let selected_key_idx = key_dropdown.selected();
+            let identity_file = if selected_key_idx > 0 {
+                let key = &keys[(selected_key_idx - 1) as usize];
+                Some(key.priv_path.to_string_lossy().to_string())
+            } else {
+                None
+            };
+            
             let host = SshHost {
                 alias: alias_entry_clone.text().to_string().trim().to_string(),
                 hostname: host_entry.text().to_string().trim().to_string(),
                 user: Some(user_entry.text().to_string().trim().to_string()).filter(|s| !s.is_empty()),
                 port: port_entry.text().to_string().trim().parse::<u16>().ok(),
+                identity_file,
             };
             let password = pass_entry.text().to_string();
             

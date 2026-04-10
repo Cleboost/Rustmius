@@ -7,6 +7,7 @@ pub struct SshHost {
     pub hostname: String,
     pub user: Option<String>,
     pub port: Option<u16>,
+    pub identity_file: Option<String>,
 }
 
 pub fn get_default_config_path() -> Option<std::path::PathBuf> {
@@ -55,6 +56,7 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
                     hostname: String::new(),
                     user: None,
                     port: None,
+                    identity_file: None,
                 });
             }
             "hostname" => {
@@ -72,6 +74,11 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
                     if let Ok(p) = value.parse::<u16>() {
                         host.port = Some(p);
                     }
+                }
+            }
+            "identityfile" => {
+                if let Some(ref mut host) = current_host {
+                    host.identity_file = Some(value.to_string());
                 }
             }
             _ => {}
@@ -109,13 +116,17 @@ pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
         host.alias.clone()
     };
 
-    let entry = format!(
+    let mut entry = format!(
         "\nHost {}\n    HostName {}\n    User {}\n    Port {}\n",
         alias_quoted,
         host.hostname,
         host.user.as_deref().unwrap_or("root"),
         host.port.unwrap_or(22)
     );
+
+    if let Some(ref id_file) = host.identity_file {
+        entry.push_str(&format!("    IdentityFile {}\n", id_file));
+    }
 
     content.push_str(&entry);
     std::fs::write(path, content)?;

@@ -45,10 +45,34 @@ fn get_or_connect_sftp(host: &SshHost, password: &Option<String>) -> anyhow::Res
     sess.handshake()?;
 
     let user = host.user.as_deref().unwrap_or("root");
-    if let Some(pass) = password {
-        sess.userauth_password(user, pass)?;
-    } else {
-        sess.userauth_agent(user)?;
+    let mut authenticated = false;
+    
+    if let Some(ref key_path) = host.identity_file {
+        let path = Path::new(key_path);
+        if sess.userauth_pubkey_file(user, None, path, None).is_ok() {
+            println!("[DEBUG] SFTP connected to {} via Configure SSH Key ({})", host.hostname, key_path);
+            authenticated = true;
+        }
+    }
+    
+    if !authenticated {
+        if let Some(pass) = password {
+            if sess.userauth_password(user, pass).is_ok() {
+                println!("[DEBUG] SFTP connected to {} via Password", host.hostname);
+                authenticated = true;
+            }
+        }
+    }
+    
+    if !authenticated {
+        if sess.userauth_agent(user).is_ok() {
+            println!("[DEBUG] SFTP connected to {} via SSH Agent", host.hostname);
+            authenticated = true;
+        }
+    }
+    
+    if !authenticated {
+        return Err(anyhow::anyhow!("Authentication failed (tried key, password, and agent)"));
     }
 
     let sftp = sess.sftp()?;
