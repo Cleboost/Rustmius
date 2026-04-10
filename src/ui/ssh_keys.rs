@@ -1,11 +1,11 @@
+#![allow(deprecated)]
 use gtk4::prelude::*;
 use gtk4::glib;
 use std::rc::Rc;
 use std::cell::RefCell;
 use directories::UserDirs;
-use std::path::{Path, PathBuf};
-use crate::config_observer::{load_hosts, SshHost};
-use anyhow::anyhow;
+use std::path::PathBuf;
+use crate::config_observer::load_hosts;
 
 #[derive(Clone)]
 pub struct SshKeyPair {
@@ -232,7 +232,7 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
     status_label.set_halign(gtk4::Align::Start);
     content.append(&status_label);
 
-    let ok_btn = dialog.add_button("Deploy", gtk4::ResponseType::Ok);
+    let _ok_btn = dialog.add_button("Deploy", gtk4::ResponseType::Ok);
     dialog.add_button("Cancel", gtk4::ResponseType::Cancel);
 
     let key_path = key.pub_path.clone();
