@@ -19,6 +19,23 @@ fn is_valid_key_name(name: &str) -> bool {
         && p.file_name().map(|n| n == std::ffi::OsStr::new(name)).unwrap_or(false)
 }
 
+/// Build an error MessageDialog with an optional transient parent window.
+fn make_error_alert(parent: Option<&gtk4::Window>, title: &str, secondary: &str) -> gtk4::MessageDialog {
+    let builder = gtk4::MessageDialog::builder()
+        .modal(true)
+        .message_type(gtk4::MessageType::Error)
+        .buttons(gtk4::ButtonsType::Ok)
+        .text(title)
+        .secondary_text(secondary);
+    let alert = if let Some(w) = parent {
+        builder.transient_for(w).build()
+    } else {
+        builder.build()
+    };
+    alert.connect_response(|a, _| a.close());
+    alert
+}
+
 #[derive(Clone)]
 pub struct SshKeyPair {
     pub name: String,
@@ -302,7 +319,7 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
                     }
                 };
                 
-                let parent_win_weak = d.transient_for().map(|w| w.downcast::<gtk4::Window>().unwrap());
+                let parent_win_weak = d.transient_for().and_then(|w| w.downcast::<gtk4::Window>().ok());
                 let close_dialog = d.clone();
                 
                 glib::MainContext::default().spawn_local(async move {
@@ -408,15 +425,11 @@ fn show_generate_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>)
             let comment = comment_entry.text().to_string();
 
             if !is_valid_key_name(&name) {
-                let alert = gtk4::MessageDialog::builder()
-                    .transient_for(d.transient_for().as_ref().unwrap())
-                    .modal(true)
-                    .message_type(gtk4::MessageType::Error)
-                    .buttons(gtk4::ButtonsType::Ok)
-                    .text("Invalid Key Name")
-                    .secondary_text("The key name must be a simple filename with no path separators or special components.")
-                    .build();
-                alert.connect_response(|a, _| a.close());
+                let alert = make_error_alert(
+                    d.transient_for().as_ref().map(|w| w.upcast_ref()),
+                    "Invalid Key Name",
+                    "The key name must be a simple filename with no path separators or special components.",
+                );
                 alert.present();
                 return;
             }
@@ -426,15 +439,11 @@ fn show_generate_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>)
 
                 // Refuse to overwrite an existing key without asking.
                 if file_path.exists() {
-                    let alert = gtk4::MessageDialog::builder()
-                        .transient_for(d.transient_for().as_ref().unwrap())
-                        .modal(true)
-                        .message_type(gtk4::MessageType::Error)
-                        .buttons(gtk4::ButtonsType::Ok)
-                        .text("Key Already Exists")
-                        .secondary_text(&format!("A file named '{}' already exists in ~/.ssh/. Choose a different name.", name))
-                        .build();
-                    alert.connect_response(|a, _| a.close());
+                    let alert = make_error_alert(
+                        d.transient_for().as_ref().map(|w| w.upcast_ref()),
+                        "Key Already Exists",
+                        &format!("A file named '{}' already exists in ~/.ssh/. Choose a different name.", name),
+                    );
                     alert.present();
                     return;
                 }
@@ -472,17 +481,11 @@ fn show_generate_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>)
                         } else {
                             stderr_msg
                         };
-                        let alert = gtk4::MessageDialog::builder()
-                            .modal(true)
-                            .message_type(gtk4::MessageType::Error)
-                            .buttons(gtk4::ButtonsType::Ok)
-                            .text("Key Generation Failed!")
-                            .secondary_text(&secondary)
-                            .build();
-                        if let Some(ref w) = parent_win {
-                            alert.set_transient_for(Some(w.upcast_ref::<gtk4::Window>()));
-                        }
-                        alert.connect_response(|a, _| a.close());
+                        let alert = make_error_alert(
+                            parent_win.as_ref().map(|w| w.upcast_ref()),
+                            "Key Generation Failed!",
+                            &secondary,
+                        );
                         alert.present();
                     }
                 });
@@ -544,15 +547,11 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
             let key_content = text_buffer.text(&start, &end, false).to_string();
 
             if !is_valid_key_name(&name) {
-                let alert = gtk4::MessageDialog::builder()
-                    .transient_for(d.transient_for().as_ref().unwrap())
-                    .modal(true)
-                    .message_type(gtk4::MessageType::Error)
-                    .buttons(gtk4::ButtonsType::Ok)
-                    .text("Invalid Key Name")
-                    .secondary_text("The key name must be a simple filename with no path separators or special components.")
-                    .build();
-                alert.connect_response(|a, _| a.close());
+                let alert = make_error_alert(
+                    d.transient_for().as_ref().map(|w| w.upcast_ref()),
+                    "Invalid Key Name",
+                    "The key name must be a simple filename with no path separators or special components.",
+                );
                 alert.present();
                 return;
             }
@@ -562,15 +561,11 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
 
                 // Write the private key on all platforms before invoking ssh-keygen.
                 if let Err(e) = std::fs::write(&file_path, &key_content) {
-                    let alert = gtk4::MessageDialog::builder()
-                        .transient_for(d.transient_for().as_ref().unwrap())
-                        .modal(true)
-                        .message_type(gtk4::MessageType::Error)
-                        .buttons(gtk4::ButtonsType::Ok)
-                        .text("Failed to Write Key File")
-                        .secondary_text(&e.to_string())
-                        .build();
-                    alert.connect_response(|a, _| a.close());
+                    let alert = make_error_alert(
+                        d.transient_for().as_ref().map(|w| w.upcast_ref()),
+                        "Failed to Write Key File",
+                        &e.to_string(),
+                    );
                     alert.present();
                     return;
                 }
@@ -598,25 +593,14 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
                             .output()
                     }).await;
 
-                    let make_error_dialog = |text: &str, secondary: &str| {
-                        let alert = gtk4::MessageDialog::builder()
-                            .modal(true)
-                            .message_type(gtk4::MessageType::Error)
-                            .buttons(gtk4::ButtonsType::Ok)
-                            .text(text)
-                            .secondary_text(secondary)
-                            .build();
-                        alert
-                    };
-
                     match result {
                         Ok(Ok(output)) if output.status.success() => {
                             if let Err(e) = std::fs::write(&pub_path, output.stdout) {
-                                let alert = make_error_dialog("Failed to Write Public Key", &e.to_string());
-                                if let Some(ref w) = parent_win {
-                                    alert.set_transient_for(Some(w.upcast_ref::<gtk4::Window>()));
-                                }
-                                alert.connect_response(|a, _| a.close());
+                                let alert = make_error_alert(
+                                    parent_win.as_ref().map(|w| w.upcast_ref()),
+                                    "Failed to Write Public Key",
+                                    &e.to_string(),
+                                );
                                 alert.present();
                             } else {
                                 on_save();
@@ -629,27 +613,27 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
                             } else {
                                 stderr
                             };
-                            let alert = make_error_dialog("Key Import Failed!", &secondary);
-                            if let Some(ref w) = parent_win {
-                                alert.set_transient_for(Some(w.upcast_ref::<gtk4::Window>()));
-                            }
-                            alert.connect_response(|a, _| a.close());
+                            let alert = make_error_alert(
+                                parent_win.as_ref().map(|w| w.upcast_ref()),
+                                "Key Import Failed!",
+                                &secondary,
+                            );
                             alert.present();
                         }
                         Ok(Err(e)) => {
-                            let alert = make_error_dialog("Key Import Failed!", &e.to_string());
-                            if let Some(ref w) = parent_win {
-                                alert.set_transient_for(Some(w.upcast_ref::<gtk4::Window>()));
-                            }
-                            alert.connect_response(|a, _| a.close());
+                            let alert = make_error_alert(
+                                parent_win.as_ref().map(|w| w.upcast_ref()),
+                                "Key Import Failed!",
+                                &e.to_string(),
+                            );
                             alert.present();
                         }
                         Err(e) => {
-                            let alert = make_error_dialog("Key Import Failed!", &e.to_string());
-                            if let Some(ref w) = parent_win {
-                                alert.set_transient_for(Some(w.upcast_ref::<gtk4::Window>()));
-                            }
-                            alert.connect_response(|a, _| a.close());
+                            let alert = make_error_alert(
+                                parent_win.as_ref().map(|w| w.upcast_ref()),
+                                "Key Import Failed!",
+                                &e.to_string(),
+                            );
                             alert.present();
                         }
                     }
