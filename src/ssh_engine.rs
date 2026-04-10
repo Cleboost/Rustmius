@@ -76,11 +76,13 @@ pub fn deploy_pubkey(host: &SshHost, password: Option<String>, pubkey_content: &
 
     // Ensure the entry is terminated by a newline so it forms a valid line
     // even when appended to a file that doesn't end with one.
-    let mut content = pubkey_content.to_owned();
-    if !content.ends_with('\n') {
+    if pubkey_content.ends_with('\n') {
+        channel.write_all(pubkey_content.as_bytes())?;
+    } else {
+        let mut content = pubkey_content.to_owned();
         content.push('\n');
+        channel.write_all(content.as_bytes())?;
     }
-    channel.write_all(content.as_bytes())?;
     channel.send_eof()?;
     channel.wait_eof()?;
     channel.close()?;
