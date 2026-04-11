@@ -145,7 +145,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build, prepare]
+    needs: [prepare, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -169,16 +169,13 @@ jobs:
 
   aur:
     name: Update AUR
-    needs: release
+    needs: [prepare, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.prepare.outputs.sha }}
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -215,7 +212,8 @@ jobs:
             echo "nothing to commit"
           else
             git commit -m "chore: update PKGBUILD to ${{ needs.prepare.outputs.new_version }}"
-            git push
+            git pull --rebase origin master
+            git push origin master
           fi
 
       - name: Publish AUR package
