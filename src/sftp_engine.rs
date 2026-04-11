@@ -26,15 +26,14 @@ fn get_session_pool() -> &'static Mutex<HashMap<String, Arc<ActiveSession>>> {
 
 fn get_or_connect_sftp(host: &SshHost, password: &Option<String>) -> anyhow::Result<Arc<ActiveSession>> {
     let host_key = format!("{}@{}", host.user.as_deref().unwrap_or("root"), host.hostname);
-    if let Ok(mut pool) = get_session_pool().lock() {
-        if let Some(active) = pool.get(&host_key) {
+    if let Ok(mut pool) = get_session_pool().lock()
+        && let Some(active) = pool.get(&host_key) {
             if active.sftp.stat(Path::new(".")).is_ok() {
                 return Ok(active.clone());
             } else {
                 pool.remove(&host_key);
             }
         }
-    }
 
     let port = host.port.unwrap_or(22);
     let addrs = format!("{}:{}", host.hostname, port).to_socket_addrs()?;
@@ -59,21 +58,18 @@ fn get_or_connect_sftp(host: &SshHost, password: &Option<String>) -> anyhow::Res
             authenticated = true;
         }
     }
-    if !authenticated {
-        if sess.userauth_agent(user).is_ok() {
+    if !authenticated
+        && sess.userauth_agent(user).is_ok() {
             println!("[DEBUG] SFTP connected to {} via SSH Agent", host.hostname);
             authenticated = true;
         }
-    }
 
-    if !authenticated {
-        if let Some(pass) = password {
-            if sess.userauth_password(user, pass).is_ok() {
+    if !authenticated
+        && let Some(pass) = password
+            && sess.userauth_password(user, pass).is_ok() {
                 println!("[DEBUG] SFTP connected to {} via Password", host.hostname);
                 authenticated = true;
             }
-        }
-    }
     if !authenticated {
         return Err(anyhow::anyhow!("Authentication failed (tried key, password, and agent)"));
     }

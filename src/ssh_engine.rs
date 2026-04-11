@@ -49,21 +49,18 @@ pub fn deploy_pubkey(host: &SshHost, password: Option<String>, pubkey_content: &
             authenticated = true;
         }
     }
-    if !authenticated {
-        if sess.userauth_agent(user).is_ok() {
+    if !authenticated
+        && sess.userauth_agent(user).is_ok() {
             println!("[DEBUG] SSH deploy connected to {} via SSH Agent", host.hostname);
             authenticated = true;
         }
-    }
 
-    if !authenticated {
-        if let Some(pass) = password {
-            if sess.userauth_password(user, &pass).is_ok() {
+    if !authenticated
+        && let Some(pass) = password
+            && sess.userauth_password(user, &pass).is_ok() {
                 println!("[DEBUG] SSH deploy connected to {} via Password", host.hostname);
                 authenticated = true;
             }
-        }
-    }
     if !authenticated {
         return Err(anyhow::anyhow!("Authentication failed (tried key, password, and agent)"));
     }

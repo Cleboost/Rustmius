@@ -60,8 +60,8 @@ where F: Fn(SshHost, String) + 'static
     }
     let key_dropdown = gtk4::DropDown::new(Some(key_model), gtk4::Expression::NONE);
 
-    if let Some(host) = initial_host {
-        if let Some(ref id_file) = host.identity_file {
+    if let Some(host) = initial_host
+        && let Some(ref id_file) = host.identity_file {
             let id_file_expanded = crate::config_observer::expand_tilde(id_file);
             for (i, k) in keys.iter().enumerate() {
                 if k.priv_path == id_file_expanded {
@@ -70,7 +70,6 @@ where F: Fn(SshHost, String) + 'static
                 }
             }
         }
-    }
 
     content.append(&gtk4::Label::builder().label("Alias").halign(gtk4::Align::Start).build());
     content.append(&alias_entry);

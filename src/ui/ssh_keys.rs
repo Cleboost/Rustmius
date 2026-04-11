@@ -45,8 +45,8 @@ fn get_ssh_dir() -> Option<PathBuf> {
 
 pub fn load_ssh_keys() -> Vec<SshKeyPair> {
     let mut keys = Vec::new();
-    if let Some(ssh_dir) = get_ssh_dir() {
-        if let Ok(entries) = std::fs::read_dir(&ssh_dir) {
+    if let Some(ssh_dir) = get_ssh_dir()
+        && let Ok(entries) = std::fs::read_dir(&ssh_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("pub") {
@@ -63,7 +63,6 @@ pub fn load_ssh_keys() -> Vec<SshKeyPair> {
                 }
             }
         }
-    }
     keys.sort_by(|a, b| a.name.cmp(&b.name));
     keys
 }
@@ -155,7 +154,7 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
                             .modal(true)
                             .message_type(gtk4::MessageType::Warning)
                             .buttons(gtk4::ButtonsType::OkCancel)
-                            .text(&format!("Delete key '{}'?", key_clone1.name))
+                            .text(format!("Delete key '{}'?", key_clone1.name))
                             .secondary_text("This action cannot be undone and will delete both public and private key files.")
                             .build();
 
@@ -173,7 +172,7 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
                                         .message_type(gtk4::MessageType::Error)
                                         .buttons(gtk4::ButtonsType::Ok)
                                         .text("Failed to Delete Key")
-                                        .secondary_text(&format!("Could not delete private key: {}", e))
+                                        .secondary_text(format!("Could not delete private key: {}", e))
                                         .build();
                                     alert.connect_response(|a, _| a.close());
                                     alert.present();
@@ -187,16 +186,15 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
                                         .message_type(gtk4::MessageType::Error)
                                         .buttons(gtk4::ButtonsType::Ok)
                                         .text("Failed to Delete Key")
-                                        .secondary_text(&format!("Private key deleted, but could not delete public key: {}", e))
+                                        .secondary_text(format!("Private key deleted, but could not delete public key: {}", e))
                                         .build();
                                     alert.connect_response(|a, _| a.close());
                                     alert.present();
                                     d.close();
                                     return;
                                 }
-                                if let Some(rc) = h.upgrade() {
-                                    if let Some(r) = rc.borrow().as_ref() { r(); }
-                                }
+                                if let Some(rc) = h.upgrade()
+                                    && let Some(r) = rc.borrow().as_ref() { r(); }
                             }
                             d.close();
                         });
@@ -242,7 +240,7 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
     let dialog = gtk4::Dialog::builder()
         .transient_for(parent)
         .modal(true)
-        .title(&format!("Deploy key: {}", key.name))
+        .title(format!("Deploy key: {}", key.name))
         .default_width(350)
         .build();
 
@@ -298,7 +296,7 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
                             .message_type(gtk4::MessageType::Error)
                             .buttons(gtk4::ButtonsType::Ok)
                             .text("Failed to Read Public Key")
-                            .secondary_text(&format!("Could not read '{}': {}", key_path.display(), e))
+                            .secondary_text(format!("Could not read '{}': {}", key_path.display(), e))
                             .build();
                         if let Some(w) = d.transient_for() {
                             md.set_transient_for(Some(&w));
@@ -318,13 +316,11 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
                         let mut attr = std::collections::HashMap::new();
                         let alias_lower = host.alias.to_lowercase();
                         attr.insert("rustmius-server-alias", alias_lower.as_str());
-                        if let Ok(items) = keyring.search_items(&attr).await {
-                            if let Some(item) = items.first() {
-                                if let Ok(pass) = item.secret().await {
+                        if let Ok(items) = keyring.search_items(&attr).await
+                            && let Some(item) = items.first()
+                                && let Ok(pass) = item.secret().await {
                                     final_password = Some(String::from_utf8_lossy(&pass).to_string());
                                 }
-                            }
-                        }
                     }
 
                     let h_c = host.clone();
@@ -354,7 +350,7 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
                                 .message_type(gtk4::MessageType::Error)
                                 .buttons(gtk4::ButtonsType::Ok)
                                 .text("Deployment Failed")
-                                .secondary_text(&e.to_string())
+                                .secondary_text(e.to_string())
                                 .build();
                             if let Some(ref w) = parent_win_weak {
                                 md.set_transient_for(Some(w));

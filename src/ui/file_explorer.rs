@@ -423,8 +423,8 @@ impl ExplorerHandle {
                     let hii = hi.clone();
                     if let Some(w) = parent_window {
                         dialog.save(Some(&w), gio::Cancellable::NONE, move |res| {
-                            if let Ok(file) = res {
-                                if let Some(path) = file.path() {
+                            if let Ok(file) = res
+                                && let Some(path) = file.path() {
                                     let lp = path.to_string_lossy().to_string();
                                     hii.status_label.set_text(&format!("Downloading {}...", fi.name));
                                     let hiii = hii.clone();
@@ -438,7 +438,6 @@ impl ExplorerHandle {
                                         }
                                     });
                                 }
-                            }
                         });
                     }
                 });

@@ -7,11 +7,10 @@ pub fn expand_tilde(path: &str) -> PathBuf {
         if let Some(home) = UserDirs::new().map(|d| d.home_dir().to_path_buf()) {
             return home;
         }
-    } else if let Some(rest) = path.strip_prefix("~/") {
-        if let Some(home) = UserDirs::new().map(|d| d.home_dir().to_path_buf()) {
+    } else if let Some(rest) = path.strip_prefix("~/")
+        && let Some(home) = UserDirs::new().map(|d| d.home_dir().to_path_buf()) {
             return home.join(rest);
         }
-    }
     PathBuf::from(path)
 }
 
@@ -84,11 +83,10 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
                 }
             }
             "port" => {
-                if let Some(ref mut host) = current_host {
-                    if let Ok(p) = value.parse::<u16>() {
+                if let Some(ref mut host) = current_host
+                    && let Ok(p) = value.parse::<u16>() {
                         host.port = Some(p);
                     }
-                }
             }
             "identityfile" => {
                 if let Some(ref mut host) = current_host {
