@@ -27,7 +27,6 @@ impl Hud {
         let scrolled = gtk4::ScrolledWindow::new();
         scrolled.set_min_content_height(300);
         scrolled.set_min_content_width(400);
-        
         let list_box = gtk4::ListBox::new();
         scrolled.set_child(Some(&list_box));
         box_container.append(&scrolled);
@@ -43,7 +42,6 @@ impl Hud {
     }
 
     pub fn update_results(&self, hosts: &[SshHost], query: &str) {
-        
         while let Some(row) = self.list_box.first_child() {
             self.list_box.remove(&row);
         }
@@ -63,7 +61,6 @@ impl Hud {
         for host in hosts {
             let text = format!("{} {}", host.alias, host.hostname);
             let text_utf32 = Utf32String::from(text.as_str());
-            
             if let Some(score) = matcher.fuzzy_match(text_utf32.slice(..), query_utf32.slice(..)) {
                 matches.push((score, host));
             }
@@ -81,14 +78,12 @@ impl Hud {
         let alias_label = gtk4::Label::new(Some(&host.alias));
         alias_label.set_halign(gtk4::Align::Start);
         alias_label.add_css_class("heading");
-        
         let host_label = gtk4::Label::new(Some(&format!("{}@{}", host.user.as_deref().unwrap_or(""), host.hostname)));
         host_label.set_halign(gtk4::Align::Start);
         host_label.add_css_class("caption");
 
         row_box.append(&alias_label);
         row_box.append(&host_label);
-        
         self.list_box.append(&row_box);
     }
 }

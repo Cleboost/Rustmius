@@ -1,5 +1,6 @@
 use ssh2::Session;
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
+use std::time::Duration;
 use crate::config_observer::{SshHost, expand_tilde};
 use std::path::Path;
 use std::io::{Read, Write};
@@ -14,7 +15,7 @@ pub struct RemoteFile {
 }
 
 pub struct ActiveSession {
-    _sess: Session, // Keep the session alive for the Sftp pointer
+    _sess: Session,
     pub sftp: ssh2::Sftp,
 }
 
@@ -25,28 +26,32 @@ fn get_session_pool() -> &'static Mutex<HashMap<String, Arc<ActiveSession>>> {
 
 fn get_or_connect_sftp(host: &SshHost, password: &Option<String>) -> anyhow::Result<Arc<ActiveSession>> {
     let host_key = format!("{}@{}", host.user.as_deref().unwrap_or("root"), host.hostname);
-    
     if let Ok(mut pool) = get_session_pool().lock() {
         if let Some(active) = pool.get(&host_key) {
-            // Check if connection is still alive using a basic stat
             if active.sftp.stat(Path::new(".")).is_ok() {
                 return Ok(active.clone());
             } else {
-                // Connection died, remove it to force reconnect
                 pool.remove(&host_key);
             }
         }
     }
 
     let port = host.port.unwrap_or(22);
-    let tcp = TcpStream::connect(format!("{}:{}", host.hostname, port))?;
+    let addrs = format!("{}:{}", host.hostname, port).to_socket_addrs()?;
+    let mut tcp_opt = None;
+    for addr in addrs {
+        if let Ok(stream) = TcpStream::connect_timeout(&addr, Duration::from_secs(5)) {
+            tcp_opt = Some(stream);
+            break;
+        }
+    }
+    let tcp = tcp_opt.ok_or_else(|| anyhow::anyhow!("Connection timeout to {}", host.hostname))?;
     let mut sess = Session::new()?;
     sess.set_tcp_stream(tcp);
     sess.handshake()?;
 
     let user = host.user.as_deref().unwrap_or("root");
     let mut authenticated = false;
-    
     if let Some(ref key_path) = host.identity_file {
         let path = expand_tilde(key_path);
         if sess.userauth_pubkey_file(user, None, &path, None).is_ok() {
@@ -54,8 +59,6 @@ fn get_or_connect_sftp(host: &SshHost, password: &Option<String>) -> anyhow::Res
             authenticated = true;
         }
     }
-    
-    // Try ssh-agent next: it handles passphrase-protected keys transparently.
     if !authenticated {
         if sess.userauth_agent(user).is_ok() {
             println!("[DEBUG] SFTP connected to {} via SSH Agent", host.hostname);
@@ -71,19 +74,15 @@ fn get_or_connect_sftp(host: &SshHost, password: &Option<String>) -> anyhow::Res
             }
         }
     }
-    
     if !authenticated {
         return Err(anyhow::anyhow!("Authentication failed (tried key, password, and agent)"));
     }
 
     let sftp = sess.sftp()?;
-    
     let active = Arc::new(ActiveSession { _sess: sess, sftp });
-    
     if let Ok(mut pool) = get_session_pool().lock() {
         pool.insert(host_key, active.clone());
     }
-    
     Ok(active)
 }
 
@@ -91,7 +90,6 @@ pub async fn list_files(host: SshHost, password: Option<String>, path: String) -
     tokio::task::spawn_blocking(move || {
         let active = get_or_connect_sftp(&host, &password)?;
         let dir = active.sftp.readdir(Path::new(&path))?;
-        
         let mut files = Vec::new();
         for (path, stat) in dir {
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
@@ -102,7 +100,6 @@ pub async fn list_files(host: SshHost, password: Option<String>, path: String) -
                 });
             }
         }
-        
         files.sort_by(|a, b| {
             if a.is_dir != b.is_dir {
                 b.is_dir.cmp(&a.is_dir)
@@ -157,7 +154,6 @@ pub async fn upload_file(host: SshHost, password: Option<String>, local_path: St
         let active = get_or_connect_sftp(&host, &password)?;
         let mut local_file = std::fs::File::open(local_path)?;
         let mut remote_file = active.sftp.create(Path::new(&remote_path))?;
-        
         let mut buffer = [0; 16384];
         while let Ok(n) = local_file.read(&mut buffer) {
             if n == 0 { break; }

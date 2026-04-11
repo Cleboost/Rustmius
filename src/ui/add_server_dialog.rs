@@ -4,8 +4,8 @@ use crate::config_observer::SshHost;
 use crate::ui::ssh_keys::load_ssh_keys;
 
 pub fn show_server_dialog<F>(
-    parent: &gtk4::Window, 
-    initial_host: Option<&SshHost>, 
+    parent: &gtk4::Window,
+    initial_host: Option<&SshHost>,
     existing_aliases: Vec<String>,
     on_save: F
 )
@@ -62,9 +62,6 @@ where F: Fn(SshHost, String) + 'static
 
     if let Some(host) = initial_host {
         if let Some(ref id_file) = host.identity_file {
-            // Normalize the stored path (which may contain `~`) to an absolute
-            // path so it compares correctly with the absolute priv_path from
-            // load_ssh_keys().
             let id_file_expanded = crate::config_observer::expand_tilde(id_file);
             for (i, k) in keys.iter().enumerate() {
                 if k.priv_path == id_file_expanded {
@@ -94,16 +91,13 @@ where F: Fn(SshHost, String) + 'static
 
     let existing_aliases = Rc::new(existing_aliases);
     let initial_alias = initial_host.map(|h| h.alias.to_lowercase());
-    
     let alias_entry_clone = alias_entry.clone();
     let error_label_clone = error_label.clone();
     let ok_button_clone = ok_button.clone();
     let existing_aliases_clone = existing_aliases.clone();
-    
     alias_entry.connect_changed(move |e| {
         let text = e.text().to_string().trim().to_lowercase();
         let is_duplicate = existing_aliases_clone.contains(&text) && Some(text.clone()) != initial_alias;
-        
         error_label_clone.set_visible(is_duplicate);
         ok_button_clone.set_sensitive(!is_duplicate && !text.is_empty());
     });
@@ -117,7 +111,6 @@ where F: Fn(SshHost, String) + 'static
             } else {
                 None
             };
-            
             let host = SshHost {
                 alias: alias_entry_clone.text().to_string().trim().to_string(),
                 hostname: host_entry.text().to_string().trim().to_string(),
@@ -126,7 +119,6 @@ where F: Fn(SshHost, String) + 'static
                 identity_file,
             };
             let password = pass_entry.text().to_string();
-            
             if !host.alias.is_empty() && !host.hostname.is_empty() {
                 on_save(host, password);
             }

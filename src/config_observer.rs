@@ -2,8 +2,6 @@ use std::fs;
 use std::path::PathBuf;
 use directories::UserDirs;
 
-/// Expand a leading `~/` or lone `~` to the user's home directory.
-/// If no home directory can be determined, the original path is returned unchanged.
 pub fn expand_tilde(path: &str) -> PathBuf {
     if path == "~" {
         if let Some(home) = UserDirs::new().map(|d| d.home_dir().to_path_buf()) {
@@ -111,7 +109,6 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
 
 pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
     let path = get_default_config_path().ok_or_else(|| anyhow::anyhow!("Could not find SSH config path"))?;
-    
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -150,14 +147,15 @@ pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
     }
 
     content.push_str(&entry);
-    std::fs::write(path, content)?;
+    let tmp_path = path.with_extension("tmp");
+    std::fs::write(&tmp_path, &content)?;
+    std::fs::rename(tmp_path, path)?;
     Ok(())
 }
 
 pub fn delete_host_from_config(alias: &str) -> anyhow::Result<()> {
     let path = get_default_config_path().ok_or_else(|| anyhow::anyhow!("No config path"))?;
     if !path.exists() { return Ok(()); }
-    
     let content = std::fs::read_to_string(&path)?;
     let mut new_lines = Vec::new();
     let mut skip = false;
@@ -170,7 +168,6 @@ pub fn delete_host_from_config(alias: &str) -> anyhow::Result<()> {
             if val.starts_with('"') && val.ends_with('"') && val.len() >= 2 {
                 val = &val[1..val.len()-1];
             }
-            
             if val == target_alias {
                 skip = true;
                 continue;
@@ -178,19 +175,17 @@ pub fn delete_host_from_config(alias: &str) -> anyhow::Result<()> {
                 skip = false;
             }
         }
-        
         if skip && (line.starts_with(' ') || line.starts_with('\t') || line.trim().is_empty()) {
             continue;
         }
-        
         if skip {
             skip = false;
         }
-        
         new_lines.push(line);
     }
-    
-    std::fs::write(path, new_lines.join("\n"))?;
+    let tmp_path = path.with_extension("tmp");
+    std::fs::write(&tmp_path, new_lines.join("\n"))?;
+    std::fs::rename(tmp_path, path)?;
     Ok(())
 }
 
@@ -235,7 +230,6 @@ mod tests {
 
     #[test]
     fn test_add_host_to_config_emits_identity_file() {
-        // Build the config entry using the same logic as add_host_to_config.
         let host = SshHost {
             alias: "test-host".to_string(),
             hostname: "192.168.1.1".to_string(),
@@ -263,9 +257,7 @@ mod tests {
             };
             entry.push_str(&format!("    IdentityFile {}\n", id_file_quoted));
         }
-        // Verify the config string contains the IdentityFile line.
         assert!(entry.contains("IdentityFile ~/.ssh/id_ed25519"));
-        // Verify it round-trips through the parser.
         let hosts = parse_ssh_config(&entry);
         assert_eq!(hosts.len(), 1);
         assert_eq!(hosts[0].identity_file, Some("~/.ssh/id_ed25519".to_string()));
@@ -294,9 +286,7 @@ mod tests {
             };
             entry.push_str(&format!("    IdentityFile {}\n", id_file_quoted));
         }
-        // The entry must contain a properly quoted IdentityFile line.
         assert!(entry.contains("IdentityFile \"/home/user/my keys/id_rsa\""));
-        // Verify the path round-trips through the parser.
         let hosts = parse_ssh_config(&entry);
         assert_eq!(hosts.len(), 1);
         assert_eq!(hosts[0].identity_file, Some("/home/user/my keys/id_rsa".to_string()));

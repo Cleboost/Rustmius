@@ -79,7 +79,6 @@ pub fn build_ui(app: &gtk4::Application) {
     let window_clone = window.clone();
     let notebook_clone = notebook.clone();
     let refresh_ui_weak = Rc::downgrade(&refresh_ui);
-    
 
     notebook.connect_switch_page(move |nb, _, _| {
         *last_pg.borrow_mut() = nb.current_page().unwrap_or(0);
@@ -90,10 +89,6 @@ pub fn build_ui(app: &gtk4::Application) {
             nb.reorder_child(child, Some(1));
         }
     });
-
-
-
-
 
     let do_refresh = {
         let sc = stack_clone.clone();
@@ -115,17 +110,14 @@ pub fn build_ui(app: &gtk4::Application) {
             let window = sl_window.clone();
             let notebook = sl_notebook.clone();
             let refresh = sl_refresh_handle.borrow().as_ref().unwrap().clone();
-            
             match action {
                 ServerAction::Connect(host) => {
                     stack.set_visible_child_name("sessions");
-                    
                     let session_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
                     let toolbar = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
                     toolbar.set_margin_top(4);
                     toolbar.set_margin_bottom(4);
                     toolbar.set_margin_start(6);
-                    
                     let explorer_btn = gtk4::Button::from_icon_name("folder-remote-symbolic");
                     explorer_btn.add_css_class("flat");
                     explorer_btn.set_tooltip_text(Some("File Explorer"));
@@ -163,7 +155,6 @@ pub fn build_ui(app: &gtk4::Application) {
                     close_btn.add_css_class("flat");
                     tab_label_box.append(&label);
                     tab_label_box.append(&close_btn);
-                    
                     let mut insert_pos = notebook.n_pages();
                     for i in 0..notebook.n_pages() {
                         if let Some(c) = notebook.nth_page(Some(i))
@@ -172,7 +163,6 @@ pub fn build_ui(app: &gtk4::Application) {
                     notebook.insert_page(&session_box, Some(&tab_label_box), Some(insert_pos));
                     notebook.set_tab_reorderable(&session_box, true);
                     notebook.set_current_page(Some(insert_pos));
-                    
                     let nb_close = notebook.clone();
                     let sb_close = session_box.clone();
 
@@ -195,7 +185,6 @@ pub fn build_ui(app: &gtk4::Application) {
                         let h_alias = h_exp.alias.clone();
                         let nb_spawn = nb_exp.clone();
 
-                        
                         glib::MainContext::default().spawn_local(async move {
                             let mut password = None;
                             if let Ok(keyring) = oo7::Keyring::new().await {
@@ -252,18 +241,11 @@ pub fn build_ui(app: &gtk4::Application) {
                         });
                     });
 
-
-
                     let host_str = host.hostname.clone();
                     let user_str = host.user.clone().unwrap_or_else(|| "root".to_string());
                     let host_alias = host.alias.clone();
                     let exe_path = std::env::current_exe().unwrap_or_default().to_string_lossy().to_string();
                     let mut envv: Vec<String> = std::env::vars().map(|(k, v)| format!("{}={}", k, v)).collect();
-                    // Only force ASKPASS when no identity file is configured.
-                    // When key-based auth is in use, let ssh handle passphrase
-                    // prompts natively in the terminal instead of routing them
-                    // through the app's askpass helper (which returns the server
-                    // password, not the key passphrase).
                     if host.identity_file.is_none() {
                         envv.push(format!("SSH_ASKPASS={}", exe_path));
                         envv.push("SSH_ASKPASS_REQUIRE=force".to_string());
@@ -272,7 +254,6 @@ pub fn build_ui(app: &gtk4::Application) {
                     envv.push("DISPLAY=:0".to_string());
                     let env_refs: Vec<&str> = envv.iter().map(|s| s.as_str()).collect();
                     let port_str = host.port.unwrap_or(22).to_string();
-                    
                     let mut ssh_args = vec![
                         "/usr/bin/ssh".to_string(),
                         "-p".to_string(),
@@ -280,12 +261,10 @@ pub fn build_ui(app: &gtk4::Application) {
                         "-o".to_string(),
                         "StrictHostKeyChecking=no".to_string(),
                     ];
-                    
                     if let Some(identity_file) = &host.identity_file {
                         ssh_args.push("-i".to_string());
                         ssh_args.push(identity_file.clone());
                     }
-                    
                     ssh_args.push(format!("{}@{}", user_str, host_str));
                     let ssh_args_refs: Vec<&str> = ssh_args.iter().map(|s| s.as_str()).collect();
 
@@ -333,12 +312,10 @@ pub fn build_ui(app: &gtk4::Application) {
             if let Some(c) = notebook.nth_page(Some(i))
                 && c.widget_name() == "server_list_tab" { server_list_idx = Some(i); break; }
         }
-        
         sl.container.set_widget_name("server_list_tab");
         let tab_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
         tab_box.append(&gtk4::Image::from_icon_name("view-grid-symbolic"));
         tab_box.append(&gtk4::Label::new(Some("Connect")));
-        
         if let Some(idx) = server_list_idx {
             notebook.remove_page(Some(idx));
             notebook.insert_page(&sl.container, Some(&tab_box), Some(idx));

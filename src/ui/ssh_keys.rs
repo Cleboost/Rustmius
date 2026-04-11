@@ -7,19 +7,15 @@ use directories::UserDirs;
 use std::path::PathBuf;
 use crate::config_observer::load_hosts;
 
-/// Returns true iff `name` is a simple file name with no path components,
-/// no `..`, no absolute path, and no NUL bytes – safe to join onto `~/.ssh/`.
 fn is_valid_key_name(name: &str) -> bool {
     if name.is_empty() || name.contains('\0') {
         return false;
     }
     let p = std::path::Path::new(name);
-    // Must be a single component, identical to the original name.
     p.components().count() == 1
         && p.file_name().map(|n| n == std::ffi::OsStr::new(name)).unwrap_or(false)
 }
 
-/// Build an error MessageDialog with an optional transient parent window.
 fn make_error_alert(parent: Option<&gtk4::Window>, title: &str, secondary: &str) -> gtk4::MessageDialog {
     let builder = gtk4::MessageDialog::builder()
         .modal(true)
@@ -56,7 +52,6 @@ pub fn load_ssh_keys() -> Vec<SshKeyPair> {
                 if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("pub") {
                     let mut priv_path = path.clone();
                     priv_path.set_extension("");
-                    
                     if priv_path.exists() {
                         let name = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
                         keys.push(SshKeyPair {
@@ -133,10 +128,8 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
                     let hbox = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
                     hbox.set_margin_start(12); hbox.set_margin_end(12);
                     hbox.set_margin_top(12); hbox.set_margin_bottom(12);
-                    
                     let icon = gtk4::Image::from_icon_name("network-vpn-symbolic");
                     icon.set_pixel_size(24);
-                    
                     let name_lbl = gtk4::Label::new(Some(&key.name));
                     name_lbl.set_halign(gtk4::Align::Start);
                     name_lbl.set_hexpand(true);
@@ -173,7 +166,6 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
 
                         dialog.connect_response(move |d, res| {
                             if res == gtk4::ResponseType::Ok {
-                                // Delete private key first; only delete public key if that succeeds.
                                 if let Err(e) = std::fs::remove_file(&p2) {
                                     let alert = gtk4::MessageDialog::builder()
                                         .transient_for(&w_del)
@@ -237,7 +229,6 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
     gen_btn.connect_clicked(move |_| {
         show_generate_dialog(&r_win, g_refresh.clone());
     });
-    
     let w_win = window_rc.clone();
     let i_refresh = do_refresh.clone();
     import_btn.connect_clicked(move |_| {
@@ -293,7 +284,6 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
     dialog.add_button("Cancel", gtk4::ResponseType::Cancel);
 
     let key_path = key.pub_path.clone();
-    
     dialog.connect_response(move |d, res| {
         if res == gtk4::ResponseType::Ok {
             let idx = dropdown.selected();
@@ -318,10 +308,8 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
                         return;
                     }
                 };
-                
                 let parent_win_weak = d.transient_for().and_then(|w| w.downcast::<gtk4::Window>().ok());
                 let close_dialog = d.clone();
-                
                 glib::MainContext::default().spawn_local(async move {
                     let mut final_password = None;
                     if !password.is_empty() {
@@ -433,27 +421,25 @@ fn show_generate_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>)
                 alert.present();
                 return;
             }
-            
             if let Some(ssh_dir) = get_ssh_dir() {
                 let file_path = ssh_dir.join(&name);
+                let pub_path = ssh_dir.join(format!("{}.pub", name));
 
-                // Refuse to overwrite an existing key without asking.
-                if file_path.exists() {
+                if file_path.exists() || pub_path.exists() {
                     let alert = make_error_alert(
                         d.transient_for().as_ref().map(|w| w.upcast_ref()),
                         "Key Already Exists",
-                        &format!("A file named '{}' already exists in ~/.ssh/. Choose a different name.", name),
+                        &format!("A file named '{}' or its public key already exists in ~/.ssh/. Choose a different name.", name),
                     );
                     alert.present();
                     return;
                 }
 
-                // Capture a weak reference to the parent window for the
-                // result dialog shown after the blocking keygen finishes.
                 let parent_win = d.transient_for()
                     .and_then(|w| w.downcast::<gtk4::ApplicationWindow>().ok());
                 d.close();
 
+                let on_save_spawn = on_save.clone();
                 glib::MainContext::default().spawn_local(async move {
                     let result = tokio::task::spawn_blocking(move || {
                         let mut cmd = std::process::Command::new("ssh-keygen");
@@ -474,7 +460,7 @@ fn show_generate_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>)
                     };
 
                     if success {
-                        on_save();
+                        on_save_spawn();
                     } else {
                         let secondary = if stderr_msg.is_empty() {
                             "ssh-keygen exited with a non-zero status.".to_string()
@@ -519,7 +505,6 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
         .monospace(true)
         .vexpand(true)
         .build();
-    
     let scrolled = gtk4::ScrolledWindow::builder()
         .child(&text_view)
         .min_content_height(250)
@@ -555,12 +540,38 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
                 alert.present();
                 return;
             }
-            
             if let Some(ssh_dir) = get_ssh_dir() {
                 let file_path = ssh_dir.join(&name);
+                let pub_path = ssh_dir.join(format!("{}.pub", name));
 
-                // Write the private key on all platforms before invoking ssh-keygen.
-                if let Err(e) = std::fs::write(&file_path, &key_content) {
+                if file_path.exists() || pub_path.exists() {
+                    let alert = make_error_alert(
+                        d.transient_for().as_ref().map(|w| w.upcast_ref()),
+                        "Key Already Exists",
+                        &format!("A file named '{}' or its public key already exists in ~/.ssh/.", name),
+                    );
+                    alert.present();
+                    return;
+                }
+
+                #[cfg(unix)]
+                let write_result = {
+                    use std::os::unix::fs::OpenOptionsExt;
+                    std::fs::OpenOptions::new()
+                        .create(true)
+                        .truncate(true)
+                        .write(true)
+                        .mode(0o600)
+                        .open(&file_path)
+                        .and_then(|mut f| {
+                            use std::io::Write;
+                            f.write_all(key_content.as_bytes())
+                        })
+                };
+                #[cfg(not(unix))]
+                let write_result = std::fs::write(&file_path, &key_content);
+
+                if let Err(e) = write_result {
                     let alert = make_error_alert(
                         d.transient_for().as_ref().map(|w| w.upcast_ref()),
                         "Failed to Write Key File",
@@ -570,32 +581,26 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
                     return;
                 }
 
-                // On Unix, restrict permissions to owner-read/write (0600).
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    if let Ok(mut perms) = std::fs::metadata(&file_path).map(|m| m.permissions()) {
-                        perms.set_mode(0o600);
-                        let _ = std::fs::set_permissions(&file_path, perms);
-                    }
-                }
-
                 let parent_win = d.transient_for()
                     .and_then(|w| w.downcast::<gtk4::ApplicationWindow>().ok());
                 d.close();
 
+                let on_save_spawn = on_save.clone();
                 glib::MainContext::default().spawn_local(async move {
                     let pub_path = ssh_dir.join(format!("{}.pub", name));
+                    let file_path_cleanup = ssh_dir.join(&name);
+                    let file_path_keygen = ssh_dir.join(&name);
                     let result = tokio::task::spawn_blocking(move || {
                         std::process::Command::new("ssh-keygen")
                             .arg("-y")
-                            .arg("-f").arg(&file_path)
+                            .arg("-f").arg(&file_path_keygen)
                             .output()
                     }).await;
 
                     match result {
                         Ok(Ok(output)) if output.status.success() => {
                             if let Err(e) = std::fs::write(&pub_path, output.stdout) {
+                                let _ = std::fs::remove_file(&file_path_cleanup);
                                 let alert = make_error_alert(
                                     parent_win.as_ref().map(|w| w.upcast_ref()),
                                     "Failed to Write Public Key",
@@ -603,10 +608,11 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
                                 );
                                 alert.present();
                             } else {
-                                on_save();
+                                on_save_spawn();
                             }
                         }
                         Ok(Ok(output)) => {
+                            let _ = std::fs::remove_file(&file_path_cleanup);
                             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
                             let secondary = if stderr.is_empty() {
                                 "Check if the pasted key is a valid private key or if it is encrypted.".to_string()
@@ -621,6 +627,7 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
                             alert.present();
                         }
                         Ok(Err(e)) => {
+                            let _ = std::fs::remove_file(&file_path_cleanup);
                             let alert = make_error_alert(
                                 parent_win.as_ref().map(|w| w.upcast_ref()),
                                 "Key Import Failed!",
@@ -629,6 +636,7 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
                             alert.present();
                         }
                         Err(e) => {
+                            let _ = std::fs::remove_file(&file_path_cleanup);
                             let alert = make_error_alert(
                                 parent_win.as_ref().map(|w| w.upcast_ref()),
                                 "Key Import Failed!",
