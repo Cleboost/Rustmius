@@ -46,7 +46,7 @@ cargo build --release
 
 - [ ] **Server Performance Monitoring** (Custom Rust UI, htop-like experience)
 - [ ] **Docker Manager** (View images, Pull, Start/Stop/Create containers)
-- [ ] **SSH Keys Management** (Creation, Deletion, Auto-config on servers, Key-based auth UX)
+- [x] **SSH Keys Management** (Creation, Deletion, Auto-config on servers, Key-based auth UX)
 - [ ] **SyncCloud** (Optional): Cross-device synchronization or backup using fully encrypted GitHub Gists.
 - [ ] Global Settings & Themes
 
