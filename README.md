@@ -58,10 +58,18 @@ Rustmius is built upon a cutting-edge technology stack:
 - **SSH/SFTP**: `ssh2-rs`
 - **Terminal**: `vte4`
 
-## 📄 License
+## ⚖️ License & Intellectual Property
+This software is distributed under the [GNU AGPLv3 license](LICENSE).
 
-This project is licensed under the [MIT License](LICENSE).
+### Name and protection: 
+- The name "Rustmius", its logo, and its visual identity are the exclusive property of the original author.
+- While the source code is open, the use of the name "Rustmius" for derivative works (forks) or third-party commercial products is not permitted without prior written consent.
+- If you create a modified version of this software, you must rename it clearly to avoid any confusion with the official version.
 
+### Forking & Usage Constraints:
+- Forks and derivative works are permitted and encouraged, provided they remain under the same AGPLv3 license.
+- Non-Commercial Use Only: Derivative versions or forks of this project may not be used for commercial purposes or sold as proprietary software.
+- All modifications must remain public and accessible to the community
 ---
 
 *Developed with ❤️ by Cleboost.*
