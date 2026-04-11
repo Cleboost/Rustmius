@@ -3,6 +3,7 @@ use gtk4::{glib, gio};
 use crate::ui::server_list::{ServerList, ServerAction};
 use crate::ui::add_server_dialog::show_server_dialog;
 use crate::ui::file_explorer::FileExplorer;
+use crate::ui::ssh_keys::build_ssh_keys_ui;
 use crate::config_observer::{add_host_to_config, delete_host_from_config, load_hosts};
 use vte4::prelude::*;
 use std::rc::Rc;
@@ -78,7 +79,6 @@ pub fn build_ui(app: &gtk4::Application) {
     let window_clone = window.clone();
     let notebook_clone = notebook.clone();
     let refresh_ui_weak = Rc::downgrade(&refresh_ui);
-    
 
     notebook.connect_switch_page(move |nb, _, _| {
         *last_pg.borrow_mut() = nb.current_page().unwrap_or(0);
@@ -89,10 +89,6 @@ pub fn build_ui(app: &gtk4::Application) {
             nb.reorder_child(child, Some(1));
         }
     });
-
-
-
-
 
     let do_refresh = {
         let sc = stack_clone.clone();
@@ -114,17 +110,14 @@ pub fn build_ui(app: &gtk4::Application) {
             let window = sl_window.clone();
             let notebook = sl_notebook.clone();
             let refresh = sl_refresh_handle.borrow().as_ref().unwrap().clone();
-            
             match action {
                 ServerAction::Connect(host) => {
                     stack.set_visible_child_name("sessions");
-                    
                     let session_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
                     let toolbar = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
                     toolbar.set_margin_top(4);
                     toolbar.set_margin_bottom(4);
                     toolbar.set_margin_start(6);
-                    
                     let explorer_btn = gtk4::Button::from_icon_name("folder-remote-symbolic");
                     explorer_btn.add_css_class("flat");
                     explorer_btn.set_tooltip_text(Some("File Explorer"));
@@ -162,7 +155,6 @@ pub fn build_ui(app: &gtk4::Application) {
                     close_btn.add_css_class("flat");
                     tab_label_box.append(&label);
                     tab_label_box.append(&close_btn);
-                    
                     let mut insert_pos = notebook.n_pages();
                     for i in 0..notebook.n_pages() {
                         if let Some(c) = notebook.nth_page(Some(i))
@@ -171,7 +163,6 @@ pub fn build_ui(app: &gtk4::Application) {
                     notebook.insert_page(&session_box, Some(&tab_label_box), Some(insert_pos));
                     notebook.set_tab_reorderable(&session_box, true);
                     notebook.set_current_page(Some(insert_pos));
-                    
                     let nb_close = notebook.clone();
                     let sb_close = session_box.clone();
 
@@ -194,7 +185,6 @@ pub fn build_ui(app: &gtk4::Application) {
                         let h_alias = h_exp.alias.clone();
                         let nb_spawn = nb_exp.clone();
 
-                        
                         glib::MainContext::default().spawn_local(async move {
                             let mut password = None;
                             if let Ok(keyring) = oo7::Keyring::new().await {
@@ -251,20 +241,34 @@ pub fn build_ui(app: &gtk4::Application) {
                         });
                     });
 
-
-
                     let host_str = host.hostname.clone();
                     let user_str = host.user.clone().unwrap_or_else(|| "root".to_string());
                     let host_alias = host.alias.clone();
                     let exe_path = std::env::current_exe().unwrap_or_default().to_string_lossy().to_string();
                     let mut envv: Vec<String> = std::env::vars().map(|(k, v)| format!("{}={}", k, v)).collect();
-                    envv.push(format!("SSH_ASKPASS={}", exe_path));
-                    envv.push("SSH_ASKPASS_REQUIRE=force".to_string());
-                    envv.push(format!("RUSTMIUS_ASKPASS_ALIAS={}", host_alias));
+                    if host.identity_file.is_none() {
+                        envv.push(format!("SSH_ASKPASS={}", exe_path));
+                        envv.push("SSH_ASKPASS_REQUIRE=force".to_string());
+                        envv.push(format!("RUSTMIUS_ASKPASS_ALIAS={}", host_alias));
+                    }
                     envv.push("DISPLAY=:0".to_string());
                     let env_refs: Vec<&str> = envv.iter().map(|s| s.as_str()).collect();
                     let port_str = host.port.unwrap_or(22).to_string();
-                    terminal.spawn_async(vte4::PtyFlags::DEFAULT, None, &["/usr/bin/ssh", "-p", &port_str, "-o", "StrictHostKeyChecking=no", "-o", "PubkeyAuthentication=no", &format!("{}@{}", user_str, host_str)], &env_refs, glib::SpawnFlags::SEARCH_PATH, || {}, -1, None::<&gio::Cancellable>, |_| {});
+                    let mut ssh_args = vec![
+                        "/usr/bin/ssh".to_string(),
+                        "-p".to_string(),
+                        port_str,
+                        "-o".to_string(),
+                        "StrictHostKeyChecking=no".to_string(),
+                    ];
+                    if let Some(identity_file) = &host.identity_file {
+                        ssh_args.push("-i".to_string());
+                        ssh_args.push(identity_file.clone());
+                    }
+                    ssh_args.push(format!("{}@{}", user_str, host_str));
+                    let ssh_args_refs: Vec<&str> = ssh_args.iter().map(|s| s.as_str()).collect();
+
+                    terminal.spawn_async(vte4::PtyFlags::DEFAULT, None, &ssh_args_refs, &env_refs, glib::SpawnFlags::SEARCH_PATH, || {}, -1, None::<&gio::Cancellable>, |_| {});
                 },
                 ServerAction::Delete(host) => {
                     let _ = delete_host_from_config(&host.alias);
@@ -308,12 +312,10 @@ pub fn build_ui(app: &gtk4::Application) {
             if let Some(c) = notebook.nth_page(Some(i))
                 && c.widget_name() == "server_list_tab" { server_list_idx = Some(i); break; }
         }
-        
         sl.container.set_widget_name("server_list_tab");
         let tab_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
         tab_box.append(&gtk4::Image::from_icon_name("view-grid-symbolic"));
         tab_box.append(&gtk4::Label::new(Some("Connect")));
-        
         if let Some(idx) = server_list_idx {
             notebook.remove_page(Some(idx));
             notebook.insert_page(&sl.container, Some(&tab_box), Some(idx));
@@ -351,16 +353,7 @@ pub fn build_ui(app: &gtk4::Application) {
     let stack_nav_settings = stack.clone();
     btn_settings.connect_clicked(move |_| { stack_nav_settings.set_visible_child_name("settings"); });
 
-    let keys_box = gtk4::Box::new(gtk4::Orientation::Vertical, 24);
-    keys_box.set_margin_top(48); keys_box.set_margin_bottom(48); keys_box.set_margin_start(48); keys_box.set_margin_end(48);
-    keys_box.set_halign(gtk4::Align::Center); keys_box.set_valign(gtk4::Align::Center);
-    let wip_icon = gtk4::Image::from_icon_name("system-shutdown-symbolic");
-    wip_icon.set_pixel_size(96); wip_icon.add_css_class("dim-label");
-    let wip_label = gtk4::Label::new(Some("SSH Keys Management - WIP"));
-    wip_label.add_css_class("title-1");
-    let wip_subtitle = gtk4::Label::new(Some("This feature is under development"));
-    wip_subtitle.add_css_class("dim-label"); wip_subtitle.add_css_class("title-4");
-    keys_box.append(&wip_icon); keys_box.append(&wip_label); keys_box.append(&wip_subtitle);
+    let keys_box = build_ssh_keys_ui(&window);
     stack.add_named(&keys_box, Some("ssh_keys"));
 
     let settings_box = gtk4::Box::new(gtk4::Orientation::Vertical, 24);

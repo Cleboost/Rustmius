@@ -19,7 +19,6 @@ fn log_debug(msg: &str) {
 #[tokio::main]
 async fn main() {
     let _args: Vec<String> = std::env::args().collect();
-    
     if let Ok(alias) = std::env::var("RUSTMIUS_ASKPASS_ALIAS") {
         log_debug(&format!("AskPass triggered for alias: {}", alias));
         if let Ok(keyring) = oo7::Keyring::new().await {
@@ -32,7 +31,6 @@ async fn main() {
                     && let Ok(password) = item.secret().await
                         && let Ok(pass_str) = std::str::from_utf8(&password) {
                             log_debug("Password retrieved successfully, sending to SSH");
-                            
                             print!("{}", pass_str);
                             std::process::exit(0);
                         }

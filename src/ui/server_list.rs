@@ -13,14 +13,13 @@ pub struct ServerList {
 }
 
 impl ServerList {
-    pub fn new<F>(on_action: F) -> Self 
+    pub fn new<F>(on_action: F) -> Self
     where F: Fn(ServerAction) + 'static + Clone
     {
         let scrolled = gtk4::ScrolledWindow::builder()
             .hscrollbar_policy(gtk4::PolicyType::Never)
             .vexpand(true)
             .build();
-        
         let flow_box = gtk4::FlowBox::builder()
             .selection_mode(gtk4::SelectionMode::None)
             .valign(gtk4::Align::Start)
@@ -33,7 +32,6 @@ impl ServerList {
             .margin_start(24)
             .margin_end(24)
             .build();
-        
         scrolled.set_child(Some(&flow_box));
 
         let sl = Self { container: scrolled, flow_box };
@@ -41,7 +39,7 @@ impl ServerList {
         sl
     }
 
-    pub fn refresh<F>(&self, on_action: F) 
+    pub fn refresh<F>(&self, on_action: F)
     where F: Fn(ServerAction) + 'static + Clone
     {
         while let Some(child) = self.flow_box.first_child() {
@@ -54,7 +52,7 @@ impl ServerList {
         }
     }
 
-    fn add_host_row<F>(&self, host: &SshHost, on_action: F) 
+    fn add_host_row<F>(&self, host: &SshHost, on_action: F)
     where F: Fn(ServerAction) + 'static + Clone
     {
         let frame = gtk4::Frame::new(None);
@@ -67,7 +65,6 @@ impl ServerList {
         content_box.set_margin_end(12);
 
         let header_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
-        
         let alias_label = gtk4::Label::builder()
             .label(&host.alias)
             .halign(gtk4::Align::Start)
@@ -76,7 +73,6 @@ impl ServerList {
             .build();
 
         let actions_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
-        
         let edit_btn = gtk4::Button::from_icon_name("document-edit-symbolic");
         edit_btn.add_css_class("flat");
         let host_edit = host.clone();

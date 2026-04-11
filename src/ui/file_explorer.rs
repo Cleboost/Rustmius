@@ -14,7 +14,6 @@ pub struct FileExplorer {
     status_label: gtk4::Label,
     host: SshHost,
     password: Option<String>,
-    
     files: Rc<RefCell<Vec<RemoteFile>>>,
 }
 
@@ -144,7 +143,6 @@ impl FileExplorer {
                     && let Ok(uris_str) = std::str::from_utf8(bytes.as_ref()) {
                         paths.extend(parse_uri_list_paths(uris_str));
                     }
-            
             if paths.is_empty()
                 && let Ok(uris_str) = value.get::<String>() {
                     paths.extend(parse_uri_list_paths(&uris_str));
@@ -352,7 +350,6 @@ impl ExplorerHandle {
                 let h = h_drag.clone();
                 let f = f_drag.clone();
                 let remote_path = format!("{}{}", h.current_path.borrow(), f.name);
-                
                 let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros();
                 let local_tmp_part = format!("/tmp/rustmius_dnd_{}_{}.part", ts, f.name);
                 let local_tmp = format!("/tmp/rustmius_dnd_{}_{}", ts, f.name);
@@ -370,7 +367,6 @@ impl ExplorerHandle {
                 let host = h.host.clone();
                 let password = h.password.clone();
                 let rp = remote_path.clone();
-                
                 let lp_part = local_tmp_part.clone();
                 let lp_final = local_tmp.clone();
 
@@ -420,17 +416,15 @@ impl ExplorerHandle {
                     let hi = h_dl.clone(); let fi = f_dl.clone();
                     let rp = format!("{}{}", hi.current_path.borrow(), fi.name);
                     let parent_window = hi.list_box.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-                    
                     let dialog = gtk4::FileDialog::builder()
                         .title("Save As")
                         .initial_name(&fi.name)
                         .build();
-                        
                     let hii = hi.clone();
                     if let Some(w) = parent_window {
                         dialog.save(Some(&w), gio::Cancellable::NONE, move |res| {
-                            if let Ok(file) = res {
-                                if let Some(path) = file.path() {
+                            if let Ok(file) = res
+                                && let Some(path) = file.path() {
                                     let lp = path.to_string_lossy().to_string();
                                     hii.status_label.set_text(&format!("Downloading {}...", fi.name));
                                     let hiii = hii.clone();
@@ -444,7 +438,6 @@ impl ExplorerHandle {
                                         }
                                     });
                                 }
-                            }
                         });
                     }
                 });
@@ -492,7 +485,6 @@ impl ExplorerHandle {
             group.add_action(&ren_action);
 
             if f.is_dir {
-                
                 let h_nf = h.clone(); let f_nf = f.clone();
                 let nf_action = gio::SimpleAction::new("new_file", None);
                 nf_action.connect_activate(move |_, _| {
@@ -616,19 +608,15 @@ where F: Fn(String) + 'static
     if let Some(p) = parent {
         dialog.set_transient_for(Some(p));
     }
-    
     let content = dialog.content_area();
     content.set_margin_top(12); content.set_margin_bottom(12);
     content.set_margin_start(12); content.set_margin_end(12);
     content.set_spacing(12);
     content.append(&gtk4::Label::new(Some(label)));
-    
     let entry = gtk4::Entry::builder().text(initial).build();
     content.append(&entry);
-    
     dialog.add_button("Cancel", gtk4::ResponseType::Cancel);
     dialog.add_button("OK", gtk4::ResponseType::Ok);
-    
     dialog.connect_response(move |d, res| {
         if res == gtk4::ResponseType::Ok {
             let text = entry.text().to_string();
