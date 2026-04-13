@@ -4,6 +4,10 @@
 [![License](https://img.shields.io/github/license/Cleboost/Rustmius?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-linux-lightgrey?style=flat-square)](https://github.com/Cleboost/Rustmius)
 
+<p align="center">
+  <img src=".github/assets/thumbail.png" alt="Rustmius Screenshot" width="800">
+</p>
+
 **Rustmius** is a modern, fast, and local alternative to Termius, designed specifically for the Linux ecosystem. Built with Rust using GTK4, it provides a premium user experience while ensuring maximum security by keeping all your configurations stored locally.
 
 ---
