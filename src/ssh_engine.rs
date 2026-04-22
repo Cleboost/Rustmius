@@ -81,7 +81,7 @@ pub fn deploy_pubkey(host: &SshHost, password: Option<String>, pubkey_content: &
     Ok(())
 }
 
-pub async fn run_remote_command(host: SshHost, password: Option<String>, command: &str) -> anyhow::Result<String> {
+pub fn run_remote_command(host: SshHost, password: Option<String>, command: &str) -> anyhow::Result<String> {
     let port = host.port.unwrap_or(22);
     let addrs = format!("{}:{}", host.hostname, port).to_socket_addrs()?;
     let mut tcp_opt = None;

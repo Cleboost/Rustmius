@@ -215,10 +215,8 @@ impl SystemMonitor {
                 let h = h_clone.clone();
                 let p = p_clone.clone();
                 
-                // Move SSH command to background thread to avoid freezing UI
                 let result = tokio::task::spawn_blocking(move || {
-                    let rt = tokio::runtime::Handle::current();
-                    rt.block_on(async { run_remote_command(h, p, cmd).await })
+                    run_remote_command(h, p, cmd)
                 }).await;
 
                 if let Ok(Ok(output)) = result {
