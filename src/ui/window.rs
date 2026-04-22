@@ -194,7 +194,7 @@ pub fn build_ui(app: &gtk4::Application) {
                                 if let Ok(items) = keyring.search_items(&attr).await
                                     && let Some(item) = items.first()
                                         && let Ok(pass) = item.secret().await {
-                                            password = Some(String::from_utf8_lossy(&pass).to_string());
+                                            password = std::str::from_utf8(pass.as_ref()).map(String::from).ok();
                                         }
                             }
 
