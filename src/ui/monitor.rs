@@ -298,7 +298,7 @@ impl SystemMonitor {
         let v_lbl = gtk4::Label::builder()
             .label(value)
             .halign(gtk4::Align::Start)
-            .use_markup(true)
+            .use_markup(false)
             .build();
         v_lbl.add_css_class("body");
         (t_lbl, v_lbl)
