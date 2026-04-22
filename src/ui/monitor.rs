@@ -208,9 +208,8 @@ impl SystemMonitor {
                            echo \"---IPS---\"; ip -brief addr show | awk '{print $1 \": \" $3}'; \
                            echo \"---RAM---\"; free -h | grep Mem | awk '{print $3 \" / \" $2}'; \
                            echo \"---RAM_P---\"; free | grep Mem | awk '{print $3/$2}'; \
-                           echo \"---DISK---\"; df -Ph / | tail -1 | awk '{print $3 \" / \" $2}'; \
-                           echo \"---DISK_P---\"; df -Ph / | tail -1 | awk '{print $5}' | tr -d '%'; \
-                           echo \"---CPU_P---\"; top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\) id.*/\\1/\" | awk '{print 100 - $1}'";
+                           echo \"---DISK_ALL---\"; df -h / --output=pcent,used,size | awk 'NR==2 {print $1, $2, $3}'; \
+                           echo \"---CPU_P---\"; top -bn2 -d 0.2 | grep \"%Cpu\" | tail -1 | awk -F',' '{for(i=1;i<=NF;i++) if($i ~ /id/) print $i}' | awk '{print 100-$1}'";
 
                 let h = h_clone.clone();
                 let p = p_clone.clone();
@@ -245,16 +244,16 @@ impl SystemMonitor {
                                         st.ram_total = parts[1].to_string();
                                     }
                                 },
-                                "---RAM_P---" => st.target_ram = line.replace(',', ".").parse().unwrap_or(0.0),
-                                "---DISK---" => {
-                                    let parts: Vec<&str> = line.split(" / ").collect();
-                                    if parts.len() == 2 {
-                                        st.disk_used = parts[0].trim().to_string();
-                                        st.disk_total = parts[1].trim().to_string();
+                                "---RAM_P---" => st.target_ram = line.trim().replace(',', ".").parse().unwrap_or(0.0),
+                                "---DISK_ALL---" => {
+                                    let parts: Vec<&str> = line.split_whitespace().collect();
+                                    if parts.len() == 3 {
+                                        st.target_disk = parts[0].trim_end_matches('%').replace(',', ".").parse::<f64>().unwrap_or(0.0) / 100.0;
+                                        st.disk_used = parts[1].to_string();
+                                        st.disk_total = parts[2].to_string();
                                     }
                                 },
-                                "---DISK_P---" => st.target_disk = line.replace(',', ".").parse::<f64>().unwrap_or(0.0) / 100.0,
-                                "---CPU_P---" => st.target_cpu = line.replace(',', ".").parse::<f64>().unwrap_or(0.0) / 100.0,
+                                "---CPU_P---" => st.target_cpu = line.trim().replace(',', ".").parse::<f64>().unwrap_or(0.0) / 100.0,
                                 _ => {}
                             }
                         }
