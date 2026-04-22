@@ -319,7 +319,7 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
                         if let Ok(items) = keyring.search_items(&attr).await
                             && let Some(item) = items.first()
                                 && let Ok(pass) = item.secret().await {
-                                    final_password = Some(String::from_utf8_lossy(pass.as_ref()).to_string());
+                                    final_password = std::str::from_utf8(pass.as_ref()).map(String::from).ok();
                                 }
                     }
 
