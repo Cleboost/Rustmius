@@ -3,6 +3,7 @@ use gtk4::{glib, gio};
 use crate::ui::server_list::{ServerList, ServerAction};
 use crate::ui::add_server_dialog::show_server_dialog;
 use crate::ui::file_explorer::FileExplorer;
+use crate::ui::monitor::SystemMonitor;
 use crate::ui::ssh_keys::build_ssh_keys_ui;
 use crate::config_observer::{add_host_to_config, delete_host_from_config, load_hosts};
 use vte4::prelude::*;
@@ -124,7 +125,7 @@ pub fn build_ui(app: &gtk4::Application) {
 
                     let monitor_btn = gtk4::Button::from_icon_name("utilities-system-monitor-symbolic");
                     monitor_btn.add_css_class("flat");
-                    monitor_btn.set_tooltip_text(Some("System Monitor (WIP)"));
+                    monitor_btn.set_tooltip_text(Some("System Monitor"));
 
                     let docker_btn = gtk4::Button::from_icon_name("view-grid-symbolic");
                     docker_btn.add_css_class("flat");
@@ -229,6 +230,69 @@ pub fn build_ui(app: &gtk4::Application) {
                             let ex_c = explorer.container.clone();
                             exp_close.connect_clicked(move |_| {
                                 let idx = nb_c.page_num(&ex_c);
+                                if let Some(i) = idx {
+                                    let current = nb_c.current_page();
+                                    if current == Some(i) && nb_c.n_pages() > 2 {
+                                        let target = if i > 0 { i - 1 } else { 1 };
+                                        nb_c.set_current_page(Some(target));
+                                    }
+                                    nb_c.remove_page(Some(i));
+                                }
+                            });
+                        });
+                    });
+
+                    let nb_mon = notebook.clone();
+                    let host_mon = host.clone();
+                    monitor_btn.connect_clicked(move |_| {
+                        let h_mon = host_mon.clone();
+                        let h_alias = h_mon.alias.clone();
+                        let nb_spawn = nb_mon.clone();
+
+                        glib::MainContext::default().spawn_local(async move {
+                            let mut password = None;
+                            if let Ok(keyring) = oo7::Keyring::new().await {
+                                let mut attr = std::collections::HashMap::new();
+                                let alias_lower = h_alias.to_lowercase();
+                                attr.insert("rustmius-server-alias", alias_lower.as_str());
+                                if let Ok(items) = keyring.search_items(&attr).await
+                                    && let Some(item) = items.first()
+                                        && let Ok(pass) = item.secret().await {
+                                            password = std::str::from_utf8(pass.as_ref()).map(String::from).ok();
+                                        }
+                            }
+
+                            let monitor = SystemMonitor::new(h_mon, password);
+
+                            let mut count = 0;
+                            for i in 0..nb_spawn.n_pages() {
+                                if let Some(p) = nb_spawn.nth_page(Some(i))
+                                    && p.widget_name().starts_with(&format!("monitor:{}", h_alias)) {
+                                        count += 1;
+                                    }
+                            }
+                            monitor.container.set_widget_name(&format!("monitor:{}:{}", h_alias, count));
+
+                            let display_name = if count > 0 { format!("📈 {} ({})", h_alias, count) } else { format!("📈 {}", h_alias) };
+                            let mon_tab_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+                            mon_tab_box.append(&gtk4::Label::new(Some(&display_name)));
+                            let mon_close = gtk4::Button::from_icon_name("window-close-symbolic");
+                            mon_close.add_css_class("flat");
+                            mon_tab_box.append(&mon_close);
+
+                            let mut ins_pos = nb_spawn.n_pages();
+                            for i in 0..nb_spawn.n_pages() {
+                                if let Some(c) = nb_spawn.nth_page(Some(i))
+                                    && c.widget_name() == "plus_tab_dummy" { ins_pos = i; break; }
+                            }
+                            nb_spawn.insert_page(&monitor.container, Some(&mon_tab_box), Some(ins_pos));
+                            nb_spawn.set_tab_reorderable(&monitor.container, true);
+                            nb_spawn.set_current_page(Some(ins_pos));
+
+                            let nb_c = nb_spawn.clone();
+                            let mo_c = monitor.container.clone();
+                            mon_close.connect_clicked(move |_| {
+                                let idx = nb_c.page_num(&mo_c);
                                 if let Some(i) = idx {
                                     let current = nb_c.current_page();
                                     if current == Some(i) && nb_c.n_pages() > 2 {

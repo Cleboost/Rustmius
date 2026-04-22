@@ -1,7 +1,7 @@
 use ssh2::Session;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
-use std::io::Write;
+use std::io::{Read, Write};
 use anyhow::Context;
 use crate::config_observer::{SshHost, expand_tilde};
 
@@ -79,4 +79,45 @@ pub fn deploy_pubkey(host: &SshHost, password: Option<String>, pubkey_content: &
     channel.close()?;
     channel.wait_close()?;
     Ok(())
+}
+
+pub async fn run_remote_command(host: SshHost, password: Option<String>, command: &str) -> anyhow::Result<String> {
+    let port = host.port.unwrap_or(22);
+    let addrs = format!("{}:{}", host.hostname, port).to_socket_addrs()?;
+    let mut tcp_opt = None;
+    for addr in addrs {
+        if let Ok(stream) = TcpStream::connect_timeout(&addr, Duration::from_secs(5)) {
+            tcp_opt = Some(stream);
+            break;
+        }
+    }
+    let tcp = tcp_opt.ok_or_else(|| anyhow::anyhow!("Connection timeout to {}", host.hostname))?;
+    let mut sess = Session::new()?;
+    sess.set_tcp_stream(tcp);
+    sess.handshake()?;
+
+    let user = host.user.as_deref().unwrap_or("root");
+    let mut authenticated = false;
+    if let Some(ref key_path) = host.identity_file {
+        let path = expand_tilde(key_path);
+        if sess.userauth_pubkey_file(user, None, &path, None).is_ok() {
+            authenticated = true;
+        }
+    }
+    if !authenticated && sess.userauth_agent(user).is_ok() {
+        authenticated = true;
+    }
+    if !authenticated && let Some(pass) = password && sess.userauth_password(user, &pass).is_ok() {
+        authenticated = true;
+    }
+    if !authenticated {
+        return Err(anyhow::anyhow!("Authentication failed"));
+    }
+
+    let mut channel = sess.channel_session()?;
+    channel.exec(command)?;
+    let mut output = String::new();
+    channel.read_to_string(&mut output)?;
+    channel.wait_close()?;
+    Ok(output)
 }

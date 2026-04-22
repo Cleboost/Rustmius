@@ -1344,6 +1344,7 @@ name = "rustmius"
 version = "2.1.0"
 dependencies = [
  "anyhow",
+ "cairo-rs",
  "chrono",
  "directories",
  "gtk4",
