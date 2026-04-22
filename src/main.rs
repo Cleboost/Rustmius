@@ -29,7 +29,7 @@ async fn main() {
                 log_debug(&format!("Found {} items in keyring", items.len()));
                 if let Some(item) = items.first()
                     && let Ok(password) = item.secret().await
-                        && let Ok(pass_str) = std::str::from_utf8(&password) {
+                        && let Ok(pass_str) = std::str::from_utf8(password.as_ref()) {
                             log_debug("Password retrieved successfully, sending to SSH");
                             print!("{}", pass_str);
                             std::process::exit(0);
