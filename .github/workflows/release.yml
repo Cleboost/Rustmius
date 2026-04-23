@@ -217,7 +217,7 @@ jobs:
           fi
 
       - name: Publish AUR package
-        uses: KSXGitHub/github-actions-deploy-aur@v4.1.2
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.3
         with:
           pkgname: rustmius-bin
           pkgbuild: ./PKGBUILD
