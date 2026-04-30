@@ -14,7 +14,7 @@ anyhow = "1.0"
 directories = "6.0"
 oo7 = "0.6"
 chrono = "0.4"
-cairo-rs = { version = "0.21", features = ["use_glib"] }
+cairo-rs = { version = "0.22", features = ["use_glib"] }
 
 [profile.release]
 opt-level = 3
