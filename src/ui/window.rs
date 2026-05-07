@@ -1,5 +1,5 @@
 use gtk4::prelude::*;
-use gtk4::{glib, gio};
+use gtk4::{glib, gio, gdk};
 use crate::ui::server_list::{ServerList, ServerAction};
 use crate::ui::add_server_dialog::show_server_dialog;
 use crate::ui::file_explorer::FileExplorer;
@@ -138,6 +138,31 @@ pub fn build_ui(app: &gtk4::Application) {
 
                     let terminal = vte4::Terminal::new();
                     terminal.set_vexpand(true);
+
+                    let key_controller = gtk4::EventControllerKey::new();
+                    let terminal_clone = terminal.clone();
+                    key_controller.connect_key_pressed(move |_controller, keyval, _keycode, state| {
+                        let is_ctrl = state.contains(gdk::ModifierType::CONTROL_MASK);
+                        let is_shift = state.contains(gdk::ModifierType::SHIFT_MASK);
+
+                        if is_ctrl && is_shift {
+                            match keyval {
+                                gdk::Key::C => {
+                                    terminal_clone.copy_clipboard_format(vte4::Format::Text);
+                                    glib::Propagation::Stop
+                                }
+                                gdk::Key::V => {
+                                    terminal_clone.paste_clipboard();
+                                    glib::Propagation::Stop
+                                }
+                                _ => glib::Propagation::Proceed,
+                            }
+                        } else {
+                            glib::Propagation::Proceed
+                        }
+                    });
+                    terminal.add_controller(key_controller);
+
                     session_box.append(&terminal);
 
                     let mut count = 0;
