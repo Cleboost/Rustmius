@@ -192,7 +192,9 @@ pub fn build_ui(app: &gtk4::Application) {
                     let nb_close = notebook.clone();
                     let sb_close = session_box.clone();
 
-                    close_btn.connect_clicked(move |_| {
+                    let close_gesture = gtk4::GestureClick::new();
+                    close_gesture.connect_pressed(move |gesture, _, _, _| {
+                        gesture.set_state(gtk4::EventSequenceState::Claimed);
                         let idx = nb_close.page_num(&sb_close);
                         if let Some(i) = idx {
                             let current = nb_close.current_page();
@@ -203,6 +205,7 @@ pub fn build_ui(app: &gtk4::Application) {
                             nb_close.remove_page(Some(i));
                         }
                     });
+                    close_btn.add_controller(close_gesture);
 
                     let nb_exp = notebook.clone();
                     let host_exp = host.clone();
@@ -253,7 +256,10 @@ pub fn build_ui(app: &gtk4::Application) {
 
                             let nb_c = nb_spawn.clone();
                             let ex_c = explorer.container.clone();
-                            exp_close.connect_clicked(move |_| {
+
+                            let exp_close_gesture = gtk4::GestureClick::new();
+                            exp_close_gesture.connect_pressed(move |gesture, _, _, _| {
+                                gesture.set_state(gtk4::EventSequenceState::Claimed);
                                 let idx = nb_c.page_num(&ex_c);
                                 if let Some(i) = idx {
                                     let current = nb_c.current_page();
@@ -264,6 +270,7 @@ pub fn build_ui(app: &gtk4::Application) {
                                     nb_c.remove_page(Some(i));
                                 }
                             });
+                            exp_close.add_controller(exp_close_gesture);
                         });
                     });
 
@@ -316,7 +323,10 @@ pub fn build_ui(app: &gtk4::Application) {
 
                             let nb_c = nb_spawn.clone();
                             let mo_c = monitor.container.clone();
-                            mon_close.connect_clicked(move |_| {
+
+                            let mon_close_gesture = gtk4::GestureClick::new();
+                            mon_close_gesture.connect_pressed(move |gesture, _, _, _| {
+                                gesture.set_state(gtk4::EventSequenceState::Claimed);
                                 let idx = nb_c.page_num(&mo_c);
                                 if let Some(i) = idx {
                                     let current = nb_c.current_page();
@@ -327,6 +337,7 @@ pub fn build_ui(app: &gtk4::Application) {
                                     nb_c.remove_page(Some(i));
                                 }
                             });
+                            mon_close.add_controller(mon_close_gesture);
                         });
                     });
 
