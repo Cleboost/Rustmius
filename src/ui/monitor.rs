@@ -47,7 +47,10 @@ impl SystemMonitor {
         let toolbar = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
         let refresh_label = gtk4::Label::new(Some("Refresh Rate:"));
         let refresh_dropdown = gtk4::DropDown::from_strings(&["1s", "3s", "5s", "10s"]);
-        refresh_dropdown.set_selected(1);
+        
+        let app_config = crate::config_observer::load_app_config();
+        refresh_dropdown.set_selected(app_config.monitor_refresh_rate);
+        
         toolbar.append(&refresh_label);
         toolbar.append(&refresh_dropdown);
         toolbar.set_halign(gtk4::Align::End);

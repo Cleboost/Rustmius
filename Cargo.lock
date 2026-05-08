@@ -1415,6 +1415,7 @@ dependencies = [
  "nucleo-matcher",
  "oo7",
  "serde",
+ "serde_json",
  "ssh2",
  "tokio",
  "vte4",

@@ -15,6 +15,49 @@ pub fn expand_tilde(path: &str) -> PathBuf {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AppConfig {
+    pub monitor_refresh_rate: u32, // index: 0=1s, 1=3s, 2=5s, 3=10s
+    pub terminal_font: String,
+    pub terminal_scrollback: u32,
+    pub confirm_tab_close: bool,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            monitor_refresh_rate: 1, // 3s
+            terminal_font: "Monospace 11".to_string(),
+            terminal_scrollback: 10000,
+            confirm_tab_close: false,
+        }
+    }
+}
+
+pub fn get_app_config_path() -> Option<PathBuf> {
+    directories::ProjectDirs::from("org", "rustmius", "Rustmius")
+        .map(|dirs| dirs.config_dir().join("config.json"))
+}
+
+pub fn load_app_config() -> AppConfig {
+    if let Some(path) = get_app_config_path()
+        && path.exists()
+            && let Ok(content) = fs::read_to_string(path) {
+                return serde_json::from_str(&content).unwrap_or_default();
+            }
+    AppConfig::default()
+}
+
+pub fn save_app_config(config: &AppConfig) -> anyhow::Result<()> {
+    let path = get_app_config_path().ok_or_else(|| anyhow::anyhow!("Could not find app config path"))?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let content = serde_json::to_string_pretty(config)?;
+    fs::write(path, content)?;
+    Ok(())
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SshHost {
     pub alias: String,
     pub hostname: String,

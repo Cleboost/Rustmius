@@ -138,6 +138,11 @@ pub fn build_ui(app: &gtk4::Application) {
 
                     let terminal = vte4::Terminal::new();
                     terminal.set_vexpand(true);
+                    
+                    let app_config = crate::config_observer::load_app_config();
+                    let font_desc = gtk4::pango::FontDescription::from_string(&app_config.terminal_font);
+                    terminal.set_font(Some(&font_desc));
+                    terminal.set_scrollback_lines(app_config.terminal_scrollback as i64);
 
                     let key_controller = gtk4::EventControllerKey::new();
                     let terminal_clone = terminal.clone();
@@ -191,28 +196,45 @@ pub fn build_ui(app: &gtk4::Application) {
                     notebook.set_current_page(Some(insert_pos));
                     let nb_close = notebook.clone();
                     let sb_close = session_box.clone();
+                    let win_ref = window.clone();
 
                     let close_gesture = gtk4::GestureClick::new();
                     close_gesture.connect_pressed(move |gesture, _, _, _| {
                         gesture.set_state(gtk4::EventSequenceState::Claimed);
-                        let idx = nb_close.page_num(&sb_close);
-                        if let Some(i) = idx {
-                            let current = nb_close.current_page();
-                            if current == Some(i) && nb_close.n_pages() > 2 {
-                                let target = if i > 0 { i - 1 } else { 1 };
-                                nb_close.set_current_page(Some(target));
+                        
+                        let nb = nb_close.clone();
+                        let sb = sb_close.clone();
+                        let win = win_ref.clone();
+
+                        let on_confirm = move || {
+                            let idx = nb.page_num(&sb);
+                            if let Some(i) = idx {
+                                let current = nb.current_page();
+                                if current == Some(i) && nb.n_pages() > 2 {
+                                    let target = if i > 0 { i - 1 } else { 1 };
+                                    nb.set_current_page(Some(target));
+                                }
+                                nb.remove_page(Some(i));
                             }
-                            nb_close.remove_page(Some(i));
+                        };
+
+                        let app_config = crate::config_observer::load_app_config();
+                        if app_config.confirm_tab_close {
+                            show_close_confirmation(&win, "Close Tab?", "Are you sure you want to close this session?", on_confirm);
+                        } else {
+                            on_confirm();
                         }
                     });
                     close_btn.add_controller(close_gesture);
 
                     let nb_exp = notebook.clone();
                     let host_exp = host.clone();
+                    let win_exp = window.clone();
                     explorer_btn.connect_clicked(move |_| {
                         let h_exp = host_exp.clone();
                         let h_alias = h_exp.alias.clone();
                         let nb_spawn = nb_exp.clone();
+                        let window = win_exp.clone();
 
                         glib::MainContext::default().spawn_local(async move {
                             let mut password = None;
@@ -256,18 +278,32 @@ pub fn build_ui(app: &gtk4::Application) {
 
                             let nb_c = nb_spawn.clone();
                             let ex_c = explorer.container.clone();
+                            let win_c = window.clone();
 
                             let exp_close_gesture = gtk4::GestureClick::new();
                             exp_close_gesture.connect_pressed(move |gesture, _, _, _| {
                                 gesture.set_state(gtk4::EventSequenceState::Claimed);
-                                let idx = nb_c.page_num(&ex_c);
-                                if let Some(i) = idx {
-                                    let current = nb_c.current_page();
-                                    if current == Some(i) && nb_c.n_pages() > 2 {
-                                        let target = if i > 0 { i - 1 } else { 1 };
-                                        nb_c.set_current_page(Some(target));
+                                let nb = nb_c.clone();
+                                let ex = ex_c.clone();
+                                let win = win_c.clone();
+
+                                let on_confirm = move || {
+                                    let idx = nb.page_num(&ex);
+                                    if let Some(i) = idx {
+                                        let current = nb.current_page();
+                                        if current == Some(i) && nb.n_pages() > 2 {
+                                            let target = if i > 0 { i - 1 } else { 1 };
+                                            nb.set_current_page(Some(target));
+                                        }
+                                        nb.remove_page(Some(i));
                                     }
-                                    nb_c.remove_page(Some(i));
+                                };
+
+                                let app_config = crate::config_observer::load_app_config();
+                                if app_config.confirm_tab_close {
+                                    show_close_confirmation(&win, "Close Explorer?", "Are you sure you want to close this explorer tab?", on_confirm);
+                                } else {
+                                    on_confirm();
                                 }
                             });
                             exp_close.add_controller(exp_close_gesture);
@@ -276,10 +312,12 @@ pub fn build_ui(app: &gtk4::Application) {
 
                     let nb_mon = notebook.clone();
                     let host_mon = host.clone();
+                    let win_mon = window.clone();
                     monitor_btn.connect_clicked(move |_| {
                         let h_mon = host_mon.clone();
                         let h_alias = h_mon.alias.clone();
                         let nb_spawn = nb_mon.clone();
+                        let window = win_mon.clone();
 
                         glib::MainContext::default().spawn_local(async move {
                             let mut password = None;
@@ -323,18 +361,32 @@ pub fn build_ui(app: &gtk4::Application) {
 
                             let nb_c = nb_spawn.clone();
                             let mo_c = monitor.container.clone();
+                            let win_c = window.clone();
 
                             let mon_close_gesture = gtk4::GestureClick::new();
                             mon_close_gesture.connect_pressed(move |gesture, _, _, _| {
                                 gesture.set_state(gtk4::EventSequenceState::Claimed);
-                                let idx = nb_c.page_num(&mo_c);
-                                if let Some(i) = idx {
-                                    let current = nb_c.current_page();
-                                    if current == Some(i) && nb_c.n_pages() > 2 {
-                                        let target = if i > 0 { i - 1 } else { 1 };
-                                        nb_c.set_current_page(Some(target));
+                                let nb = nb_c.clone();
+                                let mo = mo_c.clone();
+                                let win = win_c.clone();
+
+                                let on_confirm = move || {
+                                    let idx = nb.page_num(&mo);
+                                    if let Some(i) = idx {
+                                        let current = nb.current_page();
+                                        if current == Some(i) && nb.n_pages() > 2 {
+                                            let target = if i > 0 { i - 1 } else { 1 };
+                                            nb.set_current_page(Some(target));
+                                        }
+                                        nb.remove_page(Some(i));
                                     }
-                                    nb_c.remove_page(Some(i));
+                                };
+
+                                let app_config = crate::config_observer::load_app_config();
+                                if app_config.confirm_tab_close {
+                                    show_close_confirmation(&win, "Close Monitor?", "Are you sure you want to close this monitoring tab?", on_confirm);
+                                } else {
+                                    on_confirm();
                                 }
                             });
                             mon_close.add_controller(mon_close_gesture);
@@ -456,16 +508,7 @@ pub fn build_ui(app: &gtk4::Application) {
     let keys_box = build_ssh_keys_ui(&window);
     stack.add_named(&keys_box, Some("ssh_keys"));
 
-    let settings_box = gtk4::Box::new(gtk4::Orientation::Vertical, 24);
-    settings_box.set_margin_top(48); settings_box.set_margin_bottom(48); settings_box.set_margin_start(48); settings_box.set_margin_end(48);
-    settings_box.set_halign(gtk4::Align::Center); settings_box.set_valign(gtk4::Align::Center);
-    let settings_icon = gtk4::Image::from_icon_name("emblem-system-symbolic");
-    settings_icon.set_pixel_size(96); settings_icon.add_css_class("dim-label");
-    let settings_label = gtk4::Label::new(Some("Settings - WIP"));
-    settings_label.add_css_class("title-1");
-    let settings_subtitle = gtk4::Label::new(Some("This feature is under development"));
-    settings_subtitle.add_css_class("dim-label"); settings_subtitle.add_css_class("title-4");
-    settings_box.append(&settings_icon); settings_box.append(&settings_label); settings_box.append(&settings_subtitle);
+    let settings_box = build_settings_ui(&window);
     stack.add_named(&settings_box, Some("settings"));
 
     let window_add = window.clone();
@@ -494,4 +537,157 @@ pub fn build_ui(app: &gtk4::Application) {
 
     root.append(&sidebar); root.append(&separator); root.append(&content_box);
     window.set_child(Some(&root)); window.present();
+}
+
+fn build_settings_ui(parent_window: &gtk4::ApplicationWindow) -> gtk4::Box {
+    let config = crate::config_observer::load_app_config();
+    let container = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+    
+    let scrolled = gtk4::ScrolledWindow::builder()
+        .vexpand(true)
+        .hscrollbar_policy(gtk4::PolicyType::Never)
+        .build();
+    
+    let content = gtk4::Box::new(gtk4::Orientation::Vertical, 32);
+    content.set_margin_top(48);
+    content.set_margin_bottom(48);
+    content.set_margin_start(48);
+    content.set_margin_end(48);
+    content.set_halign(gtk4::Align::Center);
+    content.set_width_request(600);
+
+    let header_box = gtk4::Box::new(gtk4::Orientation::Vertical, 8);
+    let title = gtk4::Label::builder()
+        .label("Settings")
+        .halign(gtk4::Align::Start)
+        .css_classes(vec!["title-1".to_string()])
+        .build();
+    let subtitle = gtk4::Label::builder()
+        .label("Configure your global preferences")
+        .halign(gtk4::Align::Start)
+        .css_classes(vec!["dim-label".to_string()])
+        .build();
+    header_box.append(&title);
+    header_box.append(&subtitle);
+    content.append(&header_box);
+
+    let terminal_group = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
+    let terminal_title = gtk4::Label::builder()
+        .label("Terminal")
+        .halign(gtk4::Align::Start)
+        .css_classes(vec!["title-4".to_string()])
+        .build();
+    terminal_group.append(&terminal_title);
+
+    let font_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
+    let font_label = gtk4::Label::new(Some("Font"));
+    font_label.set_hexpand(true);
+    font_label.set_halign(gtk4::Align::Start);
+    let font_button = gtk4::FontButton::with_font(&config.terminal_font);
+    font_row.append(&font_label);
+    font_row.append(&font_button);
+    terminal_group.append(&font_row);
+
+    let scrollback_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
+    let scrollback_label = gtk4::Label::new(Some("Scrollback Lines"));
+    scrollback_label.set_hexpand(true);
+    scrollback_label.set_halign(gtk4::Align::Start);
+    let scrollback_adj = gtk4::Adjustment::new(config.terminal_scrollback as f64, 100.0, 100000.0, 100.0, 1000.0, 0.0);
+    let scrollback_spinner = gtk4::SpinButton::new(Some(&scrollback_adj), 1.0, 0);
+    scrollback_row.append(&scrollback_label);
+    scrollback_row.append(&scrollback_spinner);
+    terminal_group.append(&scrollback_row);
+    content.append(&terminal_group);
+
+    let monitor_group = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
+    let monitor_title = gtk4::Label::builder()
+        .label("System Monitor")
+        .halign(gtk4::Align::Start)
+        .css_classes(vec!["title-4".to_string()])
+        .build();
+    monitor_group.append(&monitor_title);
+
+    let refresh_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
+    let refresh_label = gtk4::Label::new(Some("Default Refresh Rate"));
+    refresh_label.set_hexpand(true);
+    refresh_label.set_halign(gtk4::Align::Start);
+    let refresh_dropdown = gtk4::DropDown::from_strings(&["1s", "3s", "5s", "10s"]);
+    refresh_dropdown.set_selected(config.monitor_refresh_rate);
+    refresh_row.append(&refresh_label);
+    refresh_row.append(&refresh_dropdown);
+    monitor_group.append(&refresh_row);
+    content.append(&monitor_group);
+
+    let ui_group = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
+    let ui_title = gtk4::Label::builder()
+        .label("User Interface")
+        .halign(gtk4::Align::Start)
+        .css_classes(vec!["title-4".to_string()])
+        .build();
+    ui_group.append(&ui_title);
+
+    let confirm_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
+    let confirm_label = gtk4::Label::new(Some("Confirm before closing tabs"));
+    confirm_label.set_hexpand(true);
+    confirm_label.set_halign(gtk4::Align::Start);
+    let confirm_switch = gtk4::Switch::new();
+    confirm_switch.set_active(config.confirm_tab_close);
+    confirm_row.append(&confirm_label);
+    confirm_row.append(&confirm_switch);
+    ui_group.append(&confirm_row);
+    content.append(&ui_group);
+
+    let r_drop = refresh_dropdown.clone();
+    let f_btn = font_button.clone();
+    let s_spin = scrollback_spinner.clone();
+    let c_switch = confirm_switch.clone();
+
+    let save_config = move || {
+        let mut new_config = crate::config_observer::AppConfig::default();
+        new_config.monitor_refresh_rate = r_drop.selected();
+        new_config.terminal_font = f_btn.font().map(|s| s.to_string()).unwrap_or_else(|| "Monospace 11".to_string());
+        new_config.terminal_scrollback = s_spin.value() as u32;
+        new_config.confirm_tab_close = c_switch.is_active();
+        
+        let _ = crate::config_observer::save_app_config(&new_config);
+    };
+
+    let save_fn = Rc::new(save_config);
+    
+    let s1 = save_fn.clone();
+    refresh_dropdown.connect_selected_notify(move |_| { s1(); });
+    
+    let s2 = save_fn.clone();
+    font_button.connect_font_set(move |_| { s2(); });
+    
+    let s3 = save_fn.clone();
+    scrollback_spinner.connect_value_changed(move |_| { s3(); });
+    
+    let s5 = save_fn.clone();
+    confirm_switch.connect_active_notify(move |_| { s5(); });
+
+    scrolled.set_child(Some(&content));
+    container.append(&scrolled);
+    container
+}
+
+fn show_close_confirmation(parent: &gtk4::ApplicationWindow, title: &str, message: &str, on_confirm: impl FnOnce() + 'static) {
+    let dialog = gtk4::MessageDialog::builder()
+        .transient_for(parent)
+        .modal(true)
+        .buttons(gtk4::ButtonsType::OkCancel)
+        .text(title)
+        .secondary_text(message)
+        .build();
+    
+    let on_confirm = std::cell::RefCell::new(Some(on_confirm));
+    dialog.connect_response(move |d, response| {
+        if response == gtk4::ResponseType::Ok {
+            if let Some(callback) = on_confirm.borrow_mut().take() {
+                callback();
+            }
+        }
+        d.close();
+    });
+    dialog.present();
 }
