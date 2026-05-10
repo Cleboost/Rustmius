@@ -188,14 +188,14 @@ jobs:
           VERSION="${{ needs.prepare.outputs.version_only }}"
           HASH_DESKTOP=$(sha256sum rustmius.desktop | cut -d' ' -f1)
           HASH_PNG=$(sha256sum rustmius.png | cut -d' ' -f1)
+          HASH_LICENSE=$(sha256sum LICENSE | cut -d' ' -f1)
           HASH_BINARY=$(sha256sum rustmius-x86_64 | cut -d' ' -f1)
 
-          # Update version, pkgrel and hashes using AWK (more portable than updpkgsums on Ubuntu runners)
-          awk -v v="$VERSION" -v d="$HASH_DESKTOP" -v p="$HASH_PNG" -v b="$HASH_BINARY" '
-          BEGIN { h[0]=d; h[1]=p; h[2]=b; i=0 }
+          awk -v v="$VERSION" -v d="$HASH_DESKTOP" -v p="$HASH_PNG" -v l="$HASH_LICENSE" -v b="$HASH_BINARY" '
+          BEGIN { h[0]=d; h[1]=p; h[2]=l; h[3]=b; i=0 }
           /^pkgver=/ { $0="pkgver=" v }
           /^pkgrel=/ { $0="pkgrel=1" }
-          /'\''[0-9a-f]{64}'\''/ && i < 3 {
+          /'\''[0-9a-f]{64}'\''/ && i < 4 {
             sub(/'\''[0-9a-f]{64}'\''/, "'\''" h[i++] "'\''")
           }
           { print }
