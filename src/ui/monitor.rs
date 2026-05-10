@@ -217,11 +217,9 @@ impl SystemMonitor {
                 let h = h_clone.clone();
                 let p = p_clone.clone();
                 
-                let result = tokio::task::spawn_blocking(move || {
-                    run_remote_command(h, p, cmd)
-                }).await;
+                let result = run_remote_command(h, p, cmd.to_string()).await;
 
-                if let Ok(Ok(output)) = result {
+                if let Ok(output) = result {
                     if let Ok(mut st) = s_clone.try_borrow_mut() {
                         let mut current_section = "";
                         let mut ips = Vec::new();

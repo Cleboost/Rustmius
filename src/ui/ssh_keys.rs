@@ -325,9 +325,7 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
 
                     let h_c = host.clone();
                     let pk_c = pubkey.clone();
-                    let result = tokio::task::spawn_blocking(move || {
-                        crate::ssh_engine::deploy_pubkey(&h_c, final_password, &pk_c)
-                    }).await.unwrap_or_else(|_| Err(anyhow::anyhow!("Task panic")));
+                    let result = crate::ssh_engine::deploy_pubkey(h_c, final_password, pk_c).await;
 
                     match result {
                         Ok(_) => {
