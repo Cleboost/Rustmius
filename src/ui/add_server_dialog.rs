@@ -51,7 +51,10 @@ where F: Fn(SshHost, String) + 'static
         }
     }
 
-    let keys = load_ssh_keys();
+    let keys = load_ssh_keys().unwrap_or_else(|e| {
+        tracing::error!("Failed to load SSH keys: {}", e);
+        Vec::new()
+    });
     let key_model = gtk4::StringList::new(&[]);
     key_model.append("None (Default Auth)");
     for k in &keys {
