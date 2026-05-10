@@ -1,7 +1,6 @@
 #![allow(deprecated)]
 use gtk4::prelude::*;
-use crate::config_observer::SshHost;
-use crate::ui::ssh_keys::load_ssh_keys;
+use crate::config_observer::{SshHost, load_ssh_keys};
 
 pub fn show_server_dialog<F>(
     parent: &gtk4::Window,

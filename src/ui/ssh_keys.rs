@@ -3,9 +3,7 @@ use gtk4::prelude::*;
 use gtk4::glib;
 use std::rc::Rc;
 use std::cell::RefCell;
-use directories::UserDirs;
-use std::path::PathBuf;
-use crate::config_observer::load_hosts;
+use crate::config_observer::{load_hosts, SshKeyPair, get_ssh_dir, load_ssh_keys, REMOTE_SSH_DIR};
 
 fn is_valid_key_name(name: &str) -> bool {
     if name.is_empty() || name.contains('\0') {
@@ -30,41 +28,6 @@ fn make_error_alert(parent: Option<&gtk4::Window>, title: &str, secondary: &str)
     };
     alert.connect_response(|a, _| a.close());
     alert
-}
-
-#[derive(Clone)]
-pub struct SshKeyPair {
-    pub name: String,
-    pub pub_path: PathBuf,
-    pub priv_path: PathBuf,
-}
-
-fn get_ssh_dir() -> Option<PathBuf> {
-    UserDirs::new().map(|dirs| dirs.home_dir().join(".ssh"))
-}
-
-pub fn load_ssh_keys() -> Vec<SshKeyPair> {
-    let mut keys = Vec::new();
-    if let Some(ssh_dir) = get_ssh_dir()
-        && let Ok(entries) = std::fs::read_dir(&ssh_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("pub") {
-                    let mut priv_path = path.clone();
-                    priv_path.set_extension("");
-                    if priv_path.exists() {
-                        let name = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
-                        keys.push(SshKeyPair {
-                            name,
-                            pub_path: path,
-                            priv_path,
-                        });
-                    }
-                }
-            }
-        }
-    keys.sort_by(|a, b| a.name.cmp(&b.name));
-    keys
 }
 
 pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
@@ -116,7 +79,7 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
 
             let keys = load_ssh_keys();
             if keys.is_empty() {
-                let empty_lbl = gtk4::Label::new(Some("No SSH keys found in ~/.ssh/"));
+                let empty_lbl = gtk4::Label::new(Some(&format!("No SSH keys found in {}/", REMOTE_SSH_DIR)));
                 empty_lbl.set_margin_top(24);
                 empty_lbl.set_margin_bottom(24);
                 empty_lbl.add_css_class("dim-label");
@@ -421,7 +384,7 @@ fn show_generate_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>)
                     let alert = make_error_alert(
                         d.transient_for().as_ref().map(|w| w.upcast_ref()),
                         "Key Already Exists",
-                        &format!("A file named '{}' or its public key already exists in ~/.ssh/. Choose a different name.", name),
+                        &format!("A file named '{}' or its public key already exists in {}. Choose a different name.", name, REMOTE_SSH_DIR),
                     );
                     alert.present();
                     return;
@@ -540,7 +503,7 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
                     let alert = make_error_alert(
                         d.transient_for().as_ref().map(|w| w.upcast_ref()),
                         "Key Already Exists",
-                        &format!("A file named '{}' or its public key already exists in ~/.ssh/.", name),
+                        &format!("A file named '{}' or its public key already exists in {}.", name, REMOTE_SSH_DIR),
                     );
                     alert.present();
                     return;

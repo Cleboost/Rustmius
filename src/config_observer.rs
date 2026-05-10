@@ -14,6 +14,46 @@ pub fn expand_tilde(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
+pub fn get_ssh_dir() -> Option<PathBuf> {
+    UserDirs::new().map(|dirs| dirs.home_dir().join(".ssh"))
+}
+
+pub const REMOTE_SSH_DIR: &str = "~/.ssh";
+pub const REMOTE_AUTHORIZED_KEYS: &str = "~/.ssh/authorized_keys";
+#[allow(dead_code)]
+pub const REMOTE_SSH_CONFIG: &str = "~/.ssh/config";
+
+#[derive(Debug, Clone)]
+pub struct SshKeyPair {
+    pub name: String,
+    pub pub_path: PathBuf,
+    pub priv_path: PathBuf,
+}
+
+pub fn load_ssh_keys() -> Vec<SshKeyPair> {
+    let mut keys = Vec::new();
+    if let Some(ssh_dir) = get_ssh_dir()
+        && let Ok(entries) = std::fs::read_dir(&ssh_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("pub") {
+                    let mut priv_path = path.clone();
+                    priv_path.set_extension("");
+                    if priv_path.exists() {
+                        let name = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+                        keys.push(SshKeyPair {
+                            name,
+                            pub_path: path,
+                            priv_path,
+                        });
+                    }
+                }
+            }
+        }
+    keys.sort_by(|a, b| a.name.cmp(&b.name));
+    keys
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AppConfig {
     pub monitor_refresh_rate: u32, // index: 0=1s, 1=3s, 2=5s, 3=10s
@@ -67,7 +107,7 @@ pub struct SshHost {
 }
 
 pub fn get_default_config_path() -> Option<std::path::PathBuf> {
-    UserDirs::new().map(|dirs| dirs.home_dir().join(".ssh").join("config"))
+    get_ssh_dir().map(|d| d.join("config"))
 }
 
 pub fn load_hosts() -> Vec<SshHost> {
