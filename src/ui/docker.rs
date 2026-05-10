@@ -2,7 +2,6 @@ use gtk4::prelude::*;
 use gtk4::{glib};
 use crate::config_observer::SshHost;
 use crate::ssh_engine::run_remote_command;
-use std::rc::Rc;
 
 pub struct DockerManager {
     pub container: gtk4::Box,
@@ -244,15 +243,23 @@ impl DockerManager {
         let host = self.host.clone();
         let password = self.password.clone();
         let cmd = refresh_cmd.to_string();
-        let list_box_clone = list_box.clone();
-        let do_refresh = move || {
+        let lb_clone = list_box.clone();
+        let title_owned = title.to_string();
+
+        refresh_btn.connect_clicked(move |rb| {
             let h = host.clone();
             let p = password.clone();
             let c = cmd.clone();
-            let lb = list_box_clone.clone();
+            let lb = lb_clone.clone();
+            let t = title_owned.clone();
+            let rb_inner = rb.clone();
+
             glib::MainContext::default().spawn_local(async move {
+                let h_for_fetch = h.clone();
+                let p_for_fetch = p.clone();
+                let c_for_fetch = c.clone();
                 let result = tokio::task::spawn_blocking(move || {
-                    run_remote_command(h, p, &c)
+                    run_remote_command(h_for_fetch, p_for_fetch, &c_for_fetch)
                 }).await;
 
                 if let Ok(Ok(output)) = result {
@@ -264,8 +271,9 @@ impl DockerManager {
                         row.set_margin_start(12); row.set_margin_end(12);
                         
                         let text_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
+                        let item_name = parts.first().copied().unwrap_or(line).to_string();
                         let name_label = gtk4::Label::builder()
-                            .label(parts.first().copied().unwrap_or(line))
+                            .label(&item_name)
                             .halign(gtk4::Align::Start)
                             .css_classes(vec!["bold".to_string()])
                             .build();
@@ -282,32 +290,81 @@ impl DockerManager {
                         
                         row.append(&text_box);
 
-                        let spacer = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
-                        spacer.set_hexpand(true);
-                        row.append(&spacer);
+                        let spacer_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+                        spacer_row.set_hexpand(true);
+                        row.append(&spacer_row);
 
                         let actions = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-                        let stop_btn = gtk4::Button::from_icon_name("media-playback-stop-symbolic");
-                        stop_btn.add_css_class("flat");
+                        let is_container = t == "Containers";
+                        
+                        if is_container {
+                            let status = parts.get(1).copied().unwrap_or("");
+                            let is_running = status.starts_with("Up");
+                            let icon_name = if is_running { "media-playback-stop-symbolic" } else { "media-playback-start-symbolic" };
+                            let action_cmd = if is_running { "stop" } else { "start" };
+                            let tooltip = if is_running { "Stop Container" } else { "Start Container" };
+
+                            let toggle_btn = gtk4::Button::from_icon_name(icon_name);
+                            toggle_btn.add_css_class("flat");
+                            toggle_btn.set_tooltip_text(Some(tooltip));
+                            
+                            let h_toggle = h.clone();
+                            let p_toggle = p.clone();
+                            let n_toggle = item_name.clone();
+                            let rb_toggle = rb_inner.clone();
+                            let cmd_str = action_cmd.to_string();
+                            
+                            toggle_btn.connect_clicked(move |_| {
+                                let h_c = h_toggle.clone();
+                                let p_c = p_toggle.clone();
+                                let n_c = n_toggle.clone();
+                                let rb_c = rb_toggle.clone();
+                                let c_str = cmd_str.clone();
+                                glib::MainContext::default().spawn_local(async move {
+                                    let cmd = format!("DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); $DOCKER_BIN {} {}", c_str, n_c);
+                                    let _ = tokio::task::spawn_blocking(move || {
+                                        run_remote_command(h_c, p_c, &cmd)
+                                    }).await;
+                                    rb_c.emit_clicked();
+                                });
+                            });
+                            actions.append(&toggle_btn);
+                        }
+
                         let delete_btn = gtk4::Button::from_icon_name("user-trash-symbolic");
                         delete_btn.add_css_class("flat");
                         delete_btn.add_css_class("error");
+                        delete_btn.set_tooltip_text(Some(if is_container { "Remove Container" } else { "Remove Image" }));
                         
-                        actions.append(&stop_btn);
+                        let h_del = h.clone();
+                        let p_del = p.clone();
+                        let n_del = item_name.clone();
+                        let rb_del = rb_inner.clone();
+                        let is_c_del = is_container;
+                        delete_btn.connect_clicked(move |_| {
+                            let h_c = h_del.clone();
+                            let p_c = p_del.clone();
+                            let n_c = n_del.clone();
+                            let rb_c = rb_del.clone();
+                            glib::MainContext::default().spawn_local(async move {
+                                let sub_cmd = if is_c_del { "rm -f" } else { "rmi" };
+                                let cmd = format!("DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); $DOCKER_BIN {} {}", sub_cmd, n_c);
+                                let _ = tokio::task::spawn_blocking(move || {
+                                    run_remote_command(h_c, p_c, &cmd)
+                                }).await;
+                                rb_c.emit_clicked();
+                            });
+                        });
+
                         actions.append(&delete_btn);
                         row.append(&actions);
-
                         lb.append(&row);
                     }
                 }
             });
-        };
+        });
 
-        let refresh_fn = Rc::new(do_refresh);
-        let r_init = refresh_fn.clone();
-        r_init();
-        refresh_btn.connect_clicked(move |_| { refresh_fn(); });
-
+        refresh_btn.emit_clicked();
         box_
     }
 
