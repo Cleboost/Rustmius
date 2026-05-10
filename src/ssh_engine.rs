@@ -30,35 +30,41 @@ pub async fn establish_ssh_session(host: &SshHost, password: Option<&str>) -> an
     let password_cloned = password.map(|s| s.to_string());
     tokio::task::spawn_blocking(move || {
         let mut sess = Session::new()
-            .context("Failed to create SSH session")?;
+            .context("Failed to create SSH session object")?;
         sess.set_tcp_stream(std_tcp);
         sess.handshake()
-            .context("SSH handshake failed")?;
+            .context("SSH handshake failed - check network or firewall")?;
 
         let user = host_cloned.user.as_deref().unwrap_or("root");
         let mut authenticated = false;
+        let mut auth_errors = Vec::new();
 
         if let Some(ref key_path) = host_cloned.identity_file {
             let path = expand_tilde(key_path);
-            if sess.userauth_pubkey_file(user, None, &path, None).is_ok() {
-                authenticated = true;
+            match sess.userauth_pubkey_file(user, None, &path, None) {
+                Ok(_) => authenticated = true,
+                Err(e) => auth_errors.push(format!("Key auth failed: {}", e)),
             }
         }
 
         if !authenticated && sess.userauth_agent(user).is_ok() {
             authenticated = true;
+        } else if !authenticated {
+            auth_errors.push("Agent auth failed or no agent running".to_string());
         }
 
         if !authenticated && let Some(ref pass) = password_cloned {
-            if sess.userauth_password(user, pass).is_ok() {
-                authenticated = true;
+            match sess.userauth_password(user, pass) {
+                Ok(_) => authenticated = true,
+                Err(e) => auth_errors.push(format!("Password auth failed: {}", e)),
             }
         }
 
         if authenticated {
             Ok(sess)
         } else {
-            Err(anyhow::anyhow!("Authentication failed for {}@{} (tried key, agent, and password)", user, host_cloned.hostname))
+            let combined = auth_errors.join("; ");
+            Err(anyhow::anyhow!("Authentication failed for {}@{}. Details: {}", user, host_cloned.hostname, combined))
         }
     }).await?
 }
@@ -68,19 +74,23 @@ pub async fn deploy_pubkey(host: &SshHost, password: Option<&str>, pubkey_conten
     let pubkey_owned = pubkey_content.to_string();
     
     tokio::task::spawn_blocking(move || {
-        let mut channel = sess.channel_session()?;
+        let mut channel = sess.channel_session()
+            .context("Failed to open SSH channel for deployment")?;
         let cmd = format!(
             "mkdir -p {0} && chmod 700 {0} && cat >> {1} && chmod 600 {1}",
             REMOTE_SSH_DIR, REMOTE_AUTHORIZED_KEYS
         );
-        channel.exec(&cmd)?;
+        channel.exec(&cmd)
+            .context("Failed to execute pubkey deployment command")?;
 
         if pubkey_owned.ends_with('\n') {
-            channel.write_all(pubkey_owned.as_bytes())?;
+            channel.write_all(pubkey_owned.as_bytes())
+                .context("Failed to write pubkey to authorized_keys")?;
         } else {
             let mut content = pubkey_owned;
             content.push('\n');
-            channel.write_all(content.as_bytes())?;
+            channel.write_all(content.as_bytes())
+                .context("Failed to write pubkey to authorized_keys")?;
         }
         channel.send_eof()?;
         channel.wait_eof()?;
@@ -91,14 +101,18 @@ pub async fn deploy_pubkey(host: &SshHost, password: Option<&str>, pubkey_conten
 }
 
 pub async fn run_remote_command(host: &SshHost, password: Option<&str>, command: &str) -> anyhow::Result<String> {
-    let sess = establish_ssh_session(host, password).await?;
+    let sess = establish_ssh_session(host, password).await
+        .context("Failed to establish SSH session for remote command")?;
     let cmd_owned = command.to_string();
 
     tokio::task::spawn_blocking(move || {
-        let mut channel = sess.channel_session()?;
-        channel.exec(&cmd_owned)?;
+        let mut channel = sess.channel_session()
+            .context("Failed to open SSH channel for command execution")?;
+        channel.exec(&cmd_owned)
+            .with_context(|| format!("Failed to execute command: {}", cmd_owned))?;
         let mut output = String::new();
-        channel.read_to_string(&mut output)?;
+        channel.read_to_string(&mut output)
+            .context("Failed to read command output")?;
         channel.wait_close()?;
         Ok(output)
     }).await?
