@@ -372,8 +372,9 @@ impl ExplorerHandle {
                 let rt = tokio::runtime::Handle::current();
 
                 h.status_label.set_text(&format!("Preparing {}...", f.name));
-                std::thread::spawn(move || {
-                    if let Ok(_) = crate::sftp_engine::download_file_sync(rt, host, password, rp, lp_part.clone()) {
+                let rt_blocking = rt.clone();
+                rt.spawn_blocking(move || {
+                    if let Ok(_) = crate::sftp_engine::download_file_sync(rt_blocking, host, password, rp, lp_part.clone()) {
                         let _ = std::fs::rename(lp_part, lp_final);
                     }
                 });
