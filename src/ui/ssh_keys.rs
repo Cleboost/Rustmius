@@ -1,6 +1,6 @@
 #![allow(deprecated)]
 use gtk4::prelude::*;
-use gtk4::glib;
+use gtk4::{glib, gio};
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::config_observer::{load_hosts, SshKeyPair, get_ssh_dir, load_ssh_keys, REMOTE_SSH_DIR};
@@ -14,20 +14,15 @@ fn is_valid_key_name(name: &str) -> bool {
         && p.file_name().map(|n| n == std::ffi::OsStr::new(name)).unwrap_or(false)
 }
 
-fn make_error_alert(parent: Option<&gtk4::Window>, title: &str, secondary: &str) -> gtk4::MessageDialog {
-    let builder = gtk4::MessageDialog::builder()
+fn show_error_alert(parent: Option<&gtk4::Window>, title: &str, secondary: &str) {
+    let dialog = gtk4::AlertDialog::builder()
         .modal(true)
-        .message_type(gtk4::MessageType::Error)
-        .buttons(gtk4::ButtonsType::Ok)
-        .text(title)
-        .secondary_text(secondary);
-    let alert = if let Some(w) = parent {
-        builder.transient_for(w).build()
-    } else {
-        builder.build()
-    };
-    alert.connect_response(|a, _| a.close());
-    alert
+        .message(title)
+        .detail(secondary)
+        .buttons(vec!["OK"])
+        .default_button(0)
+        .build();
+    dialog.show(parent);
 }
 
 pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
@@ -115,13 +110,13 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
                     let handle = rwh.clone();
 
                     del_btn.connect_clicked(move |_| {
-                        let dialog = gtk4::MessageDialog::builder()
-                            .transient_for(&w_clone)
+                        let dialog = gtk4::AlertDialog::builder()
                             .modal(true)
-                            .message_type(gtk4::MessageType::Warning)
-                            .buttons(gtk4::ButtonsType::OkCancel)
-                            .text(format!("Delete key '{}'?", key_clone1.name))
-                            .secondary_text("This action cannot be undone and will delete both public and private key files.")
+                            .message(format!("Delete key '{}'?", key_clone1.name))
+                            .detail("This action cannot be undone and will delete both public and private key files.")
+                            .buttons(vec!["Cancel", "Delete"])
+                            .cancel_button(0)
+                            .default_button(1)
                             .build();
 
                         let p1 = key_clone1.pub_path.clone();
@@ -129,42 +124,22 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
                         let h = handle.clone();
                         let w_del = w_clone.clone();
 
-                        dialog.connect_response(move |d, res| {
-                            if res == gtk4::ResponseType::Ok {
-                                if let Err(e) = std::fs::remove_file(&p2) {
-                                    let alert = gtk4::MessageDialog::builder()
-                                        .transient_for(&w_del)
-                                        .modal(true)
-                                        .message_type(gtk4::MessageType::Error)
-                                        .buttons(gtk4::ButtonsType::Ok)
-                                        .text("Failed to Delete Key")
-                                        .secondary_text(format!("Could not delete private key: {}", e))
-                                        .build();
-                                    alert.connect_response(|a, _| a.close());
-                                    alert.present();
-                                    d.close();
-                                    return;
+                        dialog.choose(Some(&w_clone), None::<&gio::Cancellable>, move |res| {
+                            if let Ok(idx) = res {
+                                if idx == 1 {
+                                    if let Err(e) = std::fs::remove_file(&p2) {
+                                        show_error_alert(Some(w_del.upcast_ref::<gtk4::Window>()), "Failed to Delete Key", &format!("Could not delete private key: {}", e));
+                                        return;
+                                    }
+                                    if let Err(e) = std::fs::remove_file(&p1) {
+                                        show_error_alert(Some(w_del.upcast_ref::<gtk4::Window>()), "Failed to Delete Key", &format!("Private key deleted, but could not delete public key: {}", e));
+                                        return;
+                                    }
+                                    if let Some(rc) = h.upgrade()
+                                        && let Some(r) = rc.borrow().as_ref() { r(); }
                                 }
-                                if let Err(e) = std::fs::remove_file(&p1) {
-                                    let alert = gtk4::MessageDialog::builder()
-                                        .transient_for(&w_del)
-                                        .modal(true)
-                                        .message_type(gtk4::MessageType::Error)
-                                        .buttons(gtk4::ButtonsType::Ok)
-                                        .text("Failed to Delete Key")
-                                        .secondary_text(format!("Private key deleted, but could not delete public key: {}", e))
-                                        .build();
-                                    alert.connect_response(|a, _| a.close());
-                                    alert.present();
-                                    d.close();
-                                    return;
-                                }
-                                if let Some(rc) = h.upgrade()
-                                    && let Some(r) = rc.borrow().as_ref() { r(); }
                             }
-                            d.close();
                         });
-                        dialog.present();
                     });
 
                     deploy_btn.connect_clicked(move |_| {
@@ -260,18 +235,11 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
                 let pubkey = match std::fs::read_to_string(&key_path) {
                     Ok(content) => content,
                     Err(e) => {
-                        let md = gtk4::MessageDialog::builder()
-                            .modal(true)
-                            .message_type(gtk4::MessageType::Error)
-                            .buttons(gtk4::ButtonsType::Ok)
-                            .text("Failed to Read Public Key")
-                            .secondary_text(format!("Could not read '{}': {}", key_path.display(), e))
-                            .build();
-                        if let Some(w) = d.transient_for() {
-                            md.set_transient_for(Some(&w));
-                        }
-                        md.connect_response(|md, _| md.close());
-                        md.present();
+                        show_error_alert(
+                            d.transient_for().as_ref().map(|w| w.upcast_ref()),
+                            "Failed to Read Public Key",
+                            &format!("Could not read '{}': {}", key_path.display(), e),
+                        );
                         return;
                     }
                 };
@@ -296,32 +264,21 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
 
                     match result {
                         Ok(_) => {
-                            let md = gtk4::MessageDialog::builder()
+                            let md = gtk4::AlertDialog::builder()
                                 .modal(true)
-                                .message_type(gtk4::MessageType::Info)
-                                .buttons(gtk4::ButtonsType::Ok)
-                                .text("Deployed Successfully!")
+                                .message("Deployed Successfully!")
+                                .buttons(vec!["OK"])
+                                .default_button(0)
                                 .build();
-                            if let Some(ref w) = parent_win_weak {
-                                md.set_transient_for(Some(w));
-                            }
-                            md.connect_response(|md, _| md.close());
-                            md.present();
+                            md.show(parent_win_weak.as_ref().map(|w| w.upcast_ref::<gtk4::Window>()));
                             close_dialog.close();
                         },
                         Err(e) => {
-                            let md = gtk4::MessageDialog::builder()
-                                .modal(true)
-                                .message_type(gtk4::MessageType::Error)
-                                .buttons(gtk4::ButtonsType::Ok)
-                                .text("Deployment Failed")
-                                .secondary_text(e.to_string())
-                                .build();
-                            if let Some(ref w) = parent_win_weak {
-                                md.set_transient_for(Some(w));
-                            }
-                            md.connect_response(|md, _| md.close());
-                            md.present();
+                            show_error_alert(
+                                parent_win_weak.as_ref().map(|w| w.upcast_ref::<gtk4::Window>()),
+                                "Deployment Failed",
+                                &e.to_string(),
+                            );
                         }
                     }
                 });
@@ -374,12 +331,11 @@ fn show_generate_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>)
             let comment = comment_entry.text().to_string();
 
             if !is_valid_key_name(&name) {
-                let alert = make_error_alert(
+                show_error_alert(
                     d.transient_for().as_ref().map(|w| w.upcast_ref()),
                     "Invalid Key Name",
                     "The key name must be a simple filename with no path separators or special components.",
                 );
-                alert.present();
                 return;
             }
             if let Some(ssh_dir) = get_ssh_dir() {
@@ -387,12 +343,11 @@ fn show_generate_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>)
                 let pub_path = ssh_dir.join(format!("{}.pub", name));
 
                 if file_path.exists() || pub_path.exists() {
-                    let alert = make_error_alert(
+                    show_error_alert(
                         d.transient_for().as_ref().map(|w| w.upcast_ref()),
                         "Key Already Exists",
                         &format!("A file named '{}' or its public key already exists in {}. Choose a different name.", name, REMOTE_SSH_DIR),
                     );
-                    alert.present();
                     return;
                 }
 
@@ -428,12 +383,11 @@ fn show_generate_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>)
                         } else {
                             stderr_msg
                         };
-                        let alert = make_error_alert(
+                        show_error_alert(
                             parent_win.as_ref().map(|w| w.upcast_ref()),
                             "Key Generation Failed!",
                             &secondary,
                         );
-                        alert.present();
                     }
                 });
             }
@@ -493,12 +447,11 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
             let key_content = text_buffer.text(&start, &end, false).to_string();
 
             if !is_valid_key_name(&name) {
-                let alert = make_error_alert(
+                show_error_alert(
                     d.transient_for().as_ref().map(|w| w.upcast_ref()),
                     "Invalid Key Name",
                     "The key name must be a simple filename with no path separators or special components.",
                 );
-                alert.present();
                 return;
             }
             if let Some(ssh_dir) = get_ssh_dir() {
@@ -506,12 +459,11 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
                 let pub_path = ssh_dir.join(format!("{}.pub", name));
 
                 if file_path.exists() || pub_path.exists() {
-                    let alert = make_error_alert(
+                    show_error_alert(
                         d.transient_for().as_ref().map(|w| w.upcast_ref()),
                         "Key Already Exists",
                         &format!("A file named '{}' or its public key already exists in {}.", name, REMOTE_SSH_DIR),
                     );
-                    alert.present();
                     return;
                 }
 
@@ -533,12 +485,11 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
                 let write_result = std::fs::write(&file_path, &key_content);
 
                 if let Err(e) = write_result {
-                    let alert = make_error_alert(
+                    show_error_alert(
                         d.transient_for().as_ref().map(|w| w.upcast_ref()),
                         "Failed to Write Key File",
                         &e.to_string(),
                     );
-                    alert.present();
                     return;
                 }
 
@@ -562,12 +513,11 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
                         Ok(Ok(output)) if output.status.success() => {
                             if let Err(e) = std::fs::write(&pub_path, output.stdout) {
                                 let _ = std::fs::remove_file(&file_path_cleanup);
-                                let alert = make_error_alert(
+                                show_error_alert(
                                     parent_win.as_ref().map(|w| w.upcast_ref()),
                                     "Failed to Write Public Key",
                                     &e.to_string(),
                                 );
-                                alert.present();
                             } else {
                                 on_save_spawn();
                             }
@@ -580,30 +530,27 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
                             } else {
                                 stderr
                             };
-                            let alert = make_error_alert(
+                            show_error_alert(
                                 parent_win.as_ref().map(|w| w.upcast_ref()),
                                 "Key Import Failed!",
                                 &secondary,
                             );
-                            alert.present();
                         }
                         Ok(Err(e)) => {
                             let _ = std::fs::remove_file(&file_path_cleanup);
-                            let alert = make_error_alert(
+                            show_error_alert(
                                 parent_win.as_ref().map(|w| w.upcast_ref()),
                                 "Key Import Failed!",
                                 &e.to_string(),
                             );
-                            alert.present();
                         }
                         Err(e) => {
                             let _ = std::fs::remove_file(&file_path_cleanup);
-                            let alert = make_error_alert(
+                            show_error_alert(
                                 parent_win.as_ref().map(|w| w.upcast_ref()),
                                 "Key Import Failed!",
                                 &e.to_string(),
                             );
-                            alert.present();
                         }
                     }
                 });
