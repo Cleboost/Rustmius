@@ -48,7 +48,10 @@ impl SystemMonitor {
         let refresh_label = gtk4::Label::new(Some("Refresh Rate:"));
         let refresh_dropdown = gtk4::DropDown::from_strings(&["1s", "3s", "5s", "10s"]);
         
-        let app_config = crate::config_observer::load_app_config();
+        let app_config = crate::config_observer::load_app_config().unwrap_or_else(|e| {
+            tracing::error!("Failed to load app config: {}", e);
+            crate::config_observer::AppConfig::default()
+        });
         refresh_dropdown.set_selected(app_config.monitor_refresh_rate);
         
         toolbar.append(&refresh_label);

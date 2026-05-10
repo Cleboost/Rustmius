@@ -7,7 +7,10 @@ pub struct Settings {
 
 impl Settings {
     pub fn new() -> Self {
-        let config = crate::config_observer::load_app_config();
+        let config = crate::config_observer::load_app_config().unwrap_or_else(|e| {
+            tracing::error!("Failed to load app config: {}", e);
+            AppConfig::default()
+        });
         let container = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         
         let scrolled = gtk4::ScrolledWindow::builder()

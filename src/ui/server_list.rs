@@ -47,7 +47,10 @@ impl ServerList {
             self.flow_box.remove(&child);
         }
 
-        let hosts = load_hosts();
+        let hosts = load_hosts().unwrap_or_else(|e| {
+            tracing::error!("Failed to load hosts: {}", e);
+            Vec::new()
+        });
         for host in hosts {
             self.add_host_row(&host, on_action.clone());
         }

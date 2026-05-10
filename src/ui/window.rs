@@ -127,7 +127,10 @@ impl AppWindow {
 
     fn show_add_server_dialog(&self) {
         let this = self.clone();
-        let existing_hosts = load_hosts();
+        let existing_hosts = load_hosts().unwrap_or_else(|e| {
+            tracing::error!("Failed to load hosts: {}", e);
+            Vec::new()
+        });
         let existing_aliases: Vec<String> = existing_hosts.iter().map(|h| h.alias.to_lowercase()).collect();
         
         show_server_dialog(self.inner.window.upcast_ref(), None, existing_aliases, move |new_host, password| {
@@ -205,7 +208,10 @@ impl AppWindow {
 
         let terminal = vte4::Terminal::new();
         terminal.set_vexpand(true);
-        let app_config = crate::config_observer::load_app_config();
+        let app_config = crate::config_observer::load_app_config().unwrap_or_else(|e| {
+            tracing::error!("Failed to load app config: {}", e);
+            crate::config_observer::AppConfig::default()
+        });
         let font_desc = gtk4::pango::FontDescription::from_string(&app_config.terminal_font);
         terminal.set_font(Some(&font_desc));
         terminal.set_scrollback_lines(app_config.terminal_scrollback as i64);
@@ -261,7 +267,7 @@ impl AppWindow {
                     nb.remove_page(Some(i));
                 }
             };
-            if crate::config_observer::load_app_config().confirm_tab_close {
+            if crate::config_observer::load_app_config().map(|c| c.confirm_tab_close).unwrap_or(false) {
                 show_close_confirmation(w.upcast_ref(), "Close Tab?", "Are you sure you want to close this session?", on_confirm);
             } else { on_confirm(); }
         });
@@ -334,7 +340,7 @@ impl AppWindow {
                 let on_confirm = move || {
                     if let Some(i) = nb_confirm.page_num(&ex_confirm) { nb_confirm.remove_page(Some(i)); }
                 };
-                if crate::config_observer::load_app_config().confirm_tab_close {
+                if crate::config_observer::load_app_config().map(|c| c.confirm_tab_close).unwrap_or(false) {
                     show_close_confirmation(win_inner.upcast_ref(), "Close Explorer?", "Are you sure you want to close this explorer tab?", on_confirm);
                 } else { on_confirm(); }
             });
@@ -367,7 +373,7 @@ impl AppWindow {
                 let on_confirm = move || {
                     if let Some(i) = nb_confirm.page_num(&mo_confirm) { nb_confirm.remove_page(Some(i)); }
                 };
-                if crate::config_observer::load_app_config().confirm_tab_close {
+                if crate::config_observer::load_app_config().map(|c| c.confirm_tab_close).unwrap_or(false) {
                     show_close_confirmation(win_inner.upcast_ref(), "Close Monitor?", "Are you sure you want to close this monitoring tab?", on_confirm);
                 } else { on_confirm(); }
             });
@@ -418,7 +424,10 @@ impl AppWindow {
     fn edit_server(&self, host: SshHost) {
         let old_alias = host.alias.clone();
         let this = self.clone();
-        let existing_aliases: Vec<String> = load_hosts().into_iter().map(|h| h.alias.to_lowercase()).collect();
+        let existing_aliases: Vec<String> = load_hosts().unwrap_or_else(|e| {
+            tracing::error!("Failed to load hosts: {}", e);
+            Vec::new()
+        }).into_iter().map(|h| h.alias.to_lowercase()).collect();
         show_server_dialog(self.inner.window.upcast_ref(), Some(&host), existing_aliases, move |new_host, password| {
             let _ = delete_host_from_config(&old_alias);
             if let Ok(_) = add_host_to_config(&new_host) {

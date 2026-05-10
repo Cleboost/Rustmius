@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use directories::UserDirs;
+use anyhow::Context;
 
 pub fn expand_tilde(path: &str) -> PathBuf {
     if path == "~" {
@@ -30,28 +31,29 @@ pub struct SshKeyPair {
     pub priv_path: PathBuf,
 }
 
-pub fn load_ssh_keys() -> Vec<SshKeyPair> {
+pub fn load_ssh_keys() -> anyhow::Result<Vec<SshKeyPair>> {
     let mut keys = Vec::new();
-    if let Some(ssh_dir) = get_ssh_dir()
-        && let Ok(entries) = std::fs::read_dir(&ssh_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("pub") {
-                    let mut priv_path = path.clone();
-                    priv_path.set_extension("");
-                    if priv_path.exists() {
-                        let name = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
-                        keys.push(SshKeyPair {
-                            name,
-                            pub_path: path,
-                            priv_path,
-                        });
-                    }
+    let ssh_dir = get_ssh_dir().ok_or_else(|| anyhow::anyhow!("Could not determine SSH directory"))?;
+    if ssh_dir.exists() {
+        for entry in std::fs::read_dir(&ssh_dir).context("Failed to read SSH directory")? {
+            let entry = entry.context("Failed to read directory entry")?;
+            let path = entry.path();
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("pub") {
+                let mut priv_path = path.clone();
+                priv_path.set_extension("");
+                if priv_path.exists() {
+                    let name = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+                    keys.push(SshKeyPair {
+                        name,
+                        pub_path: path,
+                        priv_path,
+                    });
                 }
             }
         }
+    }
     keys.sort_by(|a, b| a.name.cmp(&b.name));
-    keys
+    Ok(keys)
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -78,13 +80,13 @@ pub fn get_app_config_path() -> Option<PathBuf> {
         .map(|dirs| dirs.config_dir().join("config.json"))
 }
 
-pub fn load_app_config() -> AppConfig {
-    if let Some(path) = get_app_config_path()
-        && path.exists()
-            && let Ok(content) = fs::read_to_string(path) {
-                return serde_json::from_str(&content).unwrap_or_default();
-            }
-    AppConfig::default()
+pub fn load_app_config() -> anyhow::Result<AppConfig> {
+    let path = get_app_config_path().ok_or_else(|| anyhow::anyhow!("Could not determine app config path"))?;
+    if !path.exists() {
+        return Ok(AppConfig::default());
+    }
+    let content = fs::read_to_string(&path).context("Failed to read app config file")?;
+    serde_json::from_str(&content).context("Failed to parse app config JSON")
 }
 
 pub fn save_app_config(config: &AppConfig) -> anyhow::Result<()> {
@@ -110,13 +112,13 @@ pub fn get_default_config_path() -> Option<std::path::PathBuf> {
     get_ssh_dir().map(|d| d.join("config"))
 }
 
-pub fn load_hosts() -> Vec<SshHost> {
-    if let Some(path) = get_default_config_path()
-        && path.exists()
-            && let Ok(content) = fs::read_to_string(path) {
-                return parse_ssh_config(&content);
-            }
-    Vec::new()
+pub fn load_hosts() -> anyhow::Result<Vec<SshHost>> {
+    let path = get_default_config_path().ok_or_else(|| anyhow::anyhow!("Could not determine SSH config path"))?;
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let content = fs::read_to_string(&path).context("Failed to read SSH config file")?;
+    Ok(parse_ssh_config(&content))
 }
 
 pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {

@@ -77,7 +77,10 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
                 lb.remove(&child);
             }
 
-            let keys = load_ssh_keys();
+            let keys = load_ssh_keys().unwrap_or_else(|e| {
+                tracing::error!("Failed to load SSH keys: {}", e);
+                Vec::new()
+            });
             if keys.is_empty() {
                 let empty_lbl = gtk4::Label::new(Some(&format!("No SSH keys found in {}/", REMOTE_SSH_DIR)));
                 empty_lbl.set_margin_top(24);
@@ -212,7 +215,10 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
     content.set_margin_start(12); content.set_margin_end(12);
     content.set_spacing(12);
 
-    let hosts = load_hosts();
+    let hosts = load_hosts().unwrap_or_else(|e| {
+        tracing::error!("Failed to load hosts: {}", e);
+        Vec::new()
+    });
     if hosts.is_empty() {
         content.append(&gtk4::Label::new(Some("No servers available.")));
         dialog.add_button("Close", gtk4::ResponseType::Close);
