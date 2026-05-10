@@ -495,19 +495,21 @@ pub fn build_ui(app: &gtk4::Application) {
 }
 
 fn show_close_confirmation(parent: &gtk4::Window, title: &str, message: &str, on_confirm: impl FnOnce() + 'static) {
-    let dialog = gtk4::MessageDialog::builder()
-        .transient_for(parent)
+    let dialog = gtk4::AlertDialog::builder()
         .modal(true)
-        .buttons(gtk4::ButtonsType::OkCancel)
-        .text(title)
-        .secondary_text(message)
+        .message(title)
+        .detail(message)
+        .buttons(vec!["Cancel", "OK"])
+        .cancel_button(0)
+        .default_button(1)
         .build();
+
     let on_confirm = RefCell::new(Some(on_confirm));
-    dialog.connect_response(move |d, response| {
-        if response == gtk4::ResponseType::Ok {
-            if let Some(callback) = on_confirm.borrow_mut().take() { callback(); }
+    dialog.choose(Some(parent), None::<&gio::Cancellable>, move |res| {
+        if let Ok(idx) = res {
+            if idx == 1 {
+                if let Some(callback) = on_confirm.borrow_mut().take() { callback(); }
+            }
         }
-        d.close();
     });
-    dialog.present();
 }

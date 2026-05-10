@@ -630,17 +630,18 @@ where F: Fn(String) + 'static
 fn show_confirm_dialog<F>(parent: Option<&gtk4::Window>, title: &str, message: &str, on_confirm: F)
 where F: Fn() + 'static
 {
-    let dialog = gtk4::MessageDialog::new(
-        parent,
-        gtk4::DialogFlags::MODAL,
-        gtk4::MessageType::Question,
-        gtk4::ButtonsType::YesNo,
-        message
-    );
-    dialog.set_title(Some(title));
-    dialog.connect_response(move |d, res| {
-        if res == gtk4::ResponseType::Yes { on_confirm(); }
-        d.close();
+    let dialog = gtk4::AlertDialog::builder()
+        .modal(true)
+        .message(title)
+        .detail(message)
+        .buttons(vec!["No", "Yes"])
+        .cancel_button(0)
+        .default_button(1)
+        .build();
+
+    dialog.choose(parent, None::<&gio::Cancellable>, move |res| {
+        if let Ok(idx) = res {
+            if idx == 1 { on_confirm(); }
+        }
     });
-    dialog.present();
 }
