@@ -33,7 +33,12 @@ impl Settings {
 
         let font_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
         let font_label = gtk4::Label::new(Some("Font")); font_label.set_hexpand(true); font_label.set_halign(gtk4::Align::Start);
-        let font_button = gtk4::FontButton::with_font(&config.terminal_font);
+        let font_dialog = gtk4::FontDialog::new();
+        let font_button = gtk4::FontDialogButton::builder()
+            .dialog(&font_dialog)
+            .build();
+        let initial_font = gtk4::pango::FontDescription::from_string(&config.terminal_font);
+        font_button.set_font_desc(&initial_font);
         font_row.append(&font_label); font_row.append(&font_button);
         terminal_group.append(&font_row);
 
@@ -75,7 +80,9 @@ impl Settings {
         let save_config = move || {
             let mut new_config = AppConfig::default();
             new_config.monitor_refresh_rate = r_drop.selected();
-            new_config.terminal_font = f_btn.font().map(|s| s.to_string()).unwrap_or_else(|| "Monospace 11".to_string());
+            new_config.terminal_font = f_btn.font_desc()
+                .map(|fd| fd.to_string())
+                .unwrap_or_else(|| "Monospace 11".to_string());
             new_config.terminal_scrollback = s_spin.value() as u32;
             new_config.confirm_tab_close = c_switch.is_active();
             let _ = crate::config_observer::save_app_config(&new_config);
@@ -83,7 +90,7 @@ impl Settings {
 
         let save_fn = std::rc::Rc::new(save_config);
         let s1 = save_fn.clone(); refresh_dropdown.connect_selected_notify(move |_| { s1(); });
-        let s2 = save_fn.clone(); font_button.connect_font_set(move |_| { s2(); });
+        let s2 = save_fn.clone(); font_button.connect_font_desc_notify(move |_| { s2(); });
         let s3 = save_fn.clone(); scrollback_spinner.connect_value_changed(move |_| { s3(); });
         let s5 = save_fn.clone(); confirm_switch.connect_active_notify(move |_| { s5(); });
 
