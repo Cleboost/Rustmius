@@ -121,7 +121,7 @@ impl DockerManager {
         stats_flow.set_row_spacing(18);
         stats_flow.set_max_children_per_line(4);
 
-        stats_flow.append(&self.build_stat_card("Containers", "0", None));
+        stats_flow.append(&self.build_stat_card("Containers", "0", Some("container")));
         stats_flow.append(&self.build_stat_card("Images", "0", Some("view-grid-symbolic")));
         stats_flow.append(&self.build_stat_card("Running", "0", Some("media-playback-start-symbolic")));
         stats_flow.append(&self.build_stat_card("Paused", "0", Some("media-playback-pause-symbolic")));
@@ -137,7 +137,7 @@ impl DockerManager {
 
         let actions_grid = gtk4::Box::new(gtk4::Orientation::Horizontal, 18);
         
-        let btn_containers = self.build_action_tile("Manage Containers", "View and control your containers", None);
+        let btn_containers = self.build_action_tile("Manage Containers", "View and control your containers", Some("container"));
         let btn_images = self.build_action_tile("Manage Images", "Browse and prune images", Some("view-grid-symbolic"));
 
         let s_c = self.stack.clone();
@@ -164,14 +164,22 @@ impl DockerManager {
         tile.set_hexpand(true);
         tile.set_cursor_from_name(Some("pointer"));
 
-        let icon_img = if let Some(name) = icon_name {
-            let img = gtk4::Image::from_icon_name(name);
-            img.set_pixel_size(32);
-            img
-        } else {
-            let img = crate::ui::get_docker_icon();
-            img.set_pixel_size(32);
-            img
+        let icon_img = match icon_name {
+            Some("container") => {
+                let img = crate::ui::get_container_icon();
+                img.set_pixel_size(32);
+                img
+            }
+            Some(name) => {
+                let img = gtk4::Image::from_icon_name(name);
+                img.set_pixel_size(32);
+                img
+            }
+            None => {
+                let img = crate::ui::get_docker_icon();
+                img.set_pixel_size(32);
+                img
+            }
         };
         
         let text_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
@@ -309,10 +317,10 @@ impl DockerManager {
         card.add_css_class("docker-card");
 
         let header = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
-        let icon_img = if let Some(name) = icon_name {
-            gtk4::Image::from_icon_name(name)
-        } else {
-            crate::ui::get_docker_icon()
+        let icon_img = match icon_name {
+            Some("container") => crate::ui::get_container_icon(),
+            Some(name) => gtk4::Image::from_icon_name(name),
+            None => crate::ui::get_docker_icon(),
         };
         let label_title = gtk4::Label::builder()
             .label(title)

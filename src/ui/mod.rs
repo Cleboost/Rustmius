@@ -17,3 +17,12 @@ pub fn get_docker_icon() -> gtk4::Image {
     image.set_pixel_size(16);
     image
 }
+
+pub fn get_container_icon() -> gtk4::Image {
+    let bytes = include_bytes!("../assets/container.svg");
+    let gbytes = glib::Bytes::from_static(bytes);
+    let icon = gio::BytesIcon::new(&gbytes);
+    let image = gtk4::Image::from_gicon(&icon);
+    image.set_pixel_size(16);
+    image
+}
