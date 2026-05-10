@@ -1,6 +1,5 @@
 use ssh2::Session;
 use std::path::Path;
-use std::io::{Read, Write};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::collections::HashMap;
 use crate::config_observer::SshHost;
@@ -129,11 +128,7 @@ pub async fn upload_file(host: &SshHost, password: Option<&str>, local_path: &st
     tokio::task::spawn_blocking(move || {
         let mut local_file = std::fs::File::open(local_owned)?;
         let mut remote_file = active.sftp.create(Path::new(&remote_owned))?;
-        let mut buffer = [0; 16384];
-        while let Ok(n) = local_file.read(&mut buffer) {
-            if n == 0 { break; }
-            remote_file.write_all(&buffer[..n])?;
-        }
+        std::io::copy(&mut local_file, &mut remote_file)?;
         Ok(())
     }).await?
 }
@@ -146,27 +141,16 @@ pub async fn download_file(host: &SshHost, password: Option<&str>, remote_path: 
     tokio::task::spawn_blocking(move || {
         let mut remote_file = active.sftp.open(Path::new(&remote_owned))?;
         let mut local_file = std::fs::File::create(local_owned)?;
-
-        let mut buffer = [0; 16384];
-        while let Ok(n) = remote_file.read(&mut buffer) {
-            if n == 0 { break; }
-            local_file.write_all(&buffer[..n])?;
-        }
+        std::io::copy(&mut local_file, &mut remote_file)?;
         Ok(())
     }).await?
 }
 
-pub fn download_file_sync(host: &SshHost, password: Option<&str>, remote_path: &str, local_path: &str) -> anyhow::Result<()> {
-    let runtime = tokio::runtime::Handle::current();
-    let active = runtime.block_on(get_or_connect_sftp(host, password))?;
+pub fn download_file_sync(rt: tokio::runtime::Handle, host: SshHost, password: Option<String>, remote_path: String, local_path: String) -> anyhow::Result<()> {
+    let active = rt.block_on(get_or_connect_sftp(&host, password.as_deref()))?;
     
-    let mut remote_file = active.sftp.open(Path::new(remote_path))?;
+    let mut remote_file = active.sftp.open(Path::new(&remote_path))?;
     let mut local_file = std::fs::File::create(local_path)?;
-
-    let mut buffer = [0; 16384];
-    while let Ok(n) = remote_file.read(&mut buffer) {
-        if n == 0 { break; }
-        local_file.write_all(&buffer[..n])?;
-    }
+    std::io::copy(&mut remote_file, &mut local_file)?;
     Ok(())
 }
