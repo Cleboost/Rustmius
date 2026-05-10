@@ -141,16 +141,15 @@ pub async fn download_file(host: &SshHost, password: Option<&str>, remote_path: 
     tokio::task::spawn_blocking(move || {
         let mut remote_file = active.sftp.open(Path::new(&remote_owned))?;
         let mut local_file = std::fs::File::create(local_owned)?;
-        std::io::copy(&mut remote_file, &mut local_file)?;
+        std::io::copy(&mut local_file, &mut remote_file)?;
         Ok(())
     }).await?
 }
 
-pub fn download_file_sync(host: &SshHost, password: Option<&str>, remote_path: &str, local_path: &str) -> anyhow::Result<()> {
-    let runtime = tokio::runtime::Handle::current();
-    let active = runtime.block_on(get_or_connect_sftp(host, password))?;
+pub fn download_file_sync(rt: tokio::runtime::Handle, host: SshHost, password: Option<String>, remote_path: String, local_path: String) -> anyhow::Result<()> {
+    let active = rt.block_on(get_or_connect_sftp(&host, password.as_deref()))?;
     
-    let mut remote_file = active.sftp.open(Path::new(remote_path))?;
+    let mut remote_file = active.sftp.open(Path::new(&remote_path))?;
     let mut local_file = std::fs::File::create(local_path)?;
     std::io::copy(&mut remote_file, &mut local_file)?;
     Ok(())
