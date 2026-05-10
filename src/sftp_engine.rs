@@ -24,7 +24,7 @@ fn get_session_pool() -> &'static Mutex<HashMap<String, Arc<HostLock>>> {
     POOL.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-async fn get_or_connect_sftp(host: &SshHost, password: &Option<String>) -> anyhow::Result<Arc<ActiveSession>> {
+async fn get_or_connect_sftp(host: &SshHost, password: Option<&str>) -> anyhow::Result<Arc<ActiveSession>> {
     let host_key = format!("{}@{}", host.user.as_deref().unwrap_or("root"), host.hostname);
     
     let host_lock = {
@@ -40,7 +40,7 @@ async fn get_or_connect_sftp(host: &SshHost, password: &Option<String>) -> anyho
         }
     }
 
-    let sess = crate::ssh_engine::establish_ssh_session(host, password.clone()).await?;
+    let sess = crate::ssh_engine::establish_ssh_session(host, password).await?;
 
     let sftp_sess = sess.clone();
     let sftp = tokio::task::spawn_blocking(move || {
@@ -53,10 +53,11 @@ async fn get_or_connect_sftp(host: &SshHost, password: &Option<String>) -> anyho
     Ok(active)
 }
 
-pub async fn list_files(host: SshHost, password: Option<String>, path: String) -> anyhow::Result<Vec<RemoteFile>> {
-    let active = get_or_connect_sftp(&host, &password).await?;
+pub async fn list_files(host: &SshHost, password: Option<&str>, path: &str) -> anyhow::Result<Vec<RemoteFile>> {
+    let active = get_or_connect_sftp(host, password).await?;
+    let path_owned = path.to_string();
     tokio::task::spawn_blocking(move || {
-        let dir = active.sftp.readdir(Path::new(&path))?;
+        let dir = active.sftp.readdir(Path::new(&path_owned))?;
         let mut files = Vec::new();
         for (path, stat) in dir {
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
@@ -79,10 +80,11 @@ pub async fn list_files(host: SshHost, password: Option<String>, path: String) -
     }).await?
 }
 
-pub async fn delete_file(host: SshHost, password: Option<String>, path: String, is_dir: bool) -> anyhow::Result<()> {
-    let active = get_or_connect_sftp(&host, &password).await?;
+pub async fn delete_file(host: &SshHost, password: Option<&str>, path: &str, is_dir: bool) -> anyhow::Result<()> {
+    let active = get_or_connect_sftp(host, password).await?;
+    let path_owned = path.to_string();
     tokio::task::spawn_blocking(move || {
-        let p = Path::new(&path);
+        let p = Path::new(&path_owned);
         if is_dir {
             active.sftp.rmdir(p)?;
         } else {
@@ -92,35 +94,41 @@ pub async fn delete_file(host: SshHost, password: Option<String>, path: String, 
     }).await?
 }
 
-pub async fn create_dir(host: SshHost, password: Option<String>, path: String) -> anyhow::Result<()> {
-    let active = get_or_connect_sftp(&host, &password).await?;
+pub async fn create_dir(host: &SshHost, password: Option<&str>, path: &str) -> anyhow::Result<()> {
+    let active = get_or_connect_sftp(host, password).await?;
+    let path_owned = path.to_string();
     tokio::task::spawn_blocking(move || {
-        active.sftp.mkdir(Path::new(&path), 0o755)?;
+        active.sftp.mkdir(Path::new(&path_owned), 0o755)?;
         Ok(())
     }).await?
 }
 
-pub async fn create_file(host: SshHost, password: Option<String>, path: String) -> anyhow::Result<()> {
-    let active = get_or_connect_sftp(&host, &password).await?;
+pub async fn create_file(host: &SshHost, password: Option<&str>, path: &str) -> anyhow::Result<()> {
+    let active = get_or_connect_sftp(host, password).await?;
+    let path_owned = path.to_string();
     tokio::task::spawn_blocking(move || {
-        active.sftp.create(Path::new(&path))?;
+        active.sftp.create(Path::new(&path_owned))?;
         Ok(())
     }).await?
 }
 
-pub async fn rename_file(host: SshHost, password: Option<String>, old_path: String, new_path: String) -> anyhow::Result<()> {
-    let active = get_or_connect_sftp(&host, &password).await?;
+pub async fn rename_file(host: &SshHost, password: Option<&str>, old_path: &str, new_path: &str) -> anyhow::Result<()> {
+    let active = get_or_connect_sftp(host, password).await?;
+    let old_owned = old_path.to_string();
+    let new_owned = new_path.to_string();
     tokio::task::spawn_blocking(move || {
-        active.sftp.rename(Path::new(&old_path), Path::new(&new_path), None)?;
+        active.sftp.rename(Path::new(&old_owned), Path::new(&new_owned), None)?;
         Ok(())
     }).await?
 }
 
-pub async fn upload_file(host: SshHost, password: Option<String>, local_path: String, remote_path: String) -> anyhow::Result<()> {
-    let active = get_or_connect_sftp(&host, &password).await?;
+pub async fn upload_file(host: &SshHost, password: Option<&str>, local_path: &str, remote_path: &str) -> anyhow::Result<()> {
+    let active = get_or_connect_sftp(host, password).await?;
+    let local_owned = local_path.to_string();
+    let remote_owned = remote_path.to_string();
     tokio::task::spawn_blocking(move || {
-        let mut local_file = std::fs::File::open(local_path)?;
-        let mut remote_file = active.sftp.create(Path::new(&remote_path))?;
+        let mut local_file = std::fs::File::open(local_owned)?;
+        let mut remote_file = active.sftp.create(Path::new(&remote_owned))?;
         let mut buffer = [0; 16384];
         while let Ok(n) = local_file.read(&mut buffer) {
             if n == 0 { break; }
@@ -131,11 +139,13 @@ pub async fn upload_file(host: SshHost, password: Option<String>, local_path: St
 }
 
 #[allow(dead_code)]
-pub async fn download_file(host: SshHost, password: Option<String>, remote_path: String, local_path: String) -> anyhow::Result<()> {
-    let active = get_or_connect_sftp(&host, &password).await?;
+pub async fn download_file(host: &SshHost, password: Option<&str>, remote_path: &str, local_path: &str) -> anyhow::Result<()> {
+    let active = get_or_connect_sftp(host, password).await?;
+    let remote_owned = remote_path.to_string();
+    let local_owned = local_path.to_string();
     tokio::task::spawn_blocking(move || {
-        let mut remote_file = active.sftp.open(Path::new(&remote_path))?;
-        let mut local_file = std::fs::File::create(local_path)?;
+        let mut remote_file = active.sftp.open(Path::new(&remote_owned))?;
+        let mut local_file = std::fs::File::create(local_owned)?;
 
         let mut buffer = [0; 16384];
         while let Ok(n) = remote_file.read(&mut buffer) {
@@ -146,11 +156,11 @@ pub async fn download_file(host: SshHost, password: Option<String>, remote_path:
     }).await?
 }
 
-pub fn download_file_sync(host: SshHost, password: Option<String>, remote_path: String, local_path: String) -> anyhow::Result<()> {
+pub fn download_file_sync(host: &SshHost, password: Option<&str>, remote_path: &str, local_path: &str) -> anyhow::Result<()> {
     let runtime = tokio::runtime::Handle::current();
-    let active = runtime.block_on(get_or_connect_sftp(&host, &password))?;
+    let active = runtime.block_on(get_or_connect_sftp(host, password))?;
     
-    let mut remote_file = active.sftp.open(Path::new(&remote_path))?;
+    let mut remote_file = active.sftp.open(Path::new(remote_path))?;
     let mut local_file = std::fs::File::create(local_path)?;
 
     let mut buffer = [0; 16384];

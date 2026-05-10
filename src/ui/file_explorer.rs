@@ -163,7 +163,7 @@ impl FileExplorer {
                 let local_str = local_path.to_string_lossy().to_string();
                 let h_task = h.clone();
                 glib::MainContext::default().spawn_local(async move {
-                    match upload_file(h_task.host.clone(), h_task.password.clone(), local_str, remote_dest).await {
+                    match upload_file(&h_task.host, h_task.password.as_deref(), &local_str, &remote_dest).await {
                         Ok(_) => {
                             h_task.status_label.set_text("Upload complete.");
                             h_task.refresh();
@@ -229,7 +229,7 @@ impl FileExplorer {
             show_input_dialog(parent_window.as_ref(), "New Folder", "Name:", "", move |n| {
                 let sli = sl.clone(); let p = format!("{}{}", cur, n);
                 glib::MainContext::default().spawn_local(async move {
-                    if let Ok(_) = create_dir(sli.host.clone(), sli.password.clone(), p).await { sli.refresh(); }
+                    if let Ok(_) = create_dir(&sli.host, sli.password.as_deref(), &p).await { sli.refresh(); }
                 });
             });
         });
@@ -282,7 +282,7 @@ impl ExplorerHandle {
         lb.append(&loading);
 
         glib::MainContext::default().spawn_local(async move {
-            match list_files(h, pw, p).await {
+            match list_files(&h, pw.as_deref(), &p).await {
                 Ok(files) => {
                     while let Some(row) = lb.row_at_index(0) {
                         unparent_children(&row);
@@ -364,15 +364,14 @@ impl ExplorerHandle {
                     );
                 src.set_icon(Some(&paintable), 16, 16);
 
-                let host = h.host.clone();
-                let password = h.password.clone();
                 let rp = remote_path.clone();
                 let lp_part = local_tmp_part.clone();
                 let lp_final = local_tmp.clone();
 
+                let h_cloned = h.clone();
                 h.status_label.set_text(&format!("Preparing {}...", f.name));
                 std::thread::spawn(move || {
-                    if let Ok(_) = crate::sftp_engine::download_file_sync(host, password, rp, lp_part.clone()) {
+                    if let Ok(_) = crate::sftp_engine::download_file_sync(&h_cloned.host, h_cloned.password.as_deref(), &rp, &lp_part) {
                         let _ = std::fs::rename(lp_part, lp_final);
                     }
                 });
@@ -428,11 +427,9 @@ impl ExplorerHandle {
                                     let lp = path.to_string_lossy().to_string();
                                     hii.status_label.set_text(&format!("Downloading {}...", fi.name));
                                     let hiii = hii.clone();
-                                    let host = hiii.host.clone();
-                                    let pass = hiii.password.clone();
                                     glib::MainContext::default().spawn_local(async move {
                                         let rp = rp.clone();
-                                        match crate::sftp_engine::download_file(host, pass, rp, lp).await {
+                                        match crate::sftp_engine::download_file(&hiii.host, hiii.password.as_deref(), &rp, &lp).await {
                                             Ok(_) => hiii.status_label.set_text("Download complete."),
                                             Err(e) => hiii.status_label.set_text(&format!("Download error: {}", e)),
                                         }
@@ -453,7 +450,7 @@ impl ExplorerHandle {
                 show_confirm_dialog(parent_window.as_ref(), "Confirm Delete", &format!("Delete '{}'?", fi.name), move || {
                     let hii = hi.clone(); let p = path.clone(); let isd = fi.is_dir;
                     glib::MainContext::default().spawn_local(async move {
-                        match delete_file(hii.host.clone(), hii.password.clone(), p, isd).await {
+                        match delete_file(&hii.host, hii.password.as_deref(), &p, isd).await {
                             Ok(_) => hii.refresh(),
                             Err(e) => hii.status_label.set_text(&format!("Delete error: {}", e)),
                         }
@@ -475,7 +472,7 @@ impl ExplorerHandle {
                     let old_p = format!("{}{}", cur, old_name_cloned);
                     let new_p = format!("{}{}", cur, new_n);
                     glib::MainContext::default().spawn_local(async move {
-                        match rename_file(hii.host.clone(), hii.password.clone(), old_p, new_p).await {
+                        match rename_file(&hii.host, hii.password.as_deref(), &old_p, &new_p).await {
                             Ok(_) => hii.refresh(),
                             Err(e) => hii.status_label.set_text(&format!("Rename error: {}", e)),
                         }
@@ -494,7 +491,7 @@ impl ExplorerHandle {
                     show_input_dialog(parent_window.as_ref(), "New File", "Name:", "", move |n| {
                         let hii = hi.clone(); let p = format!("{}{}", pb, n);
                         glib::MainContext::default().spawn_local(async move {
-                            match create_file(hii.host.clone(), hii.password.clone(), p).await {
+                            match create_file(&hii.host, hii.password.as_deref(), &p).await {
                                 Ok(_) => hii.refresh(),
                                 Err(e) => hii.status_label.set_text(&format!("Error: {}", e)),
                             }
@@ -512,7 +509,7 @@ impl ExplorerHandle {
                     show_input_dialog(parent_window.as_ref(), "New Folder", "Name:", "", move |n| {
                         let hii = hi.clone(); let p = format!("{}{}", pb, n);
                         glib::MainContext::default().spawn_local(async move {
-                            match create_dir(hii.host.clone(), hii.password.clone(), p).await {
+                            match create_dir(&hii.host, hii.password.as_deref(), &p).await {
                                 Ok(_) => hii.refresh(),
                                 Err(e) => hii.status_label.set_text(&format!("Error: {}", e)),
                             }

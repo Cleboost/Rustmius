@@ -214,10 +214,7 @@ impl SystemMonitor {
                            echo \"---DISK_ALL---\"; df -h / --output=pcent,used,size | awk 'NR==2 {print $1, $2, $3}'; \
                            echo \"---CPU_P---\"; top -bn2 -d 0.2 | grep \"%Cpu\" | tail -1 | awk -F',' '{for(i=1;i<=NF;i++) if($i ~ /id/) print $i}' | awk '{print 100-$1}'";
 
-                let h = h_clone.clone();
-                let p = p_clone.clone();
-                
-                let result = run_remote_command(h, p, cmd.to_string()).await;
+                let result = run_remote_command(&h_clone, p_clone.as_deref(), cmd).await;
 
                 if let Ok(output) = result {
                     if let Ok(mut st) = s_clone.try_borrow_mut() {
