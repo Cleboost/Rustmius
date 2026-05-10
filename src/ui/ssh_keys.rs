@@ -323,9 +323,7 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
                                 }
                     }
 
-                    let h_c = host.clone();
-                    let pk_c = pubkey.clone();
-                    let result = crate::ssh_engine::deploy_pubkey(h_c, final_password, pk_c).await;
+                    let result = crate::ssh_engine::deploy_pubkey(&host, final_password.as_deref(), &pubkey).await;
 
                     match result {
                         Ok(_) => {

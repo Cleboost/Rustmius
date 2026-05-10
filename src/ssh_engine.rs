@@ -5,7 +5,7 @@ use anyhow::Context;
 use crate::config_observer::{SshHost, expand_tilde};
 use tokio::net::{TcpStream, lookup_host};
 
-pub async fn establish_ssh_session(host: &SshHost, password: Option<String>) -> anyhow::Result<Session> {
+pub async fn establish_ssh_session(host: &SshHost, password: Option<&str>) -> anyhow::Result<Session> {
     let port = host.port.unwrap_or(22);
     let addr_str = format!("{}:{}", host.hostname, port);
     
@@ -27,6 +27,7 @@ pub async fn establish_ssh_session(host: &SshHost, password: Option<String>) -> 
     std_tcp.set_nonblocking(false)?;
 
     let host_cloned = host.clone();
+    let password_cloned = password.map(|s| s.to_string());
     tokio::task::spawn_blocking(move || {
         let mut sess = Session::new()
             .context("Failed to create SSH session")?;
@@ -48,8 +49,8 @@ pub async fn establish_ssh_session(host: &SshHost, password: Option<String>) -> 
             authenticated = true;
         }
 
-        if !authenticated && let Some(pass) = password {
-            if sess.userauth_password(user, &pass).is_ok() {
+        if !authenticated && let Some(ref pass) = password_cloned {
+            if sess.userauth_password(user, pass).is_ok() {
                 authenticated = true;
             }
         }
@@ -62,17 +63,18 @@ pub async fn establish_ssh_session(host: &SshHost, password: Option<String>) -> 
     }).await?
 }
 
-pub async fn deploy_pubkey(host: SshHost, password: Option<String>, pubkey_content: String) -> anyhow::Result<()> {
-    let sess = establish_ssh_session(&host, password).await?;
+pub async fn deploy_pubkey(host: &SshHost, password: Option<&str>, pubkey_content: &str) -> anyhow::Result<()> {
+    let sess = establish_ssh_session(host, password).await?;
+    let pubkey_owned = pubkey_content.to_string();
     
     tokio::task::spawn_blocking(move || {
         let mut channel = sess.channel_session()?;
         channel.exec("mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys")?;
 
-        if pubkey_content.ends_with('\n') {
-            channel.write_all(pubkey_content.as_bytes())?;
+        if pubkey_owned.ends_with('\n') {
+            channel.write_all(pubkey_owned.as_bytes())?;
         } else {
-            let mut content = pubkey_content.to_owned();
+            let mut content = pubkey_owned;
             content.push('\n');
             channel.write_all(content.as_bytes())?;
         }
@@ -84,12 +86,13 @@ pub async fn deploy_pubkey(host: SshHost, password: Option<String>, pubkey_conte
     }).await?
 }
 
-pub async fn run_remote_command(host: SshHost, password: Option<String>, command: String) -> anyhow::Result<String> {
-    let sess = establish_ssh_session(&host, password).await?;
+pub async fn run_remote_command(host: &SshHost, password: Option<&str>, command: &str) -> anyhow::Result<String> {
+    let sess = establish_ssh_session(host, password).await?;
+    let cmd_owned = command.to_string();
 
     tokio::task::spawn_blocking(move || {
         let mut channel = sess.channel_session()?;
-        channel.exec(&command)?;
+        channel.exec(&cmd_owned)?;
         let mut output = String::new();
         channel.read_to_string(&mut output)?;
         channel.wait_close()?;
