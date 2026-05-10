@@ -2,7 +2,7 @@ use ssh2::Session;
 use std::time::Duration;
 use std::io::{Read, Write};
 use anyhow::Context;
-use crate::config_observer::{SshHost, expand_tilde};
+use crate::config_observer::{SshHost, expand_tilde, REMOTE_SSH_DIR, REMOTE_AUTHORIZED_KEYS};
 use tokio::net::{TcpStream, lookup_host};
 
 pub async fn establish_ssh_session(host: &SshHost, password: Option<&str>) -> anyhow::Result<Session> {
@@ -69,7 +69,11 @@ pub async fn deploy_pubkey(host: &SshHost, password: Option<&str>, pubkey_conten
     
     tokio::task::spawn_blocking(move || {
         let mut channel = sess.channel_session()?;
-        channel.exec("mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys")?;
+        let cmd = format!(
+            "mkdir -p {0} && chmod 700 {0} && cat >> {1} && chmod 600 {1}",
+            REMOTE_SSH_DIR, REMOTE_AUTHORIZED_KEYS
+        );
+        channel.exec(&cmd)?;
 
         if pubkey_owned.ends_with('\n') {
             channel.write_all(pubkey_owned.as_bytes())?;
