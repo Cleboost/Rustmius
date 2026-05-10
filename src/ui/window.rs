@@ -128,7 +128,8 @@ pub fn build_ui(app: &gtk4::Application) {
                     monitor_btn.add_css_class("flat");
                     monitor_btn.set_tooltip_text(Some("System Monitor"));
 
-                    let docker_btn = gtk4::Button::from_icon_name("view-grid-symbolic");
+                    let docker_btn = gtk4::Button::new();
+                    docker_btn.set_child(Some(&crate::ui::get_docker_icon()));
                     docker_btn.add_css_class("flat");
                     docker_btn.set_tooltip_text(Some("Docker Management"));
 
@@ -138,9 +139,8 @@ pub fn build_ui(app: &gtk4::Application) {
                     docker_btn.connect_clicked(move |_| {
                         let docker = DockerManager::new(host_docker.clone(), pass_docker.clone());
                         let label_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
-                        label_box.append(&gtk4::Image::from_icon_name("view-grid-symbolic"));
-                        label_box.append(&gtk4::Label::new(Some(&format!("Docker: {}", host_docker.alias))));
-                        let close_btn = gtk4::Button::from_icon_name("window-close-symbolic");
+                        label_box.append(&crate::ui::get_docker_icon());
+                        label_box.append(&gtk4::Label::new(Some(&format!("Docker: {}", host_docker.alias))));                        let close_btn = gtk4::Button::from_icon_name("window-close-symbolic");
                         close_btn.add_css_class("flat");
                         label_box.append(&close_btn);
                         
