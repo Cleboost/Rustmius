@@ -1,11 +1,9 @@
 use ssh2::Session;
-use std::net::{TcpStream, ToSocketAddrs};
-use std::time::Duration;
-use crate::config_observer::{SshHost, expand_tilde};
 use std::path::Path;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::collections::HashMap;
+use crate::config_observer::SshHost;
 
 #[derive(Debug, Clone)]
 pub struct RemoteFile {
@@ -35,45 +33,7 @@ fn get_or_connect_sftp(host: &SshHost, password: &Option<String>) -> anyhow::Res
             }
         }
 
-    let port = host.port.unwrap_or(22);
-    let addrs = format!("{}:{}", host.hostname, port).to_socket_addrs()?;
-    let mut tcp_opt = None;
-    for addr in addrs {
-        if let Ok(stream) = TcpStream::connect_timeout(&addr, Duration::from_secs(5)) {
-            tcp_opt = Some(stream);
-            break;
-        }
-    }
-    let tcp = tcp_opt.ok_or_else(|| anyhow::anyhow!("Connection timeout to {}", host.hostname))?;
-    let mut sess = Session::new()?;
-    sess.set_tcp_stream(tcp);
-    sess.handshake()?;
-
-    let user = host.user.as_deref().unwrap_or("root");
-    let mut authenticated = false;
-    if let Some(ref key_path) = host.identity_file {
-        let path = expand_tilde(key_path);
-        if sess.userauth_pubkey_file(user, None, &path, None).is_ok() {
-            println!("[DEBUG] SFTP connected to {} via Configure SSH Key ({})", host.hostname, key_path);
-            authenticated = true;
-        }
-    }
-    if !authenticated
-        && sess.userauth_agent(user).is_ok() {
-            println!("[DEBUG] SFTP connected to {} via SSH Agent", host.hostname);
-            authenticated = true;
-        }
-
-    if !authenticated
-        && let Some(pass) = password
-            && sess.userauth_password(user, pass).is_ok() {
-                println!("[DEBUG] SFTP connected to {} via Password", host.hostname);
-                authenticated = true;
-            }
-    if !authenticated {
-        return Err(anyhow::anyhow!("Authentication failed (tried key, password, and agent)"));
-    }
-
+    let sess = crate::ssh_engine::establish_ssh_session(host, password.as_deref())?;
     let sftp = sess.sftp()?;
     let active = Arc::new(ActiveSession { _sess: sess, sftp });
     if let Ok(mut pool) = get_session_pool().lock() {
