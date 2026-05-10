@@ -1,0 +1,388 @@
+use gtk4::prelude::*;
+use gtk4::{glib};
+use crate::config_observer::SshHost;
+use crate::ssh_engine::run_remote_command;
+use std::rc::Rc;
+
+pub struct DockerManager {
+    pub container: gtk4::Box,
+    host: SshHost,
+    password: Option<String>,
+    stack: gtk4::Stack,
+}
+
+impl DockerManager {
+    pub fn new(host: SshHost, password: Option<String>) -> Self {
+        let provider = gtk4::CssProvider::new();
+        provider.load_from_string("
+            .docker-card { 
+                background-color: alpha(@theme_fg_color, 0.05); 
+                border: 1px solid alpha(@theme_fg_color, 0.1);
+                border-radius: 12px;
+                padding: 16px;
+                transition: background-color 200ms;
+            }
+            .docker-card:hover {
+                background-color: alpha(@theme_fg_color, 0.08);
+            }
+            .stat-value { font-size: 2.2em; font-weight: 800; }
+            .action-card {
+                padding: 24px;
+                border-radius: 12px;
+                background-color: alpha(@theme_fg_color, 0.05);
+                border: 1px solid alpha(@theme_fg_color, 0.1);
+                transition: all 200ms;
+            }
+            .action-card:hover {
+                background-color: alpha(@theme_fg_color, 0.1);
+                border-color: alpha(@theme_fg_color, 0.2);
+            }
+        ");
+        gtk4::style_context_add_provider_for_display(
+            &gtk4::gdk::Display::default().expect("No display"),
+            &provider,
+            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+
+        let container = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+        let stack = gtk4::Stack::new();
+        stack.set_transition_type(gtk4::StackTransitionType::Crossfade);
+
+        let manager = Self {
+            container,
+            host,
+            password,
+            stack,
+        };
+
+        manager.init_ui();
+        manager
+    }
+
+    fn init_ui(&self) {
+        let scrolled = gtk4::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk4::PolicyType::Never)
+            .build();
+
+        let loading_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
+        loading_box.set_valign(gtk4::Align::Center);
+        loading_box.set_halign(gtk4::Align::Center);
+        let spinner = gtk4::Spinner::new();
+        spinner.set_spinning(true);
+        spinner.set_size_request(48, 48);
+        let loading_label = gtk4::Label::builder()
+            .label("Connecting to Docker...")
+            .css_classes(vec!["dim-label".to_string()])
+            .build();
+        loading_box.append(&spinner);
+        loading_box.append(&loading_label);
+        self.stack.add_named(&loading_box, Some("loading"));
+        self.stack.set_visible_child_name("loading");
+        
+        let dashboard = self.build_dashboard();
+        self.stack.add_named(&dashboard, Some("dashboard"));
+
+        let containers_view = self.build_list_view("Containers", "DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); $DOCKER_BIN ps -a --format '{{.Names}}\t{{.Status}}\t{{.Image}}'");
+        self.stack.add_named(&containers_view, Some("containers"));
+
+        let images_view = self.build_list_view("Images", "DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); $DOCKER_BIN images --format '{{.Repository}}\t{{.Tag}}\t{{.Size}}'");
+        self.stack.add_named(&images_view, Some("images"));
+        
+        scrolled.set_child(Some(&self.stack));
+        self.container.append(&scrolled);
+        self.refresh_dashboard();
+    }
+
+    fn build_dashboard(&self) -> gtk4::Box {
+        let box_ = gtk4::Box::new(gtk4::Orientation::Vertical, 32);
+        box_.set_margin_top(32);
+        box_.set_margin_bottom(32);
+        box_.set_margin_start(48);
+        box_.set_margin_end(48);
+
+        let header_box = gtk4::Box::new(gtk4::Orientation::Vertical, 4);
+        let title = gtk4::Label::builder()
+            .label("Docker Management")
+            .halign(gtk4::Align::Start)
+            .css_classes(vec!["title-1".to_string()])
+            .build();
+        let subtitle = gtk4::Label::builder()
+            .label(&format!("Server: {}", self.host.alias))
+            .halign(gtk4::Align::Start)
+            .css_classes(vec!["dim-label".to_string()])
+            .build();
+        header_box.append(&title);
+        header_box.append(&subtitle);
+        box_.append(&header_box);
+
+        let stats_flow = gtk4::FlowBox::new();
+        stats_flow.set_selection_mode(gtk4::SelectionMode::None);
+        stats_flow.set_column_spacing(18);
+        stats_flow.set_row_spacing(18);
+        stats_flow.set_max_children_per_line(4);
+
+        stats_flow.append(&self.build_stat_card("Containers", "0", "box-symbolic"));
+        stats_flow.append(&self.build_stat_card("Images", "0", "view-grid-symbolic"));
+        stats_flow.append(&self.build_stat_card("Running", "0", "media-playback-start-symbolic"));
+        stats_flow.append(&self.build_stat_card("Paused", "0", "media-playback-pause-symbolic"));
+        box_.append(&stats_flow);
+
+        let actions_section = gtk4::Box::new(gtk4::Orientation::Vertical, 16);
+        let actions_title = gtk4::Label::builder()
+            .label("Quick Actions")
+            .halign(gtk4::Align::Start)
+            .css_classes(vec!["title-3".to_string()])
+            .build();
+        actions_section.append(&actions_title);
+
+        let actions_grid = gtk4::Box::new(gtk4::Orientation::Horizontal, 18);
+        
+        let btn_containers = self.build_action_tile("Manage Containers", "View and control your containers", "box-symbolic");
+        let btn_images = self.build_action_tile("Manage Images", "Browse and prune images", "view-grid-symbolic");
+
+        let s_c = self.stack.clone();
+        let g_c = gtk4::GestureClick::new();
+        g_c.connect_released(move |_, _, _, _| { s_c.set_visible_child_name("containers"); });
+        btn_containers.add_controller(g_c);
+
+        let s_i = self.stack.clone();
+        let g_i = gtk4::GestureClick::new();
+        g_i.connect_released(move |_, _, _, _| { s_i.set_visible_child_name("images"); });
+        btn_images.add_controller(g_i);
+
+        actions_grid.append(&btn_containers);
+        actions_grid.append(&btn_images);
+        actions_section.append(&actions_grid);
+        box_.append(&actions_section);
+
+        box_
+    }
+
+    fn build_action_tile(&self, title: &str, desc: &str, icon: &str) -> gtk4::Box {
+        let tile = gtk4::Box::new(gtk4::Orientation::Horizontal, 16);
+        tile.add_css_class("action-card");
+        tile.set_hexpand(true);
+        tile.set_cursor_from_name(Some("pointer"));
+
+        let icon_img = gtk4::Image::from_icon_name(icon);
+        icon_img.set_pixel_size(32);
+        
+        let text_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
+        let label_title = gtk4::Label::builder()
+            .label(title)
+            .halign(gtk4::Align::Start)
+            .css_classes(vec!["title-4".to_string()])
+            .build();
+        let label_desc = gtk4::Label::builder()
+            .label(desc)
+            .halign(gtk4::Align::Start)
+            .css_classes(vec!["caption".to_string(), "dim-label".to_string()])
+            .build();
+        
+        text_box.append(&label_title);
+        text_box.append(&label_desc);
+        
+        tile.append(&icon_img);
+        tile.append(&text_box);
+        tile
+    }
+
+    fn build_list_view(&self, title: &str, refresh_cmd: &str) -> gtk4::Box {
+        let box_ = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
+        box_.set_margin_top(24);
+        box_.set_margin_bottom(24);
+        box_.set_margin_start(24);
+        box_.set_margin_end(24);
+
+        let header = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
+        let back_btn = gtk4::Button::from_icon_name("go-previous-symbolic");
+        back_btn.add_css_class("flat");
+        let s_back = self.stack.clone();
+        back_btn.connect_clicked(move |_| { s_back.set_visible_child_name("dashboard"); });
+
+        let title_label = gtk4::Label::builder()
+            .label(title)
+            .halign(gtk4::Align::Start)
+            .css_classes(vec!["title-2".to_string()])
+            .build();
+        
+        let refresh_btn = gtk4::Button::from_icon_name("view-refresh-symbolic");
+        refresh_btn.add_css_class("flat");
+
+        header.append(&back_btn);
+        header.append(&title_label);
+        let spacer = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+        spacer.set_hexpand(true);
+        header.append(&spacer);
+        header.append(&refresh_btn);
+        box_.append(&header);
+
+        let scrolled = gtk4::ScrolledWindow::builder()
+            .vexpand(true)
+            .build();
+        let list_box = gtk4::ListBox::new();
+        list_box.set_selection_mode(gtk4::SelectionMode::None);
+        list_box.add_css_class("boxed-list");
+        scrolled.set_child(Some(&list_box));
+        box_.append(&scrolled);
+
+        let host = self.host.clone();
+        let password = self.password.clone();
+        let cmd = refresh_cmd.to_string();
+        let list_box_clone = list_box.clone();
+        let do_refresh = move || {
+            let h = host.clone();
+            let p = password.clone();
+            let c = cmd.clone();
+            let lb = list_box_clone.clone();
+            glib::MainContext::default().spawn_local(async move {
+                let result = tokio::task::spawn_blocking(move || {
+                    run_remote_command(h, p, &c)
+                }).await;
+
+                if let Ok(Ok(output)) = result {
+                    while let Some(child) = lb.first_child() { lb.remove(&child); }
+                    for line in output.lines() {
+                        let parts: Vec<&str> = line.split('\t').collect();
+                        let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
+                        row.set_margin_top(8); row.set_margin_bottom(8);
+                        row.set_margin_start(12); row.set_margin_end(12);
+                        
+                        let text_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
+                        let name_label = gtk4::Label::builder()
+                            .label(parts.first().copied().unwrap_or(line))
+                            .halign(gtk4::Align::Start)
+                            .css_classes(vec!["bold".to_string()])
+                            .build();
+                        text_box.append(&name_label);
+
+                        if parts.len() > 1 {
+                            let detail = gtk4::Label::builder()
+                                .label(&parts[1..].join(" • "))
+                                .halign(gtk4::Align::Start)
+                                .css_classes(vec!["caption".to_string(), "dim-label".to_string()])
+                                .build();
+                            text_box.append(&detail);
+                        }
+                        
+                        row.append(&text_box);
+
+                        let spacer = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
+                        spacer.set_hexpand(true);
+                        row.append(&spacer);
+
+                        let actions = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+                        let stop_btn = gtk4::Button::from_icon_name("media-playback-stop-symbolic");
+                        stop_btn.add_css_class("flat");
+                        let delete_btn = gtk4::Button::from_icon_name("user-trash-symbolic");
+                        delete_btn.add_css_class("flat");
+                        delete_btn.add_css_class("error");
+                        
+                        actions.append(&stop_btn);
+                        actions.append(&delete_btn);
+                        row.append(&actions);
+
+                        lb.append(&row);
+                    }
+                }
+            });
+        };
+
+        let refresh_fn = Rc::new(do_refresh);
+        let r_init = refresh_fn.clone();
+        r_init();
+        refresh_btn.connect_clicked(move |_| { refresh_fn(); });
+
+        box_
+    }
+
+    fn build_stat_card(&self, title: &str, value: &str, icon: &str) -> gtk4::Box {
+        let card = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
+        card.set_width_request(160);
+        card.add_css_class("docker-card");
+
+        let header = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+        let icon_img = gtk4::Image::from_icon_name(icon);
+        let label_title = gtk4::Label::builder()
+            .label(title)
+            .css_classes(vec!["dim-label".to_string(), "bold".to_string()])
+            .build();
+        header.append(&icon_img);
+        header.append(&label_title);
+        
+        let label_value = gtk4::Label::builder()
+            .label(value)
+            .halign(gtk4::Align::Start)
+            .css_classes(vec!["stat-value".to_string()])
+            .build();
+        label_value.set_widget_name(&format!("stat_value_{}", title.to_lowercase()));
+
+        card.append(&header);
+        card.append(&label_value);
+        card
+    }
+
+    fn refresh_dashboard(&self) {
+        let host = self.host.clone();
+        let password = self.password.clone();
+        let stack = self.stack.clone();
+
+        glib::MainContext::default().spawn_local(async move {
+            let cmd = "DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); \
+                       OUT=$($DOCKER_BIN info --format '{{.Containers}} {{.Images}} {{.ContainersRunning}} {{.ContainersPaused}}' 2>/dev/null); \
+                       if [ -z \"$OUT\" ]; then \
+                         echo $($DOCKER_BIN ps -aq 2>/dev/null | wc -l) $($DOCKER_BIN images -q 2>/dev/null | wc -l) $($DOCKER_BIN ps -q 2>/dev/null | wc -l) $($DOCKER_BIN ps -f status=paused -q 2>/dev/null | wc -l); \
+                       else \
+                         echo $OUT; \
+                       fi";
+            
+            let result = tokio::task::spawn_blocking(move || {
+                run_remote_command(host, password, cmd)
+            }).await;
+
+            match result {
+                Ok(Ok(output)) => {
+                    let trimmed = output.trim();
+                    let last_line = trimmed.lines().last().unwrap_or("");
+                    let parts: Vec<&str> = last_line.split_whitespace().collect();
+                    
+                    if parts.len() >= 4 {
+                        if let Some(dashboard) = stack.child_by_name("dashboard") {
+                            Self::update_stat(&dashboard, "stat_value_containers", parts[0]);
+                            Self::update_stat(&dashboard, "stat_value_images", parts[1]);
+                            Self::update_stat(&dashboard, "stat_value_running", parts[2]);
+                            Self::update_stat(&dashboard, "stat_value_paused", parts[3]);
+                            
+                            if stack.visible_child_name() == Some(glib::GString::from("loading")) {
+                                stack.set_visible_child_name("dashboard");
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        });
+    }
+
+    fn update_stat(root: &gtk4::Widget, name: &str, value: &str) {
+        if let Some(label) = Self::find_child_by_name(root, name) {
+            if let Some(label) = label.downcast_ref::<gtk4::Label>() {
+                label.set_text(value);
+            }
+        }
+    }
+
+    fn find_child_by_name(widget: &gtk4::Widget, name: &str) -> Option<gtk4::Widget> {
+        if widget.widget_name() == name {
+            return Some(widget.clone());
+        }
+        let mut next = widget.first_child();
+        while let Some(child) = next {
+            if let Some(found) = Self::find_child_by_name(&child, name) {
+                return Some(found);
+            }
+            next = child.next_sibling();
+        }
+        None
+    }
+}

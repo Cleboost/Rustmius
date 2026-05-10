@@ -4,6 +4,7 @@ use crate::ui::server_list::{ServerList, ServerAction};
 use crate::ui::add_server_dialog::show_server_dialog;
 use crate::ui::file_explorer::FileExplorer;
 use crate::ui::monitor::SystemMonitor;
+use crate::ui::docker::DockerManager;
 use crate::ui::ssh_keys::build_ssh_keys_ui;
 use crate::config_observer::{add_host_to_config, delete_host_from_config, load_hosts};
 use vte4::prelude::*;
@@ -112,7 +113,7 @@ pub fn build_ui(app: &gtk4::Application) {
             let notebook = sl_notebook.clone();
             let refresh = sl_refresh_handle.borrow().as_ref().unwrap().clone();
             match action {
-                ServerAction::Connect(host) => {
+                ServerAction::Connect(host, password) => {
                     stack.set_visible_child_name("sessions");
                     let session_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
                     let toolbar = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
@@ -129,7 +130,31 @@ pub fn build_ui(app: &gtk4::Application) {
 
                     let docker_btn = gtk4::Button::from_icon_name("view-grid-symbolic");
                     docker_btn.add_css_class("flat");
-                    docker_btn.set_tooltip_text(Some("Docker Management (WIP)"));
+                    docker_btn.set_tooltip_text(Some("Docker Management"));
+
+                    let host_docker = host.clone();
+                    let pass_docker = password.clone();
+                    let nb_docker = notebook.clone();
+                    docker_btn.connect_clicked(move |_| {
+                        let docker = DockerManager::new(host_docker.clone(), pass_docker.clone());
+                        let label_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
+                        label_box.append(&gtk4::Image::from_icon_name("view-grid-symbolic"));
+                        label_box.append(&gtk4::Label::new(Some(&format!("Docker: {}", host_docker.alias))));
+                        let close_btn = gtk4::Button::from_icon_name("window-close-symbolic");
+                        close_btn.add_css_class("flat");
+                        label_box.append(&close_btn);
+                        
+                        let page_idx = nb_docker.append_page(&docker.container, Some(&label_box));
+                        nb_docker.set_tab_reorderable(&docker.container, true);
+                        nb_docker.set_current_page(Some(page_idx));
+
+                        let nb_close = nb_docker.clone();
+                        let child_close = docker.container.clone();
+                        close_btn.connect_clicked(move |_| {
+                            let idx = nb_close.page_num(&child_close);
+                            nb_close.remove_page(idx);
+                        });
+                    });
 
                     toolbar.append(&explorer_btn);
                     toolbar.append(&monitor_btn);
