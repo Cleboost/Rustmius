@@ -127,7 +127,7 @@ impl FileExplorer {
 
         let h_drop = explorer.clone_handle();
         drop_target.connect_drop(move |_, value, _, _| {
-            println!("Drop event received!");
+            tracing::debug!("Drop event received!");
             let h = h_drop.clone();
             let remote_dir = h.current_path.borrow().clone();
             let mut paths: Vec<std::path::PathBuf> = Vec::new();
@@ -154,7 +154,7 @@ impl FileExplorer {
             }
 
             let count = paths.len();
-            println!("Starting upload of {} files", count);
+            tracing::debug!("Starting upload of {} files", count);
             h.status_label.set_text(&format!("Uploading {} file(s)...", count));
 
             for local_path in paths {
