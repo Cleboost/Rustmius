@@ -258,11 +258,9 @@ impl DockerManager {
                 let h_for_fetch = h.clone();
                 let p_for_fetch = p.clone();
                 let c_for_fetch = c.clone();
-                let result = tokio::task::spawn_blocking(move || {
-                    run_remote_command(h_for_fetch, p_for_fetch, &c_for_fetch)
-                }).await;
+                let result = run_remote_command(h_for_fetch, p_for_fetch, c_for_fetch).await;
 
-                if let Ok(Ok(output)) = result {
+                if let Ok(output) = result {
                     while let Some(child) = lb.first_child() { lb.remove(&child); }
                     for line in output.lines() {
                         let parts: Vec<&str> = line.split('\t').collect();
@@ -322,9 +320,7 @@ impl DockerManager {
                                 let c_str = cmd_str.clone();
                                 glib::MainContext::default().spawn_local(async move {
                                     let cmd = format!("DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); $DOCKER_BIN {} {}", c_str, n_c);
-                                    let _ = tokio::task::spawn_blocking(move || {
-                                        run_remote_command(h_c, p_c, &cmd)
-                                    }).await;
+                                    let _ = run_remote_command(h_c, p_c, cmd).await;
                                     rb_c.emit_clicked();
                                 });
                             });
@@ -349,9 +345,7 @@ impl DockerManager {
                             glib::MainContext::default().spawn_local(async move {
                                 let sub_cmd = if is_c_del { "rm -f" } else { "rmi" };
                                 let cmd = format!("DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); $DOCKER_BIN {} {}", sub_cmd, n_c);
-                                let _ = tokio::task::spawn_blocking(move || {
-                                    run_remote_command(h_c, p_c, &cmd)
-                                }).await;
+                                let _ = run_remote_command(h_c, p_c, cmd).await;
                                 rb_c.emit_clicked();
                             });
                         });
@@ -412,12 +406,10 @@ impl DockerManager {
                          echo $OUT; \
                        fi";
             
-            let result = tokio::task::spawn_blocking(move || {
-                run_remote_command(host, password, cmd)
-            }).await;
+            let result = run_remote_command(host, password, cmd.to_string()).await;
 
             match result {
-                Ok(Ok(output)) => {
+                Ok(output) => {
                     let trimmed = output.trim();
                     let last_line = trimmed.lines().last().unwrap_or("");
                     let parts: Vec<&str> = last_line.split_whitespace().collect();

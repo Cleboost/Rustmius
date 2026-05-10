@@ -40,13 +40,13 @@ async fn get_or_connect_sftp(host: &SshHost, password: &Option<String>) -> anyho
         }
     }
 
-    let host_cloned = host.clone();
-    let password_cloned = password.clone();
-    let sess = tokio::task::spawn_blocking(move || {
-        crate::ssh_engine::establish_ssh_session(&host_cloned, password_cloned.as_deref())
+    let sess = crate::ssh_engine::establish_ssh_session(host, password.clone()).await?;
+
+    let sftp_sess = sess.clone();
+    let sftp = tokio::task::spawn_blocking(move || {
+        sftp_sess.sftp()
     }).await??;
 
-    let sftp = sess.sftp()?;
     let active = Arc::new(ActiveSession { _sess: sess, sftp });
     *session_guard = Some(active.clone());
     
