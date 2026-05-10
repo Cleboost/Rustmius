@@ -57,9 +57,10 @@ pub fn build_ui(app: &gtk4::Application) {
     let add_btn = gtk4::Button::from_icon_name("list-add-symbolic");
     add_btn.add_css_class("suggested-action");
     header.pack_start(&add_btn);
+    window.set_titlebar(Some(&header));
+
     let stack = gtk4::Stack::new();
     stack.set_transition_type(gtk4::StackTransitionType::Crossfade);
-    content_box.append(&header);
     content_box.append(&stack);
 
     let notebook = gtk4::Notebook::new();
