@@ -364,14 +364,16 @@ impl ExplorerHandle {
                     );
                 src.set_icon(Some(&paintable), 16, 16);
 
+                let host = h.host.clone();
+                let password = h.password.clone();
                 let rp = remote_path.clone();
                 let lp_part = local_tmp_part.clone();
                 let lp_final = local_tmp.clone();
+                let rt = tokio::runtime::Handle::current();
 
-                let h_cloned = h.clone();
                 h.status_label.set_text(&format!("Preparing {}...", f.name));
                 std::thread::spawn(move || {
-                    if let Ok(_) = crate::sftp_engine::download_file_sync(&h_cloned.host, h_cloned.password.as_deref(), &rp, &lp_part) {
+                    if let Ok(_) = crate::sftp_engine::download_file_sync(rt, host, password, rp, lp_part.clone()) {
                         let _ = std::fs::rename(lp_part, lp_final);
                     }
                 });
