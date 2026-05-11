@@ -292,16 +292,14 @@ impl SystemMonitor {
         let t_lbl = gtk4::Label::builder()
             .label(title)
             .halign(gtk4::Align::Start)
+            .css_classes(vec!["caption".to_string(), "dim-label".to_string()])
             .build();
-        t_lbl.add_css_class("caption");
-        t_lbl.set_opacity(0.7);
 
         let v_lbl = gtk4::Label::builder()
             .label(value)
             .halign(gtk4::Align::Start)
-            .use_markup(false)
+            .css_classes(vec!["bold".to_string()])
             .build();
-        v_lbl.add_css_class("body");
         (t_lbl, v_lbl)
     }
 
