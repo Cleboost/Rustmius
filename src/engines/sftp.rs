@@ -48,7 +48,7 @@ async fn get_or_connect_sftp(host: &SshHost, password: Option<&str>) -> anyhow::
     }
 
     info!("Connecting new SFTP session to {}", host.alias);
-    let sess = crate::ssh_engine::establish_ssh_session(host, password).await?;
+    let sess = crate::engines::ssh::establish_ssh_session(host, password).await?;
 
     let sftp_sess = sess.clone();
     let sftp = tokio::task::spawn_blocking(move || -> anyhow::Result<ssh2::Sftp> {
