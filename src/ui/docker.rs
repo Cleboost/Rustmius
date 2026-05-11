@@ -12,37 +12,6 @@ pub struct DockerManager {
 
 impl DockerManager {
     pub fn new(host: SshHost, password: Option<String>) -> Self {
-        let provider = gtk4::CssProvider::new();
-        provider.load_from_string("
-            .docker-card { 
-                background-color: alpha(@theme_fg_color, 0.05); 
-                border: 1px solid alpha(@theme_fg_color, 0.1);
-                border-radius: 12px;
-                padding: 16px;
-                transition: background-color 200ms;
-            }
-            .docker-card:hover {
-                background-color: alpha(@theme_fg_color, 0.08);
-            }
-            .stat-value { font-size: 2.2em; font-weight: 800; }
-            .action-card {
-                padding: 24px;
-                border-radius: 12px;
-                background-color: alpha(@theme_fg_color, 0.05);
-                border: 1px solid alpha(@theme_fg_color, 0.1);
-                transition: all 200ms;
-            }
-            .action-card:hover {
-                background-color: alpha(@theme_fg_color, 0.1);
-                border-color: alpha(@theme_fg_color, 0.2);
-            }
-        ");
-        gtk4::style_context_add_provider_for_display(
-            &gtk4::gdk::Display::default().expect("No display"),
-            &provider,
-            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
-
         let container = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         let stack = gtk4::Stack::new();
         stack.set_transition_type(gtk4::StackTransitionType::Crossfade);

@@ -10,8 +10,8 @@ pub struct Sidebar {
 impl Sidebar {
     pub fn new() -> Self {
         let container = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
-        container.set_width_request(60);
-        container.set_margin_top(12);
+        container.set_width_request(64);
+        container.add_css_class("sidebar");
 
         let btn_servers = Self::create_sidebar_button("network-transmit-receive-symbolic");
         let btn_keys = Self::create_sidebar_button("changes-prevent-symbolic");
@@ -37,10 +37,11 @@ impl Sidebar {
     fn create_sidebar_button(icon_name: &str) -> gtk4::Button {
         let btn = gtk4::Button::from_icon_name(icon_name);
         btn.add_css_class("flat");
+        btn.add_css_class("sidebar-button");
         btn.set_halign(gtk4::Align::Center);
         btn.set_valign(gtk4::Align::Start);
-        btn.set_width_request(36);
-        btn.set_height_request(36);
+        btn.set_width_request(42);
+        btn.set_height_request(42);
         btn
     }
 }
