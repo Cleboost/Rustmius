@@ -2,7 +2,7 @@ pkgname=rustmius-bin
 _pkgname=rustmius
 pkgver=2.4.1
 pkgrel=1
-pkgdesc="Full local Termius alternative for Linux (GTK4)"
+pkgdesc="Full local Termius alternative for Linux (GTK4) - binary release"
 arch=('x86_64')
 url="https://github.com/Cleboost/Rustmius"
 license=('MIT')
@@ -11,8 +11,8 @@ provides=("$_pkgname")
 conflicts=("$_pkgname")
 
 source=(
-    "$_pkgname.desktop::https://raw.githubusercontent.com/Cleboost/Rustmius/refs/heads/master/rustmius.desktop"
-    "$_pkgname.png::https://raw.githubusercontent.com/Cleboost/Rustmius/refs/heads/master/rustmius.png"
+    "$_pkgname.desktop::https://raw.githubusercontent.com/Cleboost/Rustmius/refs/heads/master/packages/rustmius.desktop"
+    "$_pkgname.png::https://raw.githubusercontent.com/Cleboost/Rustmius/refs/heads/master/packages/rustmius.png"
     "LICENSE::https://raw.githubusercontent.com/Cleboost/Rustmius/refs/heads/master/LICENSE"
     "$_pkgname-$pkgver-x86_64::$url/releases/download/v$pkgver/$_pkgname-x86_64"
 )
