@@ -48,6 +48,18 @@ pub fn init_style() {
             padding: 10px;
             transition: all 150ms;
         }
+        .main-headerbar {
+            padding-left: 0;
+            padding-right: 0;
+        }
+        .main-headerbar > box.start {
+            margin: 0;
+            padding: 0;
+        }
+        headerbar box.start {
+            margin-left: 0;
+            padding-left: 0;
+        }
     ");
     gtk4::style_context_add_provider_for_display(
         &gdk::Display::default().expect("Could not connect to a display."),
