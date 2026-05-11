@@ -20,20 +20,10 @@ async fn main() {
     let _args: Vec<String> = std::env::args().collect();
     if let Ok(alias) = std::env::var("RUSTMIUS_ASKPASS_ALIAS") {
         debug!("AskPass triggered for alias: {}", alias);
-        if let Ok(keyring) = oo7::Keyring::new().await {
-            let mut attributes = std::collections::HashMap::new();
-            let normalized_alias = alias.to_lowercase();
-            attributes.insert("rustmius-server-alias", normalized_alias.as_str());
-            if let Ok(items) = keyring.search_items(&attributes).await {
-                debug!("Found {} items in keyring", items.len());
-                if let Some(item) = items.first()
-                    && let Ok(password) = item.secret().await
-                        && let Ok(pass_str) = std::str::from_utf8(password.as_ref()) {
-                            debug!("Password retrieved successfully, sending to SSH");
-                            print!("{}", pass_str);
-                            std::process::exit(0);
-                        }
-            }
+        if let Some(pass_str) = tokio::runtime::Handle::current().block_on(crate::config_observer::get_keyring_password(&alias)) {
+            debug!("Password retrieved successfully, sending to SSH");
+            print!("{}", pass_str);
+            std::process::exit(0);
         }
         error!("Failed to retrieve password from keyring for alias: {}", alias);
         std::process::exit(1);

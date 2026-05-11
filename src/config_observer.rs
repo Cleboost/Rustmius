@@ -75,6 +75,23 @@ pub fn load_ssh_keys() -> anyhow::Result<Vec<SshKeyPair>> {
     Ok(keys)
 }
 
+/// Retrieves a password from the system keyring for a given server alias.
+pub async fn get_keyring_password(alias: &str) -> Option<String> {
+    if let Ok(keyring) = oo7::Keyring::new().await {
+        let mut attr = std::collections::HashMap::new();
+        let alias_lower = alias.to_lowercase();
+        attr.insert("rustmius-server-alias", alias_lower.as_str());
+        if let Ok(items) = keyring.search_items(&attr).await {
+            if let Some(item) = items.first() {
+                if let Ok(secret) = item.secret().await {
+                    return std::str::from_utf8(&secret).map(String::from).ok();
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Global application configuration settings.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AppConfig {
