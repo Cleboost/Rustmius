@@ -2,21 +2,30 @@ use std::fs;
 use std::path::PathBuf;
 use directories::UserDirs;
 use anyhow::Context;
+use std::sync::{RwLock, OnceLock};
+
+static APP_CONFIG_CACHE: OnceLock<RwLock<AppConfig>> = OnceLock::new();
+static HOSTS_CACHE: OnceLock<RwLock<Vec<SshHost>>> = OnceLock::new();
+static HOME_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
+
+fn get_home_dir() -> Option<PathBuf> {
+    HOME_DIR.get_or_init(|| UserDirs::new().map(|d| d.home_dir().to_path_buf())).clone()
+}
 
 pub fn expand_tilde(path: &str) -> PathBuf {
     if path == "~" {
-        if let Some(home) = UserDirs::new().map(|d| d.home_dir().to_path_buf()) {
+        if let Some(home) = get_home_dir() {
             return home;
         }
     } else if let Some(rest) = path.strip_prefix("~/")
-        && let Some(home) = UserDirs::new().map(|d| d.home_dir().to_path_buf()) {
+        && let Some(home) = get_home_dir() {
             return home.join(rest);
         }
     PathBuf::from(path)
 }
 
 pub fn get_ssh_dir() -> Option<PathBuf> {
-    UserDirs::new().map(|dirs| dirs.home_dir().join(".ssh"))
+    get_home_dir().map(|h| h.join(".ssh"))
 }
 
 pub const REMOTE_SSH_DIR: &str = "~/.ssh";
@@ -32,26 +41,32 @@ pub struct SshKeyPair {
 }
 
 pub fn load_ssh_keys() -> anyhow::Result<Vec<SshKeyPair>> {
-    let mut keys = Vec::new();
     let ssh_dir = get_ssh_dir().ok_or_else(|| anyhow::anyhow!("Could not determine SSH directory"))?;
-    if ssh_dir.exists() {
-        for entry in std::fs::read_dir(&ssh_dir).context("Failed to read SSH directory")? {
-            let entry = entry.context("Failed to read directory entry")?;
+    if !ssh_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut keys: Vec<SshKeyPair> = fs::read_dir(&ssh_dir)
+        .context("Failed to read SSH directory")?
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
             let path = entry.path();
             if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("pub") {
                 let mut priv_path = path.clone();
                 priv_path.set_extension("");
                 if priv_path.exists() {
-                    let name = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
-                    keys.push(SshKeyPair {
+                    let name = path.file_stem()?.to_string_lossy().to_string();
+                    return Some(SshKeyPair {
                         name,
                         pub_path: path,
                         priv_path,
                     });
                 }
             }
-        }
-    }
+            None
+        })
+        .collect();
+
     keys.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(keys)
 }
@@ -81,12 +96,28 @@ pub fn get_app_config_path() -> Option<PathBuf> {
 }
 
 pub fn load_app_config() -> anyhow::Result<AppConfig> {
-    let path = get_app_config_path().ok_or_else(|| anyhow::anyhow!("Could not determine app config path"))?;
-    if !path.exists() {
-        return Ok(AppConfig::default());
+    if let Some(cache) = APP_CONFIG_CACHE.get() {
+        return Ok(cache.read().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?.clone());
     }
-    let content = fs::read_to_string(&path).context("Failed to read app config file")?;
-    serde_json::from_str(&content).context("Failed to parse app config JSON")
+    refresh_app_config()
+}
+
+pub fn refresh_app_config() -> anyhow::Result<AppConfig> {
+    let path = get_app_config_path().ok_or_else(|| anyhow::anyhow!("Could not determine app config path"))?;
+    let config = if !path.exists() {
+        AppConfig::default()
+    } else {
+        let content = fs::read_to_string(&path).context("Failed to read app config file")?;
+        serde_json::from_str(&content).context("Failed to parse app config JSON")?
+    };
+
+    if let Some(cache) = APP_CONFIG_CACHE.get() {
+        let mut guard = cache.write().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?;
+        *guard = config.clone();
+    } else {
+        let _ = APP_CONFIG_CACHE.get_or_init(|| RwLock::new(config.clone()));
+    }
+    Ok(config)
 }
 
 pub fn save_app_config(config: &AppConfig) -> anyhow::Result<()> {
@@ -96,6 +127,13 @@ pub fn save_app_config(config: &AppConfig) -> anyhow::Result<()> {
     }
     let content = serde_json::to_string_pretty(config)?;
     fs::write(path, content)?;
+
+    if let Some(cache) = APP_CONFIG_CACHE.get() {
+        let mut guard = cache.write().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?;
+        *guard = config.clone();
+    } else {
+        let _ = APP_CONFIG_CACHE.get_or_init(|| RwLock::new(config.clone()));
+    }
     Ok(())
 }
 
@@ -113,12 +151,28 @@ pub fn get_default_config_path() -> Option<std::path::PathBuf> {
 }
 
 pub fn load_hosts() -> anyhow::Result<Vec<SshHost>> {
-    let path = get_default_config_path().ok_or_else(|| anyhow::anyhow!("Could not determine SSH config path"))?;
-    if !path.exists() {
-        return Ok(Vec::new());
+    if let Some(cache) = HOSTS_CACHE.get() {
+        return Ok(cache.read().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?.clone());
     }
-    let content = fs::read_to_string(&path).context("Failed to read SSH config file")?;
-    Ok(parse_ssh_config(&content))
+    refresh_hosts()
+}
+
+pub fn refresh_hosts() -> anyhow::Result<Vec<SshHost>> {
+    let path = get_default_config_path().ok_or_else(|| anyhow::anyhow!("Could not determine SSH config path"))?;
+    let hosts = if !path.exists() {
+        Vec::new()
+    } else {
+        let content = fs::read_to_string(&path).context("Failed to read SSH config file")?;
+        parse_ssh_config(&content)
+    };
+
+    if let Some(cache) = HOSTS_CACHE.get() {
+        let mut guard = cache.write().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?;
+        *guard = hosts.clone();
+    } else {
+        let _ = HOSTS_CACHE.get_or_init(|| RwLock::new(hosts.clone()));
+    }
+    Ok(hosts)
 }
 
 pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
@@ -233,6 +287,11 @@ pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
     let tmp_path = path.with_extension("tmp");
     std::fs::write(&tmp_path, &content)?;
     std::fs::rename(tmp_path, path)?;
+
+    if let Some(cache) = HOSTS_CACHE.get() {
+        let mut guard = cache.write().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?;
+        *guard = parse_ssh_config(&content);
+    }
     Ok(())
 }
 
@@ -266,9 +325,15 @@ pub fn delete_host_from_config(alias: &str) -> anyhow::Result<()> {
         }
         new_lines.push(line);
     }
+    let new_content = new_lines.join("\n");
     let tmp_path = path.with_extension("tmp");
-    std::fs::write(&tmp_path, new_lines.join("\n"))?;
+    std::fs::write(&tmp_path, &new_content)?;
     std::fs::rename(tmp_path, path)?;
+
+    if let Some(cache) = HOSTS_CACHE.get() {
+        let mut guard = cache.write().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?;
+        *guard = parse_ssh_config(&new_content);
+    }
     Ok(())
 }
 
