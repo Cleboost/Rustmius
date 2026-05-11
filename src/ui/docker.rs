@@ -55,9 +55,38 @@ impl DockerManager {
 
         let images_view = self.build_list_view("Images");
         self.stack.add_named(&images_view, Some("images"));
-        
         scrolled.set_child(Some(&self.stack));
         self.container.append(&scrolled);
+
+        let h_dash = self.host.clone();
+        let p_dash = self.password.clone();
+        let s_dash = self.stack.clone();
+
+        self.stack.connect_visible_child_notify(move |s| {
+            if let Some(name) = s.visible_child_name() {
+                if name == "containers" || name == "images" {
+                    if let Some(view) = s.visible_child() {
+                        if let Some(box_) = view.downcast_ref::<gtk4::Box>() {
+                            if let Some(header) = box_.first_child() {
+                                let mut next = header.first_child();
+                                while let Some(child) = next {
+                                    if let Some(btn) = child.downcast_ref::<gtk4::Button>() {
+                                        if btn.icon_name() == Some(glib::GString::from("view-refresh-symbolic")) {
+                                            btn.emit_clicked();
+                                            break;
+                                        }
+                                    }
+                                    next = child.next_sibling();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Start on dashboard and refresh
+        self.stack.set_visible_child_name("dashboard");
         self.refresh_dashboard();
     }
 
@@ -321,7 +350,6 @@ impl DockerManager {
             });
         });
 
-        refresh_btn.emit_clicked();
         box_
     }
 

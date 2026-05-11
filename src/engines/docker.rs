@@ -1,11 +1,11 @@
 use crate::config_observer::SshHost;
 use crate::engines::ssh::run_remote_command;
-use tracing::{info, debug, instrument};
+use tracing::{info, instrument};
 
 /// Retrieves Docker statistics (containers, images, running, paused) from the remote host.
 #[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias))]
 pub async fn get_docker_stats(host: &SshHost, password: Option<&str>) -> anyhow::Result<Vec<String>> {
-    debug!("Fetching Docker stats for {}", host.alias);
+    tracing::trace!("Fetching Docker stats for {}", host.alias);
     let cmd = "DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); \
                OUT=$($DOCKER_BIN info --format '{{.Containers}} {{.Images}} {{.ContainersRunning}} {{.ContainersPaused}}' 2>/dev/null); \
                if [ -z \"$OUT\" ]; then \
@@ -23,7 +23,7 @@ pub async fn get_docker_stats(host: &SshHost, password: Option<&str>) -> anyhow:
 /// Lists Docker items (containers or images) from the remote host.
 #[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, is_containers = is_containers))]
 pub async fn list_docker_items(host: &SshHost, password: Option<&str>, is_containers: bool) -> anyhow::Result<String> {
-    debug!("Listing Docker {} for {}", if is_containers { "containers" } else { "images" }, host.alias);
+    tracing::trace!("Listing Docker {} for {}", if is_containers { "containers" } else { "images" }, host.alias);
     let cmd = if is_containers {
         "DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); $DOCKER_BIN ps -a --format '{{.Names}}\t{{.Status}}\t{{.Image}}'"
     } else {
