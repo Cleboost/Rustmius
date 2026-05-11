@@ -117,21 +117,7 @@ impl ServerList {
             let h = host_conn.clone();
             let oa = on_action_conn.clone();
             glib::MainContext::default().spawn_local(async move {
-                let mut password = None;
-                if let Ok(keyring) = oo7::Keyring::new().await {
-                    let mut attr = std::collections::HashMap::new();
-                    let alias_lower = h.alias.to_lowercase();
-                    attr.insert("rustmius-server-alias", alias_lower.as_str());
-                    if let Ok(items) = keyring.search_items(&attr).await {
-                        if let Some(item) = items.first() {
-                            if let Ok(secret) = item.secret().await {
-                                if let Ok(pass_str) = std::str::from_utf8(&secret) {
-                                    password = Some(pass_str.to_string());
-                                }
-                            }
-                        }
-                    }
-                }
+                let password = crate::config_observer::get_keyring_password(&h.alias).await;
                 oa(ServerAction::Connect(h, password));
             });
         });
