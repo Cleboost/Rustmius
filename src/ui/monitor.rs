@@ -1,6 +1,6 @@
 use gtk4::prelude::*;
 use crate::config_observer::SshHost;
-use crate::ssh_engine::run_remote_command;
+use crate::engines::monitor::fetch_system_metrics;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -203,62 +203,25 @@ impl SystemMonitor {
             loop {
                 if container_weak.upgrade().is_none() { break; }
                 
-                let cmd = "export LC_ALL=C; \
-                           echo \"---OS---\"; cat /etc/os-release | grep PRETTY_NAME | cut -d'\"' -f2; \
-                           echo \"---KERNEL---\"; uname -r; \
-                           echo \"---UPTIME---\"; uptime -p | sed 's/up //'; \
-                           echo \"---CPU_MODEL---\"; cat /proc/cpuinfo | grep \"model name\" | head -1 | cut -d':' -f2 | xargs; \
-                           echo \"---CPU_CORES---\"; grep -c ^processor /proc/cpuinfo; \
-                           echo \"---ARCH---\"; uname -m; \
-                           echo \"---HOSTNAME---\"; hostname; \
-                           echo \"---IPS---\"; ip -brief addr show | awk '{print $1 \": \" $3}'; \
-                           echo \"---RAM---\"; free -h | grep Mem | awk '{print $3 \" / \" $2}'; \
-                           echo \"---RAM_P---\"; free | grep Mem | awk '{print $3/$2}'; \
-                           echo \"---DISK_ALL---\"; df -h / --output=pcent,used,size | awk 'NR==2 {print $1, $2, $3}'; \
-                           echo \"---CPU_P---\"; top -bn2 -d 0.2 | grep \"%Cpu\" | tail -1 | awk -F',' '{for(i=1;i<=NF;i++) if($i ~ /id/) print $i}' | awk '{print 100-$1}'";
+                let result = fetch_system_metrics(&h_clone, p_clone.as_deref()).await;
 
-                let result = run_remote_command(&h_clone, p_clone.as_deref(), cmd).await;
-
-                if let Ok(output) = result {
+                if let Ok(m) = result {
                     if let Ok(mut st) = s_clone.try_borrow_mut() {
-                        let mut current_section = "";
-                        let mut ips = Vec::new();
-
-                        for line in output.lines() {
-                            if line.starts_with("---") && line.ends_with("---") {
-                                current_section = line;
-                                continue;
-                            }
-                            match current_section {
-                                "---OS---" => st.os = line.to_string(),
-                                "---KERNEL---" => st.kernel = line.to_string(),
-                                "---UPTIME---" => st.uptime = line.to_string(),
-                                "---CPU_MODEL---" => st.cpu_model = line.to_string(),
-                                "---CPU_CORES---" => st.cpu_cores = line.to_string(),
-                                "---ARCH---" => st.arch = line.to_string(),
-                                "---HOSTNAME---" => st.hostname = line.to_string(),
-                                "---IPS---" => if !line.is_empty() { ips.push(line); },
-                                "---RAM---" => {
-                                    let parts: Vec<&str> = line.split(" / ").collect();
-                                    if parts.len() == 2 {
-                                        st.ram_used = parts[0].to_string();
-                                        st.ram_total = parts[1].to_string();
-                                    }
-                                },
-                                "---RAM_P---" => st.target_ram = line.trim().replace(',', ".").parse().unwrap_or(0.0),
-                                "---DISK_ALL---" => {
-                                    let parts: Vec<&str> = line.split_whitespace().collect();
-                                    if parts.len() == 3 {
-                                        st.target_disk = parts[0].trim_end_matches('%').replace(',', ".").parse::<f64>().unwrap_or(0.0) / 100.0;
-                                        st.disk_used = parts[1].to_string();
-                                        st.disk_total = parts[2].to_string();
-                                    }
-                                },
-                                "---CPU_P---" => st.target_cpu = line.trim().replace(',', ".").parse::<f64>().unwrap_or(0.0) / 100.0,
-                                _ => {}
-                            }
-                        }
-                        st.ips = ips.join("\n");
+                        st.os = m.os;
+                        st.kernel = m.kernel;
+                        st.uptime = m.uptime;
+                        st.cpu_model = m.cpu_model;
+                        st.cpu_cores = m.cpu_cores;
+                        st.arch = m.arch;
+                        st.hostname = m.hostname;
+                        st.ips = m.ips.join("\n");
+                        st.ram_used = m.ram_used;
+                        st.ram_total = m.ram_total;
+                        st.target_ram = m.ram_percent;
+                        st.target_disk = m.disk_percent;
+                        st.disk_used = m.disk_used;
+                        st.disk_total = m.disk_total;
+                        st.target_cpu = m.cpu_percent;
                     }
                 }
 

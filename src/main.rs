@@ -1,7 +1,6 @@
 mod config_observer;
 mod ui;
-mod ssh_engine;
-mod sftp_engine;
+mod engines;
 
 use gtk4::prelude::*;
 use crate::ui::window::build_ui;
