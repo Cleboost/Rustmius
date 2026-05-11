@@ -12,6 +12,7 @@ fn get_home_dir() -> Option<PathBuf> {
     HOME_DIR.get_or_init(|| UserDirs::new().map(|d| d.home_dir().to_path_buf())).clone()
 }
 
+/// Expands a tilde (`~`) at the beginning of a path string into the user's home directory.
 pub fn expand_tilde(path: &str) -> PathBuf {
     if path == "~" {
         if let Some(home) = get_home_dir() {
@@ -24,6 +25,7 @@ pub fn expand_tilde(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
+/// Returns the path to the user's `.ssh` directory.
 pub fn get_ssh_dir() -> Option<PathBuf> {
     get_home_dir().map(|h| h.join(".ssh"))
 }
@@ -33,6 +35,7 @@ pub const REMOTE_AUTHORIZED_KEYS: &str = "~/.ssh/authorized_keys";
 #[allow(dead_code)]
 pub const REMOTE_SSH_CONFIG: &str = "~/.ssh/config";
 
+/// Represents an SSH public/private key pair.
 #[derive(Debug, Clone)]
 pub struct SshKeyPair {
     pub name: String,
@@ -40,6 +43,7 @@ pub struct SshKeyPair {
     pub priv_path: PathBuf,
 }
 
+/// Scans the local `.ssh` directory for public keys with corresponding private keys.
 pub fn load_ssh_keys() -> anyhow::Result<Vec<SshKeyPair>> {
     let ssh_dir = get_ssh_dir().ok_or_else(|| anyhow::anyhow!("Could not determine SSH directory"))?;
     if !ssh_dir.exists() {
@@ -71,6 +75,7 @@ pub fn load_ssh_keys() -> anyhow::Result<Vec<SshKeyPair>> {
     Ok(keys)
 }
 
+/// Global application configuration settings.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AppConfig {
     pub monitor_refresh_rate: u32, // index: 0=1s, 1=3s, 2=5s, 3=10s
@@ -95,6 +100,7 @@ pub fn get_app_config_path() -> Option<PathBuf> {
         .map(|dirs| dirs.config_dir().join("config.json"))
 }
 
+/// Loads the application configuration, using a cached version if available.
 pub fn load_app_config() -> anyhow::Result<AppConfig> {
     if let Some(cache) = APP_CONFIG_CACHE.get() {
         return Ok(cache.read().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?.clone());
@@ -102,6 +108,7 @@ pub fn load_app_config() -> anyhow::Result<AppConfig> {
     refresh_app_config()
 }
 
+/// Forces a reload of the application configuration from disk and updates the cache.
 pub fn refresh_app_config() -> anyhow::Result<AppConfig> {
     let path = get_app_config_path().ok_or_else(|| anyhow::anyhow!("Could not determine app config path"))?;
     let config = if !path.exists() {
@@ -120,6 +127,7 @@ pub fn refresh_app_config() -> anyhow::Result<AppConfig> {
     Ok(config)
 }
 
+/// Saves the provided application configuration to disk and updates the cache.
 pub fn save_app_config(config: &AppConfig) -> anyhow::Result<()> {
     let path = get_app_config_path().ok_or_else(|| anyhow::anyhow!("Could not find app config path"))?;
     if let Some(parent) = path.parent() {
@@ -137,6 +145,7 @@ pub fn save_app_config(config: &AppConfig) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Represents an SSH host entry as defined in an SSH config file.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SshHost {
     pub alias: String,
@@ -150,6 +159,7 @@ pub fn get_default_config_path() -> Option<std::path::PathBuf> {
     get_ssh_dir().map(|d| d.join("config"))
 }
 
+/// Loads the list of SSH hosts from the default SSH config file, using a cached version if available.
 pub fn load_hosts() -> anyhow::Result<Vec<SshHost>> {
     if let Some(cache) = HOSTS_CACHE.get() {
         return Ok(cache.read().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?.clone());
@@ -157,6 +167,7 @@ pub fn load_hosts() -> anyhow::Result<Vec<SshHost>> {
     refresh_hosts()
 }
 
+/// Forces a reload of the SSH hosts from the config file and updates the cache.
 pub fn refresh_hosts() -> anyhow::Result<Vec<SshHost>> {
     let path = get_default_config_path().ok_or_else(|| anyhow::anyhow!("Could not determine SSH config path"))?;
     let hosts = if !path.exists() {
@@ -175,6 +186,7 @@ pub fn refresh_hosts() -> anyhow::Result<Vec<SshHost>> {
     Ok(hosts)
 }
 
+/// Parses a raw SSH configuration string into a vector of `SshHost` structures.
 pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
     let mut hosts = Vec::new();
     let mut current_host: Option<SshHost> = None;
@@ -244,6 +256,7 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
     hosts
 }
 
+/// Appends a new SSH host entry to the user's SSH config file and updates the cache.
 pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
     let path = get_default_config_path().ok_or_else(|| anyhow::anyhow!("Could not find SSH config path"))?;
     if let Some(parent) = path.parent() {
@@ -295,6 +308,7 @@ pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Removes an SSH host entry from the config file by its alias and updates the cache.
 pub fn delete_host_from_config(alias: &str) -> anyhow::Result<()> {
     let path = get_default_config_path().ok_or_else(|| anyhow::anyhow!("No config path"))?;
     if !path.exists() { return Ok(()); }
