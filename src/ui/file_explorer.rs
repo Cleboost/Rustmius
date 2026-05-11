@@ -19,21 +19,6 @@ pub struct FileExplorer {
 
 impl FileExplorer {
     pub fn new(host: SshHost, password: Option<String>) -> Self {
-        let provider = gtk4::CssProvider::new();
-        provider.load_from_string("
-            .sftp-list row { padding: 6px 12px; }
-            .sftp-list row:selected { background-color: @theme_selected_bg_color; color: @theme_selected_fg_color; }
-            .sftp-list row:hover:not(:selected) { background-color: alpha(@theme_fg_color, 0.04); }
-            .sftp-status { padding: 4px 12px; background-color: alpha(@theme_fg_color, 0.03); border-top: 1px solid alpha(@theme_fg_color, 0.08); }
-            .sftp-path { font-family: monospace; font-size: 0.9em; }
-            .file-size { opacity: 0.55; font-size: 0.85em; font-family: monospace; }
-        ");
-        gtk4::style_context_add_provider_for_display(
-            &gdk::Display::default().expect("Could not connect to a display."),
-            &provider,
-            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
-
         let user = host.user.as_deref().unwrap_or("root");
         let initial_path = if user == "root" {
             "/root/".to_string()

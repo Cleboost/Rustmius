@@ -1,5 +1,6 @@
 use gtk4::prelude::*;
 use gtk4::{glib, gio, gdk};
+use crate::ui::style::init_style;
 use crate::ui::server_list::{ServerList, ServerAction};
 use crate::ui::add_server_dialog::show_server_dialog;
 use crate::ui::file_explorer::FileExplorer;
@@ -28,6 +29,7 @@ struct AppWindowInner {
 
 impl AppWindow {
     pub fn new(app: &gtk4::Application) -> Self {
+        init_style();
         let window = gtk4::ApplicationWindow::builder()
             .application(app)
             .title("Rustmius")
