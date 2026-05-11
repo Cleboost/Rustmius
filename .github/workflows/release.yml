@@ -168,50 +168,75 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   aur:
-    name: Update AUR
+    name: Update AUR (${{ matrix.package }})
     needs: [prepare, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    strategy:
+      matrix:
+        package: [rustmius, rustmius-bin, rustmius-git]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
       - name: Download Artifacts
+        if: matrix.package == 'rustmius-bin'
         uses: actions/download-artifact@v8
         with:
           name: binary-x86_64
           path: .
 
-      - name: Update PKGBUILD
+      - name: Update PKGBUILD (rustmius-bin)
+        if: matrix.package == 'rustmius-bin'
         run: |
           VERSION="${{ needs.prepare.outputs.version_only }}"
-          HASH_DESKTOP=$(sha256sum rustmius.desktop | cut -d' ' -f1)
-          HASH_PNG=$(sha256sum rustmius.png | cut -d' ' -f1)
+          # Paths updated to packages/ subdirectory
+          HASH_DESKTOP=$(sha256sum packages/rustmius.desktop | cut -d' ' -f1)
+          HASH_PNG=$(sha256sum packages/rustmius.png | cut -d' ' -f1)
           HASH_LICENSE=$(sha256sum LICENSE | cut -d' ' -f1)
           HASH_BINARY=$(sha256sum rustmius-x86_64 | cut -d' ' -f1)
 
+          # Target the specific PKGBUILD in packages/rustmius-bin/
+          TARGET="packages/rustmius-bin/PKGBUILD"
           awk -v v="$VERSION" -v d="$HASH_DESKTOP" -v p="$HASH_PNG" -v l="$HASH_LICENSE" -v b="$HASH_BINARY" '
           BEGIN { h[0]=d; h[1]=p; h[2]=l; h[3]=b; i=0 }
           /^pkgver=/ { $0="pkgver=" v }
           /^pkgrel=/ { $0="pkgrel=1" }
+          /^pkgdesc=/ { $0="pkgdesc=\"Full local Termius alternative for Linux (GTK4) - binary release\"" }
           /'\''[0-9a-f]{64}'\''/ && i < 4 {
             sub(/'\''[0-9a-f]{64}'\''/, "'\''" h[i++] "'\''")
           }
           { print }
-          ' PKGBUILD > PKGBUILD.tmp && mv PKGBUILD.tmp PKGBUILD
+          ' "$TARGET" > "$TARGET.tmp" && mv "$TARGET.tmp" "$TARGET"
 
-      - name: Commit and Push PKGBUILD
+      - name: Update PKGBUILD (rustmius)
+        if: matrix.package == 'rustmius'
+        run: |
+          VERSION="${{ needs.prepare.outputs.version_only }}"
+          # Get source archive hash
+          URL="https://github.com/Cleboost/Rustmius/archive/v$VERSION.tar.gz"
+          curl -L -o source.tar.gz "$URL"
+          HASH_SOURCE=$(sha256sum source.tar.gz | cut -d' ' -f1)
+
+          TARGET="packages/rustmius/PKGBUILD"
+          sed -i "s/^pkgver=.*/pkgver=$VERSION/" "$TARGET"
+          sed -i "s/^pkgrel=.*/pkgrel=1/" "$TARGET"
+          sed -i "s/^pkgdesc=.*/pkgdesc=\"Full local Termius alternative for Linux (GTK4) - built from stable source\"/" "$TARGET"
+          # Update the source hash (it's the only hash in this PKGBUILD)
+          sed -i "s/sha256sums=('.*')/sha256sums=('$HASH_SOURCE')/" "$TARGET"
+
+      - name: Commit and Push PKGBUILDs
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          git add PKGBUILD
+          git add packages/
           
           if [ -z "$(git status --porcelain)" ]; then
             echo "nothing to commit"
           else
-            git commit -m "chore: update PKGBUILD to ${{ needs.prepare.outputs.new_version }}"
+            git commit -m "chore: update PKGBUILDs to ${{ needs.prepare.outputs.new_version }}"
             git pull --rebase origin master
             git push origin master
           fi
@@ -219,8 +244,8 @@ jobs:
       - name: Publish AUR package
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.3
         with:
-          pkgname: rustmius-bin
-          pkgbuild: ./PKGBUILD
+          pkgname: ${{ matrix.package }}
+          pkgbuild: ./packages/${{ matrix.package }}/PKGBUILD
           commit_username: ${{ secrets.AUR_USERNAME }}
           commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
