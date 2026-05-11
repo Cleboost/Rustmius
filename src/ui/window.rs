@@ -135,7 +135,7 @@ impl AppWindow {
         });
         let existing_aliases: Vec<String> = existing_hosts.iter().map(|h| h.alias.to_lowercase()).collect();
         
-        show_server_dialog(self.inner.window.upcast_ref(), None, existing_aliases, move |new_host, password| {
+        show_server_dialog(self.inner.window.upcast_ref(), None, existing_aliases, move |new_host, password: String| {
             if let Ok(_) = add_host_to_config(&new_host) {
                 if !password.is_empty() {
                     let host_alias = new_host.alias.clone();
@@ -326,7 +326,7 @@ impl AppWindow {
         let nb = notebook.clone();
         let window = win.clone();
         glib::MainContext::default().spawn_local(async move {
-            let password = Self::get_keyring_password(&h_alias).await;
+            let password = crate::config_observer::get_keyring_password(&h_alias).await;
             let explorer = FileExplorer::new(host, password);
             let count = Self::count_pages_with_prefix(&nb, &format!("explorer:{}", h_alias));
             explorer.container.set_widget_name(&format!("explorer:{}:{}", h_alias, count));
@@ -359,7 +359,7 @@ impl AppWindow {
         let nb = notebook.clone();
         let window = win.clone();
         glib::MainContext::default().spawn_local(async move {
-            let password = Self::get_keyring_password(&h_alias).await;
+            let password = crate::config_observer::get_keyring_password(&h_alias).await;
             let monitor = SystemMonitor::new(host, password);
             let count = Self::count_pages_with_prefix(&nb, &format!("monitor:{}", h_alias));
             monitor.container.set_widget_name(&format!("monitor:{}:{}", h_alias, count));
@@ -447,21 +447,6 @@ impl AppWindow {
                 this.refresh();
             }
         });
-    }
-
-    // Helper methods
-    async fn get_keyring_password(alias: &str) -> Option<String> {
-        if let Ok(keyring) = oo7::Keyring::new().await {
-            let mut attr = HashMap::new();
-            let alias_lower = alias.to_lowercase();
-            attr.insert("rustmius-server-alias", alias_lower.as_str());
-            if let Ok(items) = keyring.search_items(&attr).await
-                && let Some(item) = items.first()
-                && let Ok(pass) = item.secret().await {
-                return std::str::from_utf8(pass.as_ref()).map(String::from).ok();
-            }
-        }
-        None
     }
 
     fn count_pages_with_prefix(notebook: &gtk4::Notebook, prefix: &str) -> u32 {
