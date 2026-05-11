@@ -6,6 +6,7 @@ use anyhow::Context;
 use crate::config_observer::SshHost;
 use tracing::{info, debug, warn, instrument};
 
+/// Represents a file or directory on a remote server.
 #[derive(Debug, Clone)]
 pub struct RemoteFile {
     pub name: String,
@@ -13,6 +14,7 @@ pub struct RemoteFile {
     pub size: u64,
 }
 
+/// Manages an active SSH session and its associated SFTP subsystem.
 pub struct ActiveSession {
     _sess: Session,
     pub sftp: ssh2::Sftp,
@@ -62,6 +64,7 @@ async fn get_or_connect_sftp(host: &SshHost, password: Option<&str>) -> anyhow::
     Ok(active)
 }
 
+/// Lists files in the specified remote directory.
 #[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, path = %path))]
 pub async fn list_files(host: &SshHost, password: Option<&str>, path: &str) -> anyhow::Result<Vec<RemoteFile>> {
     debug!("Listing files in {}", path);
@@ -92,6 +95,7 @@ pub async fn list_files(host: &SshHost, password: Option<&str>, path: &str) -> a
     }).await?
 }
 
+/// Deletes a file or directory on the remote host.
 #[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, path = %path, is_dir = is_dir))]
 pub async fn delete_file(host: &SshHost, password: Option<&str>, path: &str, is_dir: bool) -> anyhow::Result<()> {
     info!("Deleting {} (dir: {})", path, is_dir);
@@ -110,6 +114,7 @@ pub async fn delete_file(host: &SshHost, password: Option<&str>, path: &str, is_
     }).await?
 }
 
+/// Creates a new directory on the remote host.
 #[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, path = %path))]
 pub async fn create_dir(host: &SshHost, password: Option<&str>, path: &str) -> anyhow::Result<()> {
     info!("Creating directory {}", path);
@@ -122,6 +127,7 @@ pub async fn create_dir(host: &SshHost, password: Option<&str>, path: &str) -> a
     }).await?
 }
 
+/// Creates an empty file on the remote host.
 #[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, path = %path))]
 pub async fn create_file(host: &SshHost, password: Option<&str>, path: &str) -> anyhow::Result<()> {
     info!("Creating file {}", path);
@@ -134,6 +140,7 @@ pub async fn create_file(host: &SshHost, password: Option<&str>, path: &str) -> 
     }).await?
 }
 
+/// Renames or moves a file or directory on the remote host.
 #[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, old_path = %old_path, new_path = %new_path))]
 pub async fn rename_file(host: &SshHost, password: Option<&str>, old_path: &str, new_path: &str) -> anyhow::Result<()> {
     info!("Renaming {} to {}", old_path, new_path);
@@ -147,6 +154,7 @@ pub async fn rename_file(host: &SshHost, password: Option<&str>, old_path: &str,
     }).await?
 }
 
+/// Uploads a local file to the remote host.
 #[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, local = %local_path, remote = %remote_path))]
 pub async fn upload_file(host: &SshHost, password: Option<&str>, local_path: &str, remote_path: &str) -> anyhow::Result<()> {
     info!("Uploading {} to {}", local_path, remote_path);
@@ -164,6 +172,7 @@ pub async fn upload_file(host: &SshHost, password: Option<&str>, local_path: &st
     }).await?
 }
 
+/// Downloads a remote file to the local filesystem.
 #[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, remote = %remote_path, local = %local_path))]
 pub async fn download_file(host: &SshHost, password: Option<&str>, remote_path: &str, local_path: &str) -> anyhow::Result<()> {
     info!("Downloading {} to {}", remote_path, local_path);
@@ -181,6 +190,7 @@ pub async fn download_file(host: &SshHost, password: Option<&str>, remote_path: 
     }).await?
 }
 
+/// Synchronously downloads a remote file using a provided Tokio runtime handle.
 #[instrument(skip(rt, password), fields(host = %host.hostname, alias = %host.alias, remote = %remote_path, local = %local_path))]
 pub fn download_file_sync(rt: tokio::runtime::Handle, host: SshHost, password: Option<String>, remote_path: String, local_path: String) -> anyhow::Result<()> {
     info!("Sync downloading {} to {}", remote_path, local_path);

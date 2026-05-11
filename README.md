@@ -44,15 +44,24 @@ Ensure you have the system dependencies installed (`libgtk-4-dev`, `libvte-2.91-
 git clone https://github.com/Cleboost/Rustmius.git
 cd Rustmius
 cargo build --release
-```
+## 🏗️ Architecture
 
+Rustmius has undergone a major refactor to ensure long-term maintainability and high performance:
+- **Asynchronous Core**: Fully powered by `Tokio` for non-blocking I/O and responsive UI.
+- **Modular UI**: Decoupled components (Sidebar, Header, View Stack) for a cleaner codebase.
+- **Smart Caching**: In-memory configuration and host caching using `OnceLock` to minimize disk I/O.
+- **Unified Error Handling**: Detailed error reporting using `anyhow` with full context on all network operations.
+- **Observability**: Comprehensive instrumentation with `tracing` spans for debugging SSH and SFTP sessions.
+
+## 🚀 Installation
+...
 ## 🗺️ Roadmap
 
-- [ ] **Server Performance Monitoring** (Custom Rust UI, htop-like experience)
-- [ ] **Docker Manager** (View images, Pull, Start/Stop/Create containers)
-- [x] **SSH Keys Management** (Creation, Deletion, Auto-config on servers, Key-based auth UX)
-- [ ] **SyncCloud** (Optional): Cross-device synchronization or backup using fully encrypted GitHub Gists.
-- [ ] Global Settings & Themes
+- [x] **Server Performance Monitoring**: Real-time CPU, RAM, and Disk metrics.
+- [x] **Docker Manager**: Manage containers and images directly from the UI.
+- [x] **SSH Keys Management**: Integrated key generation and deployment.
+- [ ] **SyncCloud** (Planned): Optional cross-device synchronization.
+- [x] **Global Settings**: Configure terminal fonts, refresh rates, and UI preferences.
 
 ## 🛠️ Development
 

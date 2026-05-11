@@ -6,6 +6,7 @@ use crate::config_observer::{SshHost, expand_tilde, REMOTE_SSH_DIR, REMOTE_AUTHO
 use tokio::net::{TcpStream, lookup_host};
 use tracing::{info, debug, warn, instrument};
 
+/// Establishes an SSH session with the given host, attempting multiple authentication methods.
 #[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias))]
 pub async fn establish_ssh_session(host: &SshHost, password: Option<&str>) -> anyhow::Result<Session> {
     let port = host.port.unwrap_or(22);
@@ -96,6 +97,7 @@ pub async fn establish_ssh_session(host: &SshHost, password: Option<&str>) -> an
     }).await?
 }
 
+/// Deploys a public key to the remote host's `authorized_keys` file.
 #[instrument(skip(password, pubkey_content), fields(host = %host.hostname, alias = %host.alias))]
 pub async fn deploy_pubkey(host: &SshHost, password: Option<&str>, pubkey_content: &str) -> anyhow::Result<()> {
     info!("Deploying public key to {}", host.alias);
@@ -132,6 +134,7 @@ pub async fn deploy_pubkey(host: &SshHost, password: Option<&str>, pubkey_conten
     Ok(())
 }
 
+/// Runs a command on the remote host and returns its standard output.
 #[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, command = %command))]
 pub async fn run_remote_command(host: &SshHost, password: Option<&str>, command: &str) -> anyhow::Result<String> {
     debug!("Running remote command on {}: {}", host.alias, command);
