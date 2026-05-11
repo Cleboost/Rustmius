@@ -8,23 +8,26 @@ use tracing::{debug, info, error};
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env()
-            .add_directive(tracing::Level::INFO.into())
-            .add_directive("rustmius=debug".parse().unwrap()))
-        .init();
+    let is_askpass = std::env::var("RUSTMIUS_ASKPASS_ALIAS").is_ok();
 
-    info!("Starting Rustmius v{}", env!("CARGO_PKG_VERSION"));
+    if !is_askpass {
+        tracing_subscriber::fmt()
+            .with_writer(std::io::stderr)
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive(tracing::Level::INFO.into())
+                .add_directive("rustmius=debug".parse().unwrap()))
+            .init();
+        info!("Starting Rustmius v{}", env!("CARGO_PKG_VERSION"));
+    }
 
     let _args: Vec<String> = std::env::args().collect();
     if let Ok(alias) = std::env::var("RUSTMIUS_ASKPASS_ALIAS") {
-        debug!("AskPass triggered for alias: {}", alias);
-        if let Some(pass_str) = tokio::runtime::Handle::current().block_on(crate::config_observer::get_keyring_password(&alias)) {
-            debug!("Password retrieved successfully, sending to SSH");
-            print!("{}", pass_str);
+        if let Some(pass_str) = crate::config_observer::get_keyring_password(&alias).await {
+            use std::io::Write;
+            let _ = std::io::stdout().write_all(pass_str.as_bytes());
+            let _ = std::io::stdout().flush();
             std::process::exit(0);
         }
-        error!("Failed to retrieve password from keyring for alias: {}", alias);
         std::process::exit(1);
     }
 
