@@ -1,7 +1,7 @@
 use gtk4::prelude::*;
 use gtk4::{glib};
 use crate::config_observer::SshHost;
-use crate::ssh_engine::run_remote_command;
+use crate::engines::docker::{get_docker_stats, list_docker_items, perform_docker_action};
 
 pub struct DockerManager {
     pub container: gtk4::Box,
@@ -50,14 +50,39 @@ impl DockerManager {
         let dashboard = self.build_dashboard();
         self.stack.add_named(&dashboard, Some("dashboard"));
 
-        let containers_view = self.build_list_view("Containers", "DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); $DOCKER_BIN ps -a --format '{{.Names}}\t{{.Status}}\t{{.Image}}'");
+        let containers_view = self.build_list_view("Containers");
         self.stack.add_named(&containers_view, Some("containers"));
 
-        let images_view = self.build_list_view("Images", "DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); $DOCKER_BIN images --format '{{.Repository}}\t{{.Tag}}\t{{.Size}}'");
+        let images_view = self.build_list_view("Images");
         self.stack.add_named(&images_view, Some("images"));
-        
         scrolled.set_child(Some(&self.stack));
         self.container.append(&scrolled);
+
+        self.stack.connect_visible_child_notify(move |s| {
+            if let Some(name) = s.visible_child_name() {
+                if name == "containers" || name == "images" {
+                    if let Some(view) = s.visible_child() {
+                        if let Some(box_) = view.downcast_ref::<gtk4::Box>() {
+                            if let Some(header) = box_.first_child() {
+                                let mut next = header.first_child();
+                                while let Some(child) = next {
+                                    if let Some(btn) = child.downcast_ref::<gtk4::Button>() {
+                                        if btn.icon_name() == Some(glib::GString::from("view-refresh-symbolic")) {
+                                            btn.emit_clicked();
+                                            break;
+                                        }
+                                    }
+                                    next = child.next_sibling();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Start on dashboard and refresh
+        self.stack.set_visible_child_name("dashboard");
         self.refresh_dashboard();
     }
 
@@ -170,7 +195,7 @@ impl DockerManager {
         tile
     }
 
-    fn build_list_view(&self, title: &str, refresh_cmd: &str) -> gtk4::Box {
+    fn build_list_view(&self, title: &str) -> gtk4::Box {
         let box_ = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
         box_.set_margin_top(24);
         box_.set_margin_bottom(24);
@@ -211,14 +236,12 @@ impl DockerManager {
 
         let host = self.host.clone();
         let password = self.password.clone();
-        let cmd = refresh_cmd.to_string();
         let lb_clone = list_box.clone();
         let title_owned = title.to_string();
 
         refresh_btn.connect_clicked(move |rb| {
             let h = host.clone();
             let p = password.clone();
-            let c = cmd.clone();
             let lb = lb_clone.clone();
             let t = title_owned.clone();
             let rb_inner = rb.clone();
@@ -226,8 +249,8 @@ impl DockerManager {
             glib::MainContext::default().spawn_local(async move {
                 let h_for_fetch = h.clone();
                 let p_for_fetch = p.clone();
-                let c_for_fetch = c.clone();
-                let result = run_remote_command(&h_for_fetch, p_for_fetch.as_deref(), &c_for_fetch).await;
+                let is_containers = t == "Containers";
+                let result = list_docker_items(&h_for_fetch, p_for_fetch.as_deref(), is_containers).await;
 
                 if let Ok(output) = result {
                     while let Some(child) = lb.first_child() { lb.remove(&child); }
@@ -288,9 +311,7 @@ impl DockerManager {
                                 let rb_c = rb_toggle.clone();
                                 let c_str = cmd_str.clone();
                                 glib::MainContext::default().spawn_local(async move {
-                                    let safe_name = n_c.replace('\'', "'\\''");
-                                    let cmd = format!("DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); $DOCKER_BIN {} '{}'", c_str, safe_name);
-                                    let _ = run_remote_command(&h_c, p_c.as_deref(), &cmd).await;
+                                    let _ = perform_docker_action(&h_c, p_c.as_deref(), &c_str, &n_c).await;
                                     rb_c.emit_clicked();
                                 });                            });
                             actions.append(&toggle_btn);
@@ -313,9 +334,7 @@ impl DockerManager {
                             let rb_c = rb_del.clone();
                             glib::MainContext::default().spawn_local(async move {
                                 let sub_cmd = if is_c_del { "rm -f" } else { "rmi" };
-                                let safe_name = n_c.replace('\'', "'\\''");
-                                let cmd = format!("DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); $DOCKER_BIN {} '{}'", sub_cmd, safe_name);
-                                let _ = run_remote_command(&h_c, p_c.as_deref(), &cmd).await;
+                                let _ = perform_docker_action(&h_c, p_c.as_deref(), sub_cmd, &n_c).await;
                                 rb_c.emit_clicked();
                             });                        });
 
@@ -327,7 +346,6 @@ impl DockerManager {
             });
         });
 
-        refresh_btn.emit_clicked();
         box_
     }
 
@@ -367,28 +385,16 @@ impl DockerManager {
         let stack = self.stack.clone();
 
         glib::MainContext::default().spawn_local(async move {
-            let cmd = "DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); \
-                       OUT=$($DOCKER_BIN info --format '{{.Containers}} {{.Images}} {{.ContainersRunning}} {{.ContainersPaused}}' 2>/dev/null); \
-                       if [ -z \"$OUT\" ]; then \
-                         echo $($DOCKER_BIN ps -aq 2>/dev/null | wc -l) $($DOCKER_BIN images -q 2>/dev/null | wc -l) $($DOCKER_BIN ps -q 2>/dev/null | wc -l) $($DOCKER_BIN ps -f status=paused -q 2>/dev/null | wc -l); \
-                       else \
-                         echo $OUT; \
-                       fi";
-            
-            let result = run_remote_command(&host, password.as_deref(), &cmd).await;
+            let result = get_docker_stats(&host, password.as_deref()).await;
 
             match result {
-                Ok(output) => {
-                    let trimmed = output.trim();
-                    let last_line = trimmed.lines().last().unwrap_or("");
-                    let parts: Vec<&str> = last_line.split_whitespace().collect();
-                    
+                Ok(parts) => {
                     if parts.len() >= 4 {
                         if let Some(dashboard) = stack.child_by_name("dashboard") {
-                            Self::update_stat(&dashboard, "stat_value_containers", parts[0]);
-                            Self::update_stat(&dashboard, "stat_value_images", parts[1]);
-                            Self::update_stat(&dashboard, "stat_value_running", parts[2]);
-                            Self::update_stat(&dashboard, "stat_value_paused", parts[3]);
+                            Self::update_stat(&dashboard, "stat_value_containers", &parts[0]);
+                            Self::update_stat(&dashboard, "stat_value_images", &parts[1]);
+                            Self::update_stat(&dashboard, "stat_value_running", &parts[2]);
+                            Self::update_stat(&dashboard, "stat_value_paused", &parts[3]);
                             
                             if stack.visible_child_name() == Some(glib::GString::from("loading")) {
                                 stack.set_visible_child_name("dashboard");

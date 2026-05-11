@@ -2,7 +2,7 @@
 use gtk4::prelude::*;
 use gtk4::{glib, gio, gdk};
 use crate::config_observer::SshHost;
-use crate::sftp_engine::{list_files, delete_file, rename_file, create_dir, create_file, upload_file, RemoteFile};
+use crate::engines::sftp::{list_files, delete_file, rename_file, create_dir, create_file, upload_file, RemoteFile};
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -359,7 +359,7 @@ impl ExplorerHandle {
                 h.status_label.set_text(&format!("Preparing {}...", f.name));
                 let rt_blocking = rt.clone();
                 rt.spawn_blocking(move || {
-                    if let Ok(_) = crate::sftp_engine::download_file_sync(rt_blocking, host, password, rp, lp_part.clone()) {
+                    if let Ok(_) = crate::engines::sftp::download_file_sync(rt_blocking, host, password, rp, lp_part.clone()) {
                         let _ = std::fs::rename(lp_part, lp_final);
                     }
                 });
@@ -417,12 +417,11 @@ impl ExplorerHandle {
                                     let hiii = hii.clone();
                                     glib::MainContext::default().spawn_local(async move {
                                         let rp = rp.clone();
-                                        match crate::sftp_engine::download_file(&hiii.host, hiii.password.as_deref(), &rp, &lp).await {
+                                        match crate::engines::sftp::download_file(&hiii.host, hiii.password.as_deref(), &rp, &lp).await {
                                             Ok(_) => hiii.status_label.set_text("Download complete."),
                                             Err(e) => hiii.status_label.set_text(&format!("Download error: {}", e)),
                                         }
-                                    });
-                                }
+                                    });                                }
                         });
                     }
                 });

@@ -321,17 +321,30 @@ impl AppWindow {
         terminal.spawn_async(vte4::PtyFlags::DEFAULT, None, &ssh_args_refs, &env_refs, glib::SpawnFlags::SEARCH_PATH, || {}, -1, None::<&gio::Cancellable>, |_| {});
     }
 
+    fn find_existing_tab(notebook: &gtk4::Notebook, prefix: &str, alias: &str) -> Option<u32> {
+        let target = format!("{}:{}", prefix, alias);
+        for i in 0..notebook.n_pages() {
+            if let Some(p) = notebook.nth_page(Some(i)) {
+                if p.widget_name() == target { return Some(i); }
+            }
+        }
+        None
+    }
+
     fn spawn_explorer(notebook: &gtk4::Notebook, win: &gtk4::ApplicationWindow, host: SshHost) {
         let h_alias = host.alias.clone();
+        if let Some(idx) = Self::find_existing_tab(notebook, "explorer", &h_alias) {
+            notebook.set_current_page(Some(idx));
+            return;
+        }
         let nb = notebook.clone();
         let window = win.clone();
         glib::MainContext::default().spawn_local(async move {
             let password = crate::config_observer::get_keyring_password(&h_alias).await;
             let explorer = FileExplorer::new(host, password);
-            let count = Self::count_pages_with_prefix(&nb, &format!("explorer:{}", h_alias));
-            explorer.container.set_widget_name(&format!("explorer:{}:{}", h_alias, count));
+            explorer.container.set_widget_name(&format!("explorer:{}", h_alias));
 
-            let display_name = if count > 0 { format!("📁 {} ({})", h_alias, count) } else { format!("📁 {}", h_alias) };
+            let display_name = format!("📁 {}", h_alias);
             
             let nb_inner = nb.clone();
             let ex_inner = explorer.container.clone();
@@ -356,15 +369,18 @@ impl AppWindow {
 
     fn spawn_monitor(notebook: &gtk4::Notebook, win: &gtk4::ApplicationWindow, host: SshHost) {
         let h_alias = host.alias.clone();
+        if let Some(idx) = Self::find_existing_tab(notebook, "monitor", &h_alias) {
+            notebook.set_current_page(Some(idx));
+            return;
+        }
         let nb = notebook.clone();
         let window = win.clone();
         glib::MainContext::default().spawn_local(async move {
             let password = crate::config_observer::get_keyring_password(&h_alias).await;
             let monitor = SystemMonitor::new(host, password);
-            let count = Self::count_pages_with_prefix(&nb, &format!("monitor:{}", h_alias));
-            monitor.container.set_widget_name(&format!("monitor:{}:{}", h_alias, count));
+            monitor.container.set_widget_name(&format!("monitor:{}", h_alias));
 
-            let display_name = if count > 0 { format!("📈 {} ({})", h_alias, count) } else { format!("📈 {}", h_alias) };
+            let display_name = format!("📈 {}", h_alias);
             
             let nb_inner = nb.clone();
             let mo_inner = monitor.container.clone();
@@ -388,17 +404,23 @@ impl AppWindow {
     }
 
     fn spawn_docker(notebook: &gtk4::Notebook, host: SshHost, password: Option<String>) {
+        if let Some(idx) = Self::find_existing_tab(notebook, "docker", &host.alias) {
+            notebook.set_current_page(Some(idx));
+            return;
+        }
         let docker = DockerManager::new(host.clone(), password);
+        docker.container.set_widget_name(&format!("docker:{}", host.alias));
         let label_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
         label_box.append(&crate::ui::get_docker_icon());
-        label_box.append(&gtk4::Label::new(Some(&format!("Docker: {}", host.alias))));
+        label_box.append(&gtk4::Label::new(Some(&format!("🐳 {}", host.alias))));
         let close_btn = gtk4::Button::from_icon_name("window-close-symbolic");
         close_btn.add_css_class("flat");
         label_box.append(&close_btn);
         
-        let page_idx = notebook.append_page(&docker.container, Some(&label_box));
+        let ins_pos = Self::get_insert_position(notebook);
+        notebook.insert_page(&docker.container, Some(&label_box), Some(ins_pos));
         notebook.set_tab_reorderable(&docker.container, true);
-        notebook.set_current_page(Some(page_idx));
+        notebook.set_current_page(Some(ins_pos));
 
         let nb_close = notebook.clone();
         let child_close = docker.container.clone();

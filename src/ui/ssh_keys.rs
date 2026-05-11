@@ -260,7 +260,7 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
                                 }
                     }
 
-                    let result = crate::ssh_engine::deploy_pubkey(&host, final_password.as_deref(), &pubkey).await;
+                    let result = crate::engines::ssh::deploy_pubkey(&host, final_password.as_deref(), &pubkey).await;
 
                     match result {
                         Ok(_) => {
