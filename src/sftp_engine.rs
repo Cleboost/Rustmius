@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::collections::HashMap;
 use anyhow::Context;
 use crate::config_observer::SshHost;
+use tracing::{info, debug, warn, instrument};
 
 #[derive(Debug, Clone)]
 pub struct RemoteFile {
@@ -24,6 +25,7 @@ fn get_session_pool() -> &'static Mutex<HashMap<String, Arc<HostLock>>> {
     POOL.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+#[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias))]
 async fn get_or_connect_sftp(host: &SshHost, password: Option<&str>) -> anyhow::Result<Arc<ActiveSession>> {
     let host_key = format!("{}@{}", host.user.as_deref().unwrap_or("root"), host.hostname);
     
@@ -35,15 +37,20 @@ async fn get_or_connect_sftp(host: &SshHost, password: Option<&str>) -> anyhow::
     let mut session_guard = host_lock.lock().await;
     
     if let Some(active) = &*session_guard {
+        debug!("Checking existing SFTP session");
         if active.sftp.stat(Path::new(".")).is_ok() {
+            debug!("Using existing SFTP session");
             return Ok(active.clone());
         }
+        debug!("Existing SFTP session stale, reconnecting");
     }
 
+    info!("Connecting new SFTP session to {}", host.alias);
     let sess = crate::ssh_engine::establish_ssh_session(host, password).await?;
 
     let sftp_sess = sess.clone();
-    let sftp = tokio::task::spawn_blocking(move || {
+    let sftp = tokio::task::spawn_blocking(move || -> anyhow::Result<ssh2::Sftp> {
+        debug!("Initializing SFTP subsystem");
         sftp_sess.sftp()
             .context("Failed to initialize SFTP subsystem")
     }).await??;
@@ -51,13 +58,16 @@ async fn get_or_connect_sftp(host: &SshHost, password: Option<&str>) -> anyhow::
     let active = Arc::new(ActiveSession { _sess: sess, sftp });
     *session_guard = Some(active.clone());
     
+    info!("SFTP session established for {}", host.alias);
     Ok(active)
 }
 
+#[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, path = %path))]
 pub async fn list_files(host: &SshHost, password: Option<&str>, path: &str) -> anyhow::Result<Vec<RemoteFile>> {
+    debug!("Listing files in {}", path);
     let active = get_or_connect_sftp(host, password).await?;
     let path_owned = path.to_string();
-    tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<RemoteFile>> {
         let dir = active.sftp.readdir(Path::new(&path_owned))
             .with_context(|| format!("Failed to read directory: {}", path_owned))?;
         let mut files = Vec::new();
@@ -82,10 +92,12 @@ pub async fn list_files(host: &SshHost, password: Option<&str>, path: &str) -> a
     }).await?
 }
 
+#[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, path = %path, is_dir = is_dir))]
 pub async fn delete_file(host: &SshHost, password: Option<&str>, path: &str, is_dir: bool) -> anyhow::Result<()> {
+    info!("Deleting {} (dir: {})", path, is_dir);
     let active = get_or_connect_sftp(host, password).await?;
     let path_owned = path.to_string();
-    tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
         let p = Path::new(&path_owned);
         if is_dir {
             active.sftp.rmdir(p)
@@ -98,42 +110,50 @@ pub async fn delete_file(host: &SshHost, password: Option<&str>, path: &str, is_
     }).await?
 }
 
+#[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, path = %path))]
 pub async fn create_dir(host: &SshHost, password: Option<&str>, path: &str) -> anyhow::Result<()> {
+    info!("Creating directory {}", path);
     let active = get_or_connect_sftp(host, password).await?;
     let path_owned = path.to_string();
-    tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
         active.sftp.mkdir(Path::new(&path_owned), 0o755)
             .with_context(|| format!("Failed to create directory: {}", path_owned))?;
         Ok(())
     }).await?
 }
 
+#[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, path = %path))]
 pub async fn create_file(host: &SshHost, password: Option<&str>, path: &str) -> anyhow::Result<()> {
+    info!("Creating file {}", path);
     let active = get_or_connect_sftp(host, password).await?;
     let path_owned = path.to_string();
-    tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
         active.sftp.create(Path::new(&path_owned))
             .with_context(|| format!("Failed to create file: {}", path_owned))?;
         Ok(())
     }).await?
 }
 
+#[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, old_path = %old_path, new_path = %new_path))]
 pub async fn rename_file(host: &SshHost, password: Option<&str>, old_path: &str, new_path: &str) -> anyhow::Result<()> {
+    info!("Renaming {} to {}", old_path, new_path);
     let active = get_or_connect_sftp(host, password).await?;
     let old_owned = old_path.to_string();
     let new_owned = new_path.to_string();
-    tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
         active.sftp.rename(Path::new(&old_owned), Path::new(&new_owned), None)
             .with_context(|| format!("Failed to rename {} to {}", old_owned, new_owned))?;
         Ok(())
     }).await?
 }
 
+#[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, local = %local_path, remote = %remote_path))]
 pub async fn upload_file(host: &SshHost, password: Option<&str>, local_path: &str, remote_path: &str) -> anyhow::Result<()> {
+    info!("Uploading {} to {}", local_path, remote_path);
     let active = get_or_connect_sftp(host, password).await?;
     let local_owned = local_path.to_string();
     let remote_owned = remote_path.to_string();
-    tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
         let mut local_file = std::fs::File::open(&local_owned)
             .with_context(|| format!("Failed to open local file for upload: {}", local_owned))?;
         let mut remote_file = active.sftp.create(Path::new(&remote_owned))
@@ -144,12 +164,13 @@ pub async fn upload_file(host: &SshHost, password: Option<&str>, local_path: &st
     }).await?
 }
 
-#[allow(dead_code)]
+#[instrument(skip(password), fields(host = %host.hostname, alias = %host.alias, remote = %remote_path, local = %local_path))]
 pub async fn download_file(host: &SshHost, password: Option<&str>, remote_path: &str, local_path: &str) -> anyhow::Result<()> {
+    info!("Downloading {} to {}", remote_path, local_path);
     let active = get_or_connect_sftp(host, password).await?;
     let remote_owned = remote_path.to_string();
     let local_owned = local_path.to_string();
-    tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
         let mut remote_file = active.sftp.open(Path::new(&remote_owned))
             .with_context(|| format!("Failed to open remote file: {}", remote_owned))?;
         let mut local_file = std::fs::File::create(&local_owned)
@@ -160,7 +181,9 @@ pub async fn download_file(host: &SshHost, password: Option<&str>, remote_path: 
     }).await?
 }
 
+#[instrument(skip(rt, password), fields(host = %host.hostname, alias = %host.alias, remote = %remote_path, local = %local_path))]
 pub fn download_file_sync(rt: tokio::runtime::Handle, host: SshHost, password: Option<String>, remote_path: String, local_path: String) -> anyhow::Result<()> {
+    info!("Sync downloading {} to {}", remote_path, local_path);
     let active = rt.block_on(get_or_connect_sftp(&host, password.as_deref()))
         .context("Failed to connect for sync download")?;
     
