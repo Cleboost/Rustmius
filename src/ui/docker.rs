@@ -288,11 +288,11 @@ impl DockerManager {
                                 let rb_c = rb_toggle.clone();
                                 let c_str = cmd_str.clone();
                                 glib::MainContext::default().spawn_local(async move {
-                                    let cmd = format!("DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); $DOCKER_BIN {} {}", c_str, n_c);
+                                    let safe_name = n_c.replace('\'', "'\\''");
+                                    let cmd = format!("DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); $DOCKER_BIN {} '{}'", c_str, safe_name);
                                     let _ = run_remote_command(&h_c, p_c.as_deref(), &cmd).await;
                                     rb_c.emit_clicked();
-                                });
-                            });
+                                });                            });
                             actions.append(&toggle_btn);
                         }
 
@@ -313,10 +313,11 @@ impl DockerManager {
                             let rb_c = rb_del.clone();
                             glib::MainContext::default().spawn_local(async move {
                                 let sub_cmd = if is_c_del { "rm -f" } else { "rmi" };
-                                let cmd = format!("DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); $DOCKER_BIN {} {}", sub_cmd, n_c);
-                                let _ = run_remote_command(&h_c, p_c.as_deref(), &cmd).await;                                rb_c.emit_clicked();
-                            });
-                        });
+                                let safe_name = n_c.replace('\'', "'\\''");
+                                let cmd = format!("DOCKER_BIN=$(if [ -w /var/run/docker.sock ]; then echo 'docker'; else echo 'sudo -n docker'; fi); $DOCKER_BIN {} '{}'", sub_cmd, safe_name);
+                                let _ = run_remote_command(&h_c, p_c.as_deref(), &cmd).await;
+                                rb_c.emit_clicked();
+                            });                        });
 
                         actions.append(&delete_btn);
                         row.append(&actions);
