@@ -201,8 +201,18 @@ impl SystemMonitor {
 
         glib::MainContext::default().spawn_local(async move {
             loop {
-                if container_weak.upgrade().is_none() { break; }
-                
+                // Check if the tab is still alive. If the widget is gone or not attached to a root window, stop.
+                let alive = if let Some(c) = container_weak.upgrade() {
+                    c.root().is_some()
+                } else {
+                    false
+                };
+
+                if !alive {
+                    tracing::debug!("Stopping background monitoring: tab closed or widget disconnected");
+                    break;
+                }
+
                 let result = fetch_system_metrics(&h_clone, p_clone.as_deref()).await;
 
                 if let Ok(m) = result {

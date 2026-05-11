@@ -58,10 +58,6 @@ impl DockerManager {
         scrolled.set_child(Some(&self.stack));
         self.container.append(&scrolled);
 
-        let h_dash = self.host.clone();
-        let p_dash = self.password.clone();
-        let s_dash = self.stack.clone();
-
         self.stack.connect_visible_child_notify(move |s| {
             if let Some(name) = s.visible_child_name() {
                 if name == "containers" || name == "images" {
