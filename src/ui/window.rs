@@ -471,15 +471,6 @@ impl AppWindow {
         });
     }
 
-    fn count_pages_with_prefix(notebook: &gtk4::Notebook, prefix: &str) -> u32 {
-        let mut count = 0;
-        for i in 0..notebook.n_pages() {
-            if let Some(p) = notebook.nth_page(Some(i))
-                && p.widget_name().starts_with(prefix) { count += 1; }
-        }
-        count
-    }
-
     fn get_insert_position(notebook: &gtk4::Notebook) -> u32 {
         for i in 0..notebook.n_pages() {
             if let Some(c) = notebook.nth_page(Some(i))
