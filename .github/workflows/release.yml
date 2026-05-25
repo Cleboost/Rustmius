@@ -205,7 +205,7 @@ jobs:
           else
             git commit -m "chore: update PKGBUILDs to ${{ needs.prepare.outputs.new_version }}"
             git pull --rebase origin master
-            git push origin master
+            git push origin HEAD:master
           fi
 
       - name: Publish AUR package
