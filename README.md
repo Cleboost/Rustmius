@@ -44,6 +44,7 @@ Ensure you have the system dependencies installed (`libgtk-4-dev`, `libvte-2.91-
 git clone https://github.com/Cleboost/Rustmius.git
 cd Rustmius
 cargo build --release
+```
 ## 🏗️ Architecture
 
 Rustmius has undergone a major refactor to ensure long-term maintainability and high performance:
