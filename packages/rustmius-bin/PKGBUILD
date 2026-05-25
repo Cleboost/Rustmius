@@ -11,7 +11,7 @@ provides=("$_pkgname")
 conflicts=("$_pkgname")
 
 source=(
-    "$_pkgname.desktop::https://raw.githubusercontent.com/Cleboost/Rustmius/refs/heads/master/packages/rustmius.desktop"
+    "org.rustmius.Rustmius.desktop::https://raw.githubusercontent.com/Cleboost/Rustmius/refs/heads/master/packages/org.rustmius.Rustmius.desktop"
     "$_pkgname.png::https://raw.githubusercontent.com/Cleboost/Rustmius/refs/heads/master/packages/rustmius.png"
     "LICENSE::https://raw.githubusercontent.com/Cleboost/Rustmius/refs/heads/master/LICENSE"
     "$_pkgname-$pkgver-x86_64::$url/releases/download/v$pkgver/$_pkgname-x86_64"
@@ -24,7 +24,7 @@ sha256sums=('1498673b59f13bdd2a5beb43d72fc8e9330599324f9a4d70bd52e1d303ad9959'
 
 package() {
     install -Dm755 "$_pkgname-$pkgver-x86_64" "$pkgdir/usr/bin/$_pkgname"
-    install -Dm644 "$_pkgname.desktop" "$pkgdir/usr/share/applications/$_pkgname.desktop"
+    install -Dm644 "org.rustmius.Rustmius.desktop" "$pkgdir/usr/share/applications/org.rustmius.Rustmius.desktop"
     install -Dm644 "$_pkgname.png" "$pkgdir/usr/share/icons/hicolor/512x512/apps/$_pkgname.png"
     install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/$_pkgname/LICENSE"
 }
