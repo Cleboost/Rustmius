@@ -1,17 +1,9 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      level:
-        description: 'Type de mise à jour'
-        required: true
-        default: 'patch'
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   prepare:
@@ -33,33 +25,8 @@ jobs:
       - name: Calculate Version
         id: bump
         run: |
-          git fetch --tags
-          LATEST_TAG=$(git tag -l "v*" | sort -V | tail -n1)
-          
-          if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG="v0.0.0"
-          fi
-          
-          VERSION=${LATEST_TAG#v}
-          MAJOR=$(echo $VERSION | cut -d. -f1)
-          MINOR=$(echo $VERSION | cut -d. -f2)
-          PATCH=$(echo $VERSION | cut -d. -f3)
-          
-          LEVEL="${{ github.event.inputs.level }}"
-          
-          if [ "$LEVEL" = "major" ]; then
-            MAJOR=$((MAJOR + 1))
-            MINOR=0
-            PATCH=0
-          elif [ "$LEVEL" = "minor" ]; then
-            MINOR=$((MINOR + 1))
-            PATCH=0
-          else
-            PATCH=$((PATCH + 1))
-          fi
-          
-          NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
-          VERSION_ONLY="$MAJOR.$MINOR.$PATCH"
+          NEW_VERSION="${{ github.ref_name }}"
+          VERSION_ONLY="${NEW_VERSION#v}"
           
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "version_only=$VERSION_ONLY" >> $GITHUB_OUTPUT
@@ -175,7 +142,7 @@ jobs:
       contents: write
     strategy:
       matrix:
-        package: [rustmius, rustmius-bin, rustmius-git]
+        package: [rustmius, rustmius-bin]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -192,7 +159,7 @@ jobs:
         run: |
           VERSION="${{ needs.prepare.outputs.version_only }}"
           # Paths updated to packages/ subdirectory
-          HASH_DESKTOP=$(sha256sum packages/rustmius.desktop | cut -d' ' -f1)
+          HASH_DESKTOP=$(sha256sum packages/org.rustmius.Rustmius.desktop | cut -d' ' -f1)
           HASH_PNG=$(sha256sum packages/rustmius.png | cut -d' ' -f1)
           HASH_LICENSE=$(sha256sum LICENSE | cut -d' ' -f1)
           HASH_BINARY=$(sha256sum rustmius-x86_64 | cut -d' ' -f1)
