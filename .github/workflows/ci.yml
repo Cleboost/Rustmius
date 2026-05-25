@@ -2,6 +2,8 @@ name: Continuous Integration
 
 on:
   push:
+    branches:
+      - '**'
     files:
       - '**/*.rs'
       - 'Cargo.toml'
