@@ -54,8 +54,6 @@ Rustmius has undergone a major refactor to ensure long-term maintainability and 
 - **Unified Error Handling**: Detailed error reporting using `anyhow` with full context on all network operations.
 - **Observability**: Comprehensive instrumentation with `tracing` spans for debugging SSH and SFTP sessions.
 
-## 🚀 Installation
-...
 ## 🗺️ Roadmap
 
 - [x] **Server Performance Monitoring**: Real-time CPU, RAM, and Disk metrics.
