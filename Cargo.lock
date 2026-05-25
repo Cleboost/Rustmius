@@ -1455,7 +1455,7 @@ dependencies = [
 
 [[package]]
 name = "rustmius"
-version = "2.4.1"
+version = "2.4.2"
 dependencies = [
  "anyhow",
  "cairo-rs 0.22.0",
