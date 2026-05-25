@@ -260,9 +260,10 @@ impl AppWindow {
 
         let notebook = self.inner.notebook.clone();
         let win = self.inner.window.clone();
+        let sb_close = session_box.clone();
         close_btn.connect_clicked(move |_| {
             let nb = notebook.clone();
-            let sb = session_box.clone();
+            let sb = sb_close.clone();
             let w = win.clone();
             let on_confirm = move || {
                 if let Some(i) = nb.page_num(&sb) {
@@ -272,6 +273,14 @@ impl AppWindow {
             if crate::config_observer::load_app_config().map(|c| c.confirm_tab_close).unwrap_or(false) {
                 show_close_confirmation(w.upcast_ref(), "Close Tab?", "Are you sure you want to close this session?", on_confirm);
             } else { on_confirm(); }
+        });
+
+        let nb_exited = self.inner.notebook.clone();
+        let sb_exited = session_box.clone();
+        terminal.connect_child_exited(move |_, _| {
+            if let Some(i) = nb_exited.page_num(&sb_exited) {
+                nb_exited.remove_page(Some(i));
+            }
         });
 
         let notebook_exp = self.inner.notebook.clone();
