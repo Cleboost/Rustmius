@@ -4,7 +4,7 @@ mod engines;
 
 use gtk4::prelude::*;
 use crate::ui::window::build_ui;
-use tracing::{debug, info, error};
+use tracing::info;
 
 #[tokio::main]
 async fn main() {
