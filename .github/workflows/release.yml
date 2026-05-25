@@ -175,7 +175,7 @@ jobs:
       contents: write
     strategy:
       matrix:
-        package: [rustmius, rustmius-bin, rustmius-git]
+        package: [rustmius, rustmius-bin]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -192,7 +192,7 @@ jobs:
         run: |
           VERSION="${{ needs.prepare.outputs.version_only }}"
           # Paths updated to packages/ subdirectory
-          HASH_DESKTOP=$(sha256sum packages/rustmius.desktop | cut -d' ' -f1)
+          HASH_DESKTOP=$(sha256sum packages/org.rustmius.Rustmius.desktop | cut -d' ' -f1)
           HASH_PNG=$(sha256sum packages/rustmius.png | cut -d' ' -f1)
           HASH_LICENSE=$(sha256sum LICENSE | cut -d' ' -f1)
           HASH_BINARY=$(sha256sum rustmius-x86_64 | cut -d' ' -f1)
