@@ -170,6 +170,11 @@ pub struct SshHost {
     pub user: Option<String>,
     pub port: Option<u16>,
     pub identity_file: Option<String>,
+    /// Path to the authentication agent socket (`IdentityAgent` directive),
+    /// e.g. 1Password's `~/.1password/agent.sock`. Honored when falling back
+    /// to agent authentication in the SFTP/SSH engine.
+    #[serde(default)]
+    pub identity_agent: Option<String>,
 }
 
 pub fn get_default_config_path() -> Option<std::path::PathBuf> {
@@ -207,6 +212,10 @@ pub fn refresh_hosts() -> anyhow::Result<Vec<SshHost>> {
 pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
     let mut hosts = Vec::new();
     let mut current_host: Option<SshHost> = None;
+    // `IdentityAgent` is commonly declared once in a global `Host *` block
+    // (e.g. by 1Password). Track it so it can be applied as a default to any
+    // host that doesn't specify its own.
+    let mut global_identity_agent: Option<String> = None;
 
     for line in content.lines() {
         let line = line.trim();
@@ -238,6 +247,7 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
                     user: None,
                     port: None,
                     identity_file: None,
+                    identity_agent: None,
                 });
             }
             "hostname" => {
@@ -261,6 +271,15 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
                     host.identity_file = Some(value.to_string());
                 }
             }
+            "identityagent" => {
+                match current_host {
+                    Some(ref mut host) if host.alias != "*" => {
+                        host.identity_agent = Some(value.to_string());
+                    }
+                    // A `Host *` (or pre-host) declaration becomes the global default.
+                    _ => global_identity_agent = Some(value.to_string()),
+                }
+            }
             _ => {}
         }
     }
@@ -269,6 +288,14 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
         && !host.alias.is_empty() && !host.hostname.is_empty() {
             hosts.push(host);
         }
+
+    if let Some(ref agent) = global_identity_agent {
+        for host in &mut hosts {
+            if host.identity_agent.is_none() {
+                host.identity_agent = Some(agent.clone());
+            }
+        }
+    }
 
     hosts
 }
@@ -392,6 +419,31 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_ssh_config_with_identity_agent() {
+        let config = "Host my-server\n  HostName 1.2.3.4\n  User root\n  IdentityAgent ~/.1password/agent.sock";
+        let hosts = parse_ssh_config(config);
+        assert_eq!(hosts.len(), 1);
+        assert_eq!(hosts[0].identity_agent, Some("~/.1password/agent.sock".to_string()));
+    }
+
+    #[test]
+    fn test_parse_ssh_config_global_identity_agent_applies_to_hosts() {
+        let config = "Host *\n  IdentityAgent ~/.1password/agent.sock\n\nHost my-server\n  HostName 1.2.3.4\n  User root";
+        let hosts = parse_ssh_config(config);
+        assert_eq!(hosts.len(), 1);
+        assert_eq!(hosts[0].alias, "my-server");
+        assert_eq!(hosts[0].identity_agent, Some("~/.1password/agent.sock".to_string()));
+    }
+
+    #[test]
+    fn test_parse_ssh_config_host_identity_agent_overrides_global() {
+        let config = "Host *\n  IdentityAgent ~/.1password/agent.sock\n\nHost my-server\n  HostName 1.2.3.4\n  IdentityAgent ~/.ssh/custom.sock";
+        let hosts = parse_ssh_config(config);
+        assert_eq!(hosts.len(), 1);
+        assert_eq!(hosts[0].identity_agent, Some("~/.ssh/custom.sock".to_string()));
+    }
+
+    #[test]
     fn test_parse_ssh_config_with_identity_file() {
         let config = "Host my-server\n  HostName 1.2.3.4\n  User root\n  Port 22\n  IdentityFile ~/.ssh/id_ed25519";
         let hosts = parse_ssh_config(config);
@@ -415,6 +467,7 @@ mod tests {
             user: Some("admin".to_string()),
             port: Some(22),
             identity_file: Some("~/.ssh/id_ed25519".to_string()),
+            identity_agent: None,
         };
         let alias_quoted = if host.alias.contains(' ') {
             format!("\"{}\"", host.alias)
@@ -450,6 +503,7 @@ mod tests {
             user: Some("user".to_string()),
             port: Some(22),
             identity_file: Some("/home/user/my keys/id_rsa".to_string()),
+            identity_agent: None,
         };
         let mut entry = format!(
             "\nHost {}\n    HostName {}\n    User {}\n    Port {}\n",

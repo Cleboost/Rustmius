@@ -118,6 +118,7 @@ where F: Fn(SshHost, String) + 'static
                 user: Some(user_entry.text().to_string().trim().to_string()).filter(|s| !s.is_empty()),
                 port: port_entry.text().to_string().trim().parse::<u16>().ok(),
                 identity_file,
+                identity_agent: None,
             };
             let password = pass_entry.text().to_string();
             if !host.alias.is_empty() && !host.hostname.is_empty() {
