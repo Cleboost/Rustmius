@@ -10,6 +10,24 @@ use tracing::{info, warn, instrument};
 
 type SharedSession = Arc<tokio::sync::Mutex<Option<Session>>>;
 
+/// Restores the previous `SSH_AUTH_SOCK` value when dropped, so temporarily
+/// pointing libssh2 at a host-specific `IdentityAgent` socket doesn't leak.
+struct SshAuthSockGuard {
+    previous: Option<std::ffi::OsString>,
+}
+
+impl Drop for SshAuthSockGuard {
+    fn drop(&mut self) {
+        // SAFETY: runs on the same blocking thread that set the variable.
+        unsafe {
+            match self.previous.take() {
+                Some(value) => std::env::set_var("SSH_AUTH_SOCK", value),
+                None => std::env::remove_var("SSH_AUTH_SOCK"),
+            }
+        }
+    }
+}
+
 fn get_ssh_pool() -> &'static Mutex<HashMap<String, SharedSession>> {
     static POOL: OnceLock<Mutex<HashMap<String, SharedSession>>> = OnceLock::new();
     POOL.get_or_init(|| Mutex::new(HashMap::new()))
@@ -99,6 +117,21 @@ pub async fn establish_ssh_session(host: &SshHost, password: Option<&str>) -> an
         }
 
         if !authenticated {
+            // libssh2 (via the ssh2 crate) only discovers the agent socket
+            // through `SSH_AUTH_SOCK`. When the host declares an `IdentityAgent`
+            // in the SSH config (e.g. 1Password's `~/.1password/agent.sock`),
+            // point the agent at that socket so it behaves like the system
+            // `ssh` client used by the terminal.
+            let _agent_sock_guard = host_cloned.identity_agent.as_deref().map(|agent_path| {
+                let expanded = expand_tilde(agent_path);
+                let previous = std::env::var_os("SSH_AUTH_SOCK");
+                tracing::trace!("Using IdentityAgent socket: {}", expanded.display());
+                // SAFETY: SSH auth runs serially within this blocking task and
+                // the previous value is restored when the guard drops.
+                unsafe { std::env::set_var("SSH_AUTH_SOCK", &expanded); }
+                SshAuthSockGuard { previous }
+            });
+
             tracing::trace!("Trying agent authentication");
             if sess.userauth_agent(user).is_ok() {
                 info!("Authenticated via SSH agent");
