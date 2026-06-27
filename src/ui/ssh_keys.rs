@@ -246,19 +246,11 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
                 let parent_win_weak = d.transient_for().and_then(|w| w.downcast::<gtk4::Window>().ok());
                 let close_dialog = d.clone();
                 glib::MainContext::default().spawn_local(async move {
-                    let mut final_password = None;
-                    if !password.is_empty() {
-                        final_password = Some(password);
-                    } else if let Ok(keyring) = oo7::Keyring::new().await {
-                        let mut attr = std::collections::HashMap::new();
-                        let alias_lower = host.alias.to_lowercase();
-                        attr.insert("rustmius-server-alias", alias_lower.as_str());
-                        if let Ok(items) = keyring.search_items(&attr).await
-                            && let Some(item) = items.first()
-                                && let Ok(pass) = item.secret().await {
-                                    final_password = std::str::from_utf8(pass.as_ref()).map(String::from).ok();
-                                }
-                    }
+                    let final_password = if !password.is_empty() {
+                        Some(password)
+                    } else {
+                        crate::config_observer::get_keyring_password(&host.alias).await
+                    };
 
                     let result = crate::engines::ssh::deploy_pubkey(&host, final_password.as_deref(), &pubkey).await;
 
@@ -444,7 +436,8 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
         if res == gtk4::ResponseType::Ok {
             let name = name_entry.text().to_string();
             let (start, end) = text_buffer.bounds();
-            let key_content = text_buffer.text(&start, &end, false).to_string();
+            // Private key material: hold it in a buffer that is zeroed on drop.
+            let key_content = zeroize::Zeroizing::new(text_buffer.text(&start, &end, false).to_string());
 
             if !is_valid_key_name(&name) {
                 show_error_alert(
@@ -482,7 +475,7 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
                         })
                 };
                 #[cfg(not(unix))]
-                let write_result = std::fs::write(&file_path, &key_content);
+                let write_result = std::fs::write(&file_path, key_content.as_bytes());
 
                 if let Err(e) = write_result {
                     show_error_alert(

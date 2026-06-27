@@ -1,5 +1,4 @@
 pub mod style;
-pub mod hud;
 pub mod window;
 pub mod server_list;
 pub mod components;
