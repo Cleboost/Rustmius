@@ -20,12 +20,14 @@ async fn main() {
         info!("Starting Rustmius v{}", env!("CARGO_PKG_VERSION"));
     }
 
-    let _args: Vec<String> = std::env::args().collect();
     if let Ok(alias) = std::env::var("RUSTMIUS_ASKPASS_ALIAS") {
         if let Some(pass_str) = crate::config_observer::get_keyring_password(&alias).await {
+            // Wipe the plaintext password from memory once it has been written out.
+            let pass_str = zeroize::Zeroizing::new(pass_str);
             use std::io::Write;
-            let _ = std::io::stdout().write_all(pass_str.as_bytes());
-            let _ = std::io::stdout().flush();
+            let mut stdout = std::io::stdout().lock();
+            let _ = stdout.write_all(pass_str.as_bytes());
+            let _ = stdout.flush();
             std::process::exit(0);
         }
         std::process::exit(1);

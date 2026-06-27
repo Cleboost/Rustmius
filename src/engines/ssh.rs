@@ -87,7 +87,8 @@ pub async fn establish_ssh_session(host: &SshHost, password: Option<&str>) -> an
     std_tcp.set_nonblocking(false)?;
 
     let host_cloned = host.clone();
-    let password_cloned = password.map(|s| s.to_string());
+    // Keep the in-flight password copy in a buffer that is zeroed on drop.
+    let password_cloned = password.map(|s| zeroize::Zeroizing::new(s.to_string()));
     let sess = tokio::task::spawn_blocking(move || -> anyhow::Result<Session> {
         tracing::trace!("Starting SSH handshake");
         let mut sess = Session::new()

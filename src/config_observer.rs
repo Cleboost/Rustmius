@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use directories::UserDirs;
 use anyhow::Context;
 use std::sync::{RwLock, OnceLock};
@@ -8,15 +8,19 @@ static APP_CONFIG_CACHE: OnceLock<RwLock<AppConfig>> = OnceLock::new();
 static HOSTS_CACHE: OnceLock<RwLock<Vec<SshHost>>> = OnceLock::new();
 static HOME_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
 
-fn get_home_dir() -> Option<PathBuf> {
-    HOME_DIR.get_or_init(|| UserDirs::new().map(|d| d.home_dir().to_path_buf())).clone()
+/// Returns the user's home directory, resolved once and cached.
+/// Borrows from the cache instead of cloning the `PathBuf` on every call.
+fn get_home_dir() -> Option<&'static Path> {
+    HOME_DIR
+        .get_or_init(|| UserDirs::new().map(|d| d.home_dir().to_path_buf()))
+        .as_deref()
 }
 
 /// Expands a tilde (`~`) at the beginning of a path string into the user's home directory.
 pub fn expand_tilde(path: &str) -> PathBuf {
     if path == "~" {
         if let Some(home) = get_home_dir() {
-            return home;
+            return home.to_path_buf();
         }
     } else if let Some(rest) = path.strip_prefix("~/")
         && let Some(home) = get_home_dir() {
@@ -77,19 +81,36 @@ pub fn load_ssh_keys() -> anyhow::Result<Vec<SshKeyPair>> {
 
 /// Retrieves a password from the system keyring for a given server alias.
 pub async fn get_keyring_password(alias: &str) -> Option<String> {
-    if let Ok(keyring) = oo7::Keyring::new().await {
-        let mut attr = std::collections::HashMap::new();
-        let alias_lower = alias.to_lowercase();
-        attr.insert("rustmius-server-alias", alias_lower.as_str());
-        if let Ok(items) = keyring.search_items(&attr).await {
-            if let Some(item) = items.first() {
-                if let Ok(secret) = item.secret().await {
-                    return std::str::from_utf8(&secret).map(String::from).ok();
-                }
-            }
-        }
+    let keyring = oo7::Keyring::new().await.ok()?;
+    let alias_lower = alias.to_lowercase();
+    let attr = [("rustmius-server-alias", alias_lower.as_str())];
+    let items = keyring.search_items(&attr).await.ok()?;
+    let item = items.first()?;
+    let secret = item.secret().await.ok()?;
+    std::str::from_utf8(&secret).map(String::from).ok()
+}
+
+/// Stores (replacing any existing entry) a server password in the system keyring,
+/// keyed by the lower-cased server alias. `oo7` zeroizes the secret it holds; the
+/// caller is responsible for wiping its own plaintext copy (see `zeroize`).
+pub async fn store_keyring_password(alias: &str, password: &str) -> anyhow::Result<()> {
+    let keyring = oo7::Keyring::new().await?;
+    let alias_lower = alias.to_lowercase();
+    let attr = [("rustmius-server-alias", alias_lower.as_str())];
+    let label = format!("Rustmius: SSH Password for {}", alias);
+    keyring.create_item(&label, &attr, password.as_bytes(), true).await?;
+    Ok(())
+}
+
+/// Removes every stored keyring password matching the given server alias.
+pub async fn delete_keyring_password(alias: &str) -> anyhow::Result<()> {
+    let keyring = oo7::Keyring::new().await?;
+    let alias_lower = alias.to_lowercase();
+    let attr = [("rustmius-server-alias", alias_lower.as_str())];
+    for item in keyring.search_items(&attr).await? {
+        let _ = item.delete().await;
     }
-    None
+    Ok(())
 }
 
 /// Global application configuration settings.
@@ -223,64 +244,56 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
             continue;
         }
 
-        let parts: Vec<&str> = line.splitn(2, |c: char| c.is_whitespace()).collect();
-        if parts.len() < 2 {
+        // Split on the first whitespace run; borrow both halves (no per-line
+        // `Vec`/`String` allocation). SSH keywords are ASCII case-insensitive,
+        // so compare without allocating a lowercased copy.
+        let Some((key, rest)) = line.split_once(char::is_whitespace) else {
             continue;
-        }
+        };
+        let mut value = rest.trim();
 
-        let key = parts[0].to_lowercase();
-        let mut value = parts[1].trim();
-
-        if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
+        if value.len() >= 2 && value.starts_with('"') && value.ends_with('"') {
             value = &value[1..value.len() - 1];
         }
 
-        match key.as_str() {
-            "host" => {
-                if let Some(host) = current_host.take()
-                    && !host.alias.is_empty() && !host.hostname.is_empty() {
-                        hosts.push(host);
-                    }
-                current_host = Some(SshHost {
-                    alias: value.to_string(),
-                    hostname: String::new(),
-                    user: None,
-                    port: None,
-                    identity_file: None,
-                    identity_agent: None,
-                });
-            }
-            "hostname" => {
-                if let Some(ref mut host) = current_host {
-                    host.hostname = value.to_string();
+        if key.eq_ignore_ascii_case("host") {
+            if let Some(host) = current_host.take()
+                && !host.alias.is_empty() && !host.hostname.is_empty() {
+                    hosts.push(host);
                 }
+            current_host = Some(SshHost {
+                alias: value.to_string(),
+                hostname: String::new(),
+                user: None,
+                port: None,
+                identity_file: None,
+                identity_agent: None,
+            });
+        } else if key.eq_ignore_ascii_case("hostname") {
+            if let Some(ref mut host) = current_host {
+                host.hostname = value.to_string();
             }
-            "user" => {
-                if let Some(ref mut host) = current_host {
-                    host.user = Some(value.to_string());
+        } else if key.eq_ignore_ascii_case("user") {
+            if let Some(ref mut host) = current_host {
+                host.user = Some(value.to_string());
+            }
+        } else if key.eq_ignore_ascii_case("port") {
+            if let Some(ref mut host) = current_host
+                && let Ok(p) = value.parse::<u16>() {
+                    host.port = Some(p);
                 }
+        } else if key.eq_ignore_ascii_case("identityfile") {
+            if let Some(ref mut host) = current_host {
+                host.identity_file = Some(value.to_string());
             }
-            "port" => {
-                if let Some(ref mut host) = current_host
-                    && let Ok(p) = value.parse::<u16>() {
-                        host.port = Some(p);
-                    }
-            }
-            "identityfile" => {
-                if let Some(ref mut host) = current_host {
-                    host.identity_file = Some(value.to_string());
+        } else if key.eq_ignore_ascii_case("identityagent") {
+            match current_host {
+                Some(ref mut host) if host.alias != "*" => {
+                    host.identity_agent = Some(value.to_string());
                 }
+                // A `Host *` (or pre-host) declaration becomes the global default.
+                _ => global_identity_agent = Some(value.to_string()),
             }
-            "identityagent" => {
-                match current_host {
-                    Some(ref mut host) if host.alias != "*" => {
-                        host.identity_agent = Some(value.to_string());
-                    }
-                    // A `Host *` (or pre-host) declaration becomes the global default.
-                    _ => global_identity_agent = Some(value.to_string()),
-                }
-            }
-            _ => {}
         }
     }
 
@@ -352,38 +365,45 @@ pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Returns `content` with the `Host <alias>` block (the `Host` line and its
+/// indented body) removed. Pure string transform, factored out for testing.
+/// Borrows each line and compares keywords/aliases case-insensitively without
+/// allocating a lowercased copy per line.
+fn remove_host_block(content: &str, alias: &str) -> String {
+    let mut kept = Vec::new();
+    let mut skipping = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        let block_alias = trimmed
+            .split_once(char::is_whitespace)
+            .filter(|(kw, _)| kw.eq_ignore_ascii_case("host"))
+            .map(|(_, v)| {
+                let v = v.trim();
+                v.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(v)
+            });
+
+        if let Some(block_alias) = block_alias {
+            skipping = block_alias.eq_ignore_ascii_case(alias);
+            if skipping {
+                continue;
+            }
+        }
+        if skipping && (line.starts_with(' ') || line.starts_with('\t') || trimmed.is_empty()) {
+            continue;
+        }
+        skipping = false;
+        kept.push(line);
+    }
+    kept.join("\n")
+}
+
 /// Removes an SSH host entry from the config file by its alias and updates the cache.
 pub fn delete_host_from_config(alias: &str) -> anyhow::Result<()> {
     let path = get_default_config_path().ok_or_else(|| anyhow::anyhow!("No config path"))?;
     if !path.exists() { return Ok(()); }
     let content = std::fs::read_to_string(&path)?;
-    let mut new_lines = Vec::new();
-    let mut skip = false;
-    let target_alias = alias.to_lowercase();
-
-    for line in content.lines() {
-        let trimmed = line.trim().to_lowercase();
-        if trimmed.starts_with("host ") {
-            let mut val = trimmed["host ".len()..].trim();
-            if val.starts_with('"') && val.ends_with('"') && val.len() >= 2 {
-                val = &val[1..val.len()-1];
-            }
-            if val == target_alias {
-                skip = true;
-                continue;
-            } else {
-                skip = false;
-            }
-        }
-        if skip && (line.starts_with(' ') || line.starts_with('\t') || line.trim().is_empty()) {
-            continue;
-        }
-        if skip {
-            skip = false;
-        }
-        new_lines.push(line);
-    }
-    let new_content = new_lines.join("\n");
+    let new_content = remove_host_block(&content, alias);
     let tmp_path = path.with_extension("tmp");
     std::fs::write(&tmp_path, &new_content)?;
     std::fs::rename(tmp_path, path)?;
@@ -416,6 +436,33 @@ mod tests {
         let hosts = parse_ssh_config(config);
         assert_eq!(hosts.len(), 1);
         assert_eq!(hosts[0].alias, "My Server");
+    }
+
+    #[test]
+    fn test_remove_host_block_removes_matching_entry() {
+        let config = "Host keep\n  HostName 1.1.1.1\n\nHost drop\n  HostName 2.2.2.2\n  User root\n\nHost other\n  HostName 3.3.3.3";
+        let result = remove_host_block(config, "drop");
+        let hosts = parse_ssh_config(&result);
+        assert_eq!(hosts.len(), 2);
+        assert!(hosts.iter().all(|h| h.alias != "drop"));
+        assert!(hosts.iter().any(|h| h.alias == "keep"));
+        assert!(hosts.iter().any(|h| h.alias == "other"));
+    }
+
+    #[test]
+    fn test_remove_host_block_is_case_insensitive_and_handles_quotes() {
+        let config = "Host \"My Server\"\n  HostName 1.1.1.1\n\nHost other\n  HostName 2.2.2.2";
+        let result = remove_host_block(config, "my server");
+        let hosts = parse_ssh_config(&result);
+        assert_eq!(hosts.len(), 1);
+        assert_eq!(hosts[0].alias, "other");
+    }
+
+    #[test]
+    fn test_remove_host_block_preserves_when_no_match() {
+        let config = "Host a\n  HostName 1.1.1.1\nHost b\n  HostName 2.2.2.2";
+        let result = remove_host_block(config, "nonexistent");
+        assert_eq!(parse_ssh_config(&result).len(), 2);
     }
 
     #[test]

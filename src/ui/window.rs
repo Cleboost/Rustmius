@@ -14,7 +14,6 @@ use crate::config_observer::{add_host_to_config, delete_host_from_config, load_h
 use vte4::prelude::*;
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct AppWindow {
@@ -136,16 +135,12 @@ impl AppWindow {
         let existing_aliases: Vec<String> = existing_hosts.iter().map(|h| h.alias.to_lowercase()).collect();
         
         show_server_dialog(self.inner.window.upcast_ref(), None, existing_aliases, move |new_host, password: String| {
-            if let Ok(_) = add_host_to_config(&new_host) {
+            if add_host_to_config(&new_host).is_ok() {
                 if !password.is_empty() {
                     let host_alias = new_host.alias.clone();
+                    let password = zeroize::Zeroizing::new(password);
                     glib::MainContext::default().spawn_local(async move {
-                        if let Ok(keyring) = oo7::Keyring::new().await {
-                            let mut attr = HashMap::new();
-                            let alias_lower = host_alias.to_lowercase();
-                            attr.insert("rustmius-server-alias", alias_lower.as_str());
-                            let _ = keyring.create_item(&format!("Rustmius: SSH Password for {}", host_alias), &attr, password.as_bytes(), true).await;
-                        }
+                        let _ = crate::config_observer::store_keyring_password(&host_alias, &password).await;
                     });
                 }
                 this.refresh();
@@ -235,11 +230,12 @@ impl AppWindow {
         session_box.append(&terminal);
 
         let mut count = 0;
+        let session_prefix = format!("session:{}", host.alias);
         for i in 0..self.inner.notebook.n_pages() {
             if let Some(p) = self.inner.notebook.nth_page(Some(i))
-                && p.widget_name().starts_with(&format!("session:{}", host.alias)) { count += 1; }
+                && p.widget_name().starts_with(&session_prefix) { count += 1; }
         }
-        session_box.set_widget_name(&format!("session:{}:{}", host.alias, count));
+        session_box.set_widget_name(&format!("{}:{}", session_prefix, count));
 
         let display_name = if count > 0 { format!("{} ({})", host.alias, count) } else { host.alias.clone() };
         let tab_label_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
@@ -264,15 +260,11 @@ impl AppWindow {
         close_btn.connect_clicked(move |_| {
             let nb = notebook.clone();
             let sb = sb_close.clone();
-            let w = win.clone();
-            let on_confirm = move || {
+            confirm_close(win.upcast_ref(), "Close Tab?", "Are you sure you want to close this session?", move || {
                 if let Some(i) = nb.page_num(&sb) {
                     nb.remove_page(Some(i));
                 }
-            };
-            if crate::config_observer::load_app_config().map(|c| c.confirm_tab_close).unwrap_or(false) {
-                show_close_confirmation(w.upcast_ref(), "Close Tab?", "Are you sure you want to close this session?", on_confirm);
-            } else { on_confirm(); }
+            });
         });
 
         let nb_exited = self.inner.notebook.clone();
@@ -310,13 +302,13 @@ impl AppWindow {
     fn spawn_ssh_process(&self, terminal: &vte4::Terminal, host: &SshHost) {
         let host_str = host.hostname.clone();
         let user_str = host.user.clone().unwrap_or_else(|| "root".to_string());
-        let host_alias = host.alias.clone();
-        let exe_path = std::env::current_exe().unwrap_or_default().to_string_lossy().to_string();
         let mut envv: Vec<String> = std::env::vars().map(|(k, v)| format!("{}={}", k, v)).collect();
         if host.identity_file.is_none() {
+            // Only needed for the askpass fallback; skip the syscall + allocs otherwise.
+            let exe_path = std::env::current_exe().unwrap_or_default().to_string_lossy().into_owned();
             envv.push(format!("SSH_ASKPASS={}", exe_path));
             envv.push("SSH_ASKPASS_REQUIRE=force".to_string());
-            envv.push(format!("RUSTMIUS_ASKPASS_ALIAS={}", host_alias));
+            envv.push(format!("RUSTMIUS_ASKPASS_ALIAS={}", host.alias));
         }
         envv.push("DISPLAY=:0".to_string());
         let env_refs: Vec<&str> = envv.iter().map(|s| s.as_str()).collect();
@@ -361,12 +353,9 @@ impl AppWindow {
             let tab_box = Self::create_tab_label(&display_name, move || {
                 let nb_confirm = nb_inner.clone();
                 let ex_confirm = ex_inner.clone();
-                let on_confirm = move || {
+                confirm_close(win_inner.upcast_ref(), "Close Explorer?", "Are you sure you want to close this explorer tab?", move || {
                     if let Some(i) = nb_confirm.page_num(&ex_confirm) { nb_confirm.remove_page(Some(i)); }
-                };
-                if crate::config_observer::load_app_config().map(|c| c.confirm_tab_close).unwrap_or(false) {
-                    show_close_confirmation(win_inner.upcast_ref(), "Close Explorer?", "Are you sure you want to close this explorer tab?", on_confirm);
-                } else { on_confirm(); }
+                });
             });
 
             let ins_pos = Self::get_insert_position(&nb);
@@ -397,12 +386,9 @@ impl AppWindow {
             let tab_box = Self::create_tab_label(&display_name, move || {
                 let nb_confirm = nb_inner.clone();
                 let mo_confirm = mo_inner.clone();
-                let on_confirm = move || {
+                confirm_close(win_inner.upcast_ref(), "Close Monitor?", "Are you sure you want to close this monitoring tab?", move || {
                     if let Some(i) = nb_confirm.page_num(&mo_confirm) { nb_confirm.remove_page(Some(i)); }
-                };
-                if crate::config_observer::load_app_config().map(|c| c.confirm_tab_close).unwrap_or(false) {
-                    show_close_confirmation(win_inner.upcast_ref(), "Close Monitor?", "Are you sure you want to close this monitoring tab?", on_confirm);
-                } else { on_confirm(); }
+                });
             });
 
             let ins_pos = Self::get_insert_position(&nb);
@@ -440,16 +426,10 @@ impl AppWindow {
 
     fn delete_server(&self, host: SshHost) {
         let _ = delete_host_from_config(&host.alias);
-        let alias_norm = host.alias.to_lowercase();
+        let alias = host.alias.clone();
         let this = self.clone();
         glib::MainContext::default().spawn_local(async move {
-            if let Ok(keyring) = oo7::Keyring::new().await {
-                let mut attr = HashMap::new();
-                attr.insert("rustmius-server-alias", alias_norm.as_str());
-                if let Ok(items) = keyring.search_items(&attr).await {
-                    for item in items { let _ = item.delete().await; }
-                }
-            }
+            let _ = crate::config_observer::delete_keyring_password(&alias).await;
             this.refresh();
         });
     }
@@ -463,16 +443,12 @@ impl AppWindow {
         }).into_iter().map(|h| h.alias.to_lowercase()).collect();
         show_server_dialog(self.inner.window.upcast_ref(), Some(&host), existing_aliases, move |new_host, password| {
             let _ = delete_host_from_config(&old_alias);
-            if let Ok(_) = add_host_to_config(&new_host) {
+            if add_host_to_config(&new_host).is_ok() {
                 if !password.is_empty() {
                     let host_alias = new_host.alias.clone();
+                    let password = zeroize::Zeroizing::new(password);
                     glib::MainContext::default().spawn_local(async move {
-                        if let Ok(keyring) = oo7::Keyring::new().await {
-                            let mut attr = HashMap::new();
-                            let alias_lower = host_alias.to_lowercase();
-                            attr.insert("rustmius-server-alias", alias_lower.as_str());
-                            let _ = keyring.create_item(&format!("Rustmius: SSH Password for {}", host_alias), &attr, password.as_bytes(), true).await;
-                        }
+                        let _ = crate::config_observer::store_keyring_password(&host_alias, &password).await;
                     });
                 }
                 this.refresh();
@@ -501,6 +477,16 @@ impl AppWindow {
 
 pub fn build_ui(app: &gtk4::Application) {
     AppWindow::new(app);
+}
+
+/// Runs `on_confirm`, optionally gated behind the "confirm before closing tabs"
+/// preference. Centralizes the check duplicated across every tab-close handler.
+fn confirm_close(parent: &gtk4::Window, title: &str, message: &str, on_confirm: impl FnOnce() + 'static) {
+    if crate::config_observer::load_app_config().map(|c| c.confirm_tab_close).unwrap_or(false) {
+        show_close_confirmation(parent, title, message, on_confirm);
+    } else {
+        on_confirm();
+    }
 }
 
 fn show_close_confirmation(parent: &gtk4::Window, title: &str, message: &str, on_confirm: impl FnOnce() + 'static) {
