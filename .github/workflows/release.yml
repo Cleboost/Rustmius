@@ -209,7 +209,7 @@ jobs:
           fi
 
       - name: Publish AUR package
-        uses: KSXGitHub/github-actions-deploy-aur@v4.1.3
+        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
         with:
           pkgname: ${{ matrix.package }}
           pkgbuild: ./packages/${{ matrix.package }}/PKGBUILD
