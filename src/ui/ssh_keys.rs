@@ -1,9 +1,9 @@
 #![allow(deprecated)]
+use crate::config_observer::{REMOTE_SSH_DIR, SshKeyPair, get_ssh_dir, load_hosts, load_ssh_keys};
 use gtk4::prelude::*;
-use gtk4::{glib, gio};
-use std::rc::Rc;
+use gtk4::{gio, glib};
 use std::cell::RefCell;
-use crate::config_observer::{load_hosts, SshKeyPair, get_ssh_dir, load_ssh_keys, REMOTE_SSH_DIR};
+use std::rc::Rc;
 
 fn is_valid_key_name(name: &str) -> bool {
     if name.is_empty() || name.contains('\0') {
@@ -11,7 +11,9 @@ fn is_valid_key_name(name: &str) -> bool {
     }
     let p = std::path::Path::new(name);
     p.components().count() == 1
-        && p.file_name().map(|n| n == std::ffi::OsStr::new(name)).unwrap_or(false)
+        && p.file_name()
+            .map(|n| n == std::ffi::OsStr::new(name))
+            .unwrap_or(false)
 }
 
 fn show_error_alert(parent: Option<&gtk4::Window>, title: &str, secondary: &str) {
@@ -27,11 +29,17 @@ fn show_error_alert(parent: Option<&gtk4::Window>, title: &str, secondary: &str)
 
 pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
     let main_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
-    main_box.set_margin_top(24); main_box.set_margin_bottom(24);
-    main_box.set_margin_start(24); main_box.set_margin_end(24);
+    main_box.set_margin_top(24);
+    main_box.set_margin_bottom(24);
+    main_box.set_margin_start(24);
+    main_box.set_margin_end(24);
 
     let header_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
-    let title = gtk4::Label::builder().label("SSH Keys").halign(gtk4::Align::Start).hexpand(true).build();
+    let title = gtk4::Label::builder()
+        .label("SSH Keys")
+        .halign(gtk4::Align::Start)
+        .hexpand(true)
+        .build();
     title.add_css_class("title-1");
     let gen_btn = gtk4::Button::from_icon_name("list-add-symbolic");
     gen_btn.set_tooltip_text(Some("Generate New Key"));
@@ -77,7 +85,8 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
                 Vec::new()
             });
             if keys.is_empty() {
-                let empty_lbl = gtk4::Label::new(Some(&format!("No SSH keys found in {}/", REMOTE_SSH_DIR)));
+                let empty_lbl =
+                    gtk4::Label::new(Some(&format!("No SSH keys found in {}/", REMOTE_SSH_DIR)));
                 empty_lbl.set_margin_top(24);
                 empty_lbl.set_margin_bottom(24);
                 empty_lbl.add_css_class("dim-label");
@@ -86,8 +95,10 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
                 for key in keys {
                     let row = gtk4::ListBoxRow::new();
                     let hbox = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
-                    hbox.set_margin_start(12); hbox.set_margin_end(12);
-                    hbox.set_margin_top(12); hbox.set_margin_bottom(12);
+                    hbox.set_margin_start(12);
+                    hbox.set_margin_end(12);
+                    hbox.set_margin_top(12);
+                    hbox.set_margin_bottom(12);
                     let icon = gtk4::Image::from_icon_name("network-vpn-symbolic");
                     icon.set_pixel_size(24);
                     let name_lbl = gtk4::Label::new(Some(&key.name));
@@ -161,7 +172,9 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
     do_refresh();
 
     let r_refresh = do_refresh.clone();
-    refresh_btn.connect_clicked(move |_| { r_refresh(); });
+    refresh_btn.connect_clicked(move |_| {
+        r_refresh();
+    });
 
     let r_win = window_rc.clone();
     let g_refresh = do_refresh.clone();
@@ -186,8 +199,10 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
         .build();
 
     let content = dialog.content_area();
-    content.set_margin_top(12); content.set_margin_bottom(12);
-    content.set_margin_start(12); content.set_margin_end(12);
+    content.set_margin_top(12);
+    content.set_margin_bottom(12);
+    content.set_margin_start(12);
+    content.set_margin_end(12);
     content.set_spacing(12);
 
     let hosts = load_hosts().unwrap_or_else(|e| {
@@ -208,14 +223,24 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
     }
 
     let dropdown = gtk4::DropDown::new(Some(model), gtk4::Expression::NONE);
-    content.append(&gtk4::Label::builder().label("Select Server").halign(gtk4::Align::Start).build());
+    content.append(
+        &gtk4::Label::builder()
+            .label("Select Server")
+            .halign(gtk4::Align::Start)
+            .build(),
+    );
     content.append(&dropdown);
 
     let pass_entry = gtk4::PasswordEntry::builder()
         .placeholder_text("Server Password (optional if agent is running)")
         .show_peek_icon(true)
         .build();
-    content.append(&gtk4::Label::builder().label("Password (for deployment)").halign(gtk4::Align::Start).build());
+    content.append(
+        &gtk4::Label::builder()
+            .label("Password (for deployment)")
+            .halign(gtk4::Align::Start)
+            .build(),
+    );
     content.append(&pass_entry);
 
     let status_label = gtk4::Label::new(None);
@@ -243,7 +268,9 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
                         return;
                     }
                 };
-                let parent_win_weak = d.transient_for().and_then(|w| w.downcast::<gtk4::Window>().ok());
+                let parent_win_weak = d
+                    .transient_for()
+                    .and_then(|w| w.downcast::<gtk4::Window>().ok());
                 let close_dialog = d.clone();
                 glib::MainContext::default().spawn_local(async move {
                     let final_password = if !password.is_empty() {
@@ -252,7 +279,12 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
                         crate::config_observer::get_keyring_password(&host.alias).await
                     };
 
-                    let result = crate::engines::ssh::deploy_pubkey(&host, final_password.as_deref(), &pubkey).await;
+                    let result = crate::engines::ssh::deploy_pubkey(
+                        &host,
+                        final_password.as_deref(),
+                        &pubkey,
+                    )
+                    .await;
 
                     match result {
                         Ok(_) => {
@@ -262,12 +294,18 @@ fn show_deploy_dialog(parent: &gtk4::ApplicationWindow, key: &SshKeyPair) {
                                 .buttons(vec!["OK"])
                                 .default_button(0)
                                 .build();
-                            md.show(parent_win_weak.as_ref().map(|w| w.upcast_ref::<gtk4::Window>()));
+                            md.show(
+                                parent_win_weak
+                                    .as_ref()
+                                    .map(|w| w.upcast_ref::<gtk4::Window>()),
+                            );
                             close_dialog.close();
-                        },
+                        }
                         Err(e) => {
                             show_error_alert(
-                                parent_win_weak.as_ref().map(|w| w.upcast_ref::<gtk4::Window>()),
+                                parent_win_weak
+                                    .as_ref()
+                                    .map(|w| w.upcast_ref::<gtk4::Window>()),
                                 "Deployment Failed",
                                 &e.to_string(),
                             );
@@ -292,19 +330,43 @@ fn show_generate_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>)
         .build();
 
     let content = dialog.content_area();
-    content.set_margin_top(12); content.set_margin_bottom(12);
-    content.set_margin_start(12); content.set_margin_end(12);
+    content.set_margin_top(12);
+    content.set_margin_bottom(12);
+    content.set_margin_start(12);
+    content.set_margin_end(12);
     content.set_spacing(12);
 
-    let name_entry = gtk4::Entry::builder().placeholder_text("Key Name (e.g. id_ed25519_mykey)").build();
-    let pass_entry = gtk4::PasswordEntry::builder().placeholder_text("Passphrase (optional)").show_peek_icon(true).build();
-    let comment_entry = gtk4::Entry::builder().placeholder_text("Comment (optional, e.g. user@hostname)").build();
+    let name_entry = gtk4::Entry::builder()
+        .placeholder_text("Key Name (e.g. id_ed25519_mykey)")
+        .build();
+    let pass_entry = gtk4::PasswordEntry::builder()
+        .placeholder_text("Passphrase (optional)")
+        .show_peek_icon(true)
+        .build();
+    let comment_entry = gtk4::Entry::builder()
+        .placeholder_text("Comment (optional, e.g. user@hostname)")
+        .build();
 
-    content.append(&gtk4::Label::builder().label("Key Filename").halign(gtk4::Align::Start).build());
+    content.append(
+        &gtk4::Label::builder()
+            .label("Key Filename")
+            .halign(gtk4::Align::Start)
+            .build(),
+    );
     content.append(&name_entry);
-    content.append(&gtk4::Label::builder().label("Passphrase").halign(gtk4::Align::Start).build());
+    content.append(
+        &gtk4::Label::builder()
+            .label("Passphrase")
+            .halign(gtk4::Align::Start)
+            .build(),
+    );
     content.append(&pass_entry);
-    content.append(&gtk4::Label::builder().label("Comment").halign(gtk4::Align::Start).build());
+    content.append(
+        &gtk4::Label::builder()
+            .label("Comment")
+            .halign(gtk4::Align::Start)
+            .build(),
+    );
     content.append(&comment_entry);
 
     let ok_btn = dialog.add_button("Generate", gtk4::ResponseType::Ok);
@@ -401,11 +463,15 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
         .build();
 
     let content = dialog.content_area();
-    content.set_margin_top(12); content.set_margin_bottom(12);
-    content.set_margin_start(12); content.set_margin_end(12);
+    content.set_margin_top(12);
+    content.set_margin_bottom(12);
+    content.set_margin_start(12);
+    content.set_margin_end(12);
     content.set_spacing(12);
 
-    let name_entry = gtk4::Entry::builder().placeholder_text("Key Name (e.g. id_rsa)").build();
+    let name_entry = gtk4::Entry::builder()
+        .placeholder_text("Key Name (e.g. id_rsa)")
+        .build();
     let text_buffer = gtk4::TextBuffer::new(None);
     let text_view = gtk4::TextView::builder()
         .buffer(&text_buffer)
@@ -418,9 +484,19 @@ fn show_import_dialog(parent: &gtk4::ApplicationWindow, on_save: Rc<dyn Fn()>) {
         .vexpand(true)
         .build();
 
-    content.append(&gtk4::Label::builder().label("Key Filename").halign(gtk4::Align::Start).build());
+    content.append(
+        &gtk4::Label::builder()
+            .label("Key Filename")
+            .halign(gtk4::Align::Start)
+            .build(),
+    );
     content.append(&name_entry);
-    content.append(&gtk4::Label::builder().label("Paste Private Key").halign(gtk4::Align::Start).build());
+    content.append(
+        &gtk4::Label::builder()
+            .label("Paste Private Key")
+            .halign(gtk4::Align::Start)
+            .build(),
+    );
     content.append(&scrolled);
 
     let ok_btn = dialog.add_button("Import", gtk4::ResponseType::Ok);

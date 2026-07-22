@@ -1,9 +1,9 @@
 mod config_observer;
-mod ui;
 mod engines;
+mod ui;
 
-use gtk4::prelude::*;
 use crate::ui::window::build_ui;
+use gtk4::prelude::*;
 use tracing::info;
 
 #[tokio::main]
@@ -13,9 +13,11 @@ async fn main() {
     if !is_askpass {
         tracing_subscriber::fmt()
             .with_writer(std::io::stderr)
-            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive(tracing::Level::INFO.into())
-                .add_directive("rustmius=debug".parse().unwrap()))
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::from_default_env()
+                    .add_directive(tracing::Level::INFO.into())
+                    .add_directive("rustmius=debug".parse().unwrap()),
+            )
             .init();
         info!("Starting Rustmius v{}", env!("CARGO_PKG_VERSION"));
     }

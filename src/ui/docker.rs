@@ -1,7 +1,7 @@
-use gtk4::prelude::*;
-use gtk4::{glib};
 use crate::config_observer::SshHost;
 use crate::engines::docker::{get_docker_stats, list_docker_items, perform_docker_action};
+use gtk4::glib;
+use gtk4::prelude::*;
 
 pub struct DockerManager {
     pub container: gtk4::Box,
@@ -46,7 +46,7 @@ impl DockerManager {
         loading_box.append(&loading_label);
         self.stack.add_named(&loading_box, Some("loading"));
         self.stack.set_visible_child_name("loading");
-        
+
         let dashboard = self.build_dashboard();
         self.stack.add_named(&dashboard, Some("dashboard"));
 
@@ -67,7 +67,9 @@ impl DockerManager {
                                 let mut next = header.first_child();
                                 while let Some(child) = next {
                                     if let Some(btn) = child.downcast_ref::<gtk4::Button>() {
-                                        if btn.icon_name() == Some(glib::GString::from("view-refresh-symbolic")) {
+                                        if btn.icon_name()
+                                            == Some(glib::GString::from("view-refresh-symbolic"))
+                                        {
                                             btn.emit_clicked();
                                             break;
                                         }
@@ -80,7 +82,7 @@ impl DockerManager {
                 }
             }
         });
-        
+
         // Start on dashboard and refresh
         self.stack.set_visible_child_name("dashboard");
         self.refresh_dashboard();
@@ -116,8 +118,16 @@ impl DockerManager {
 
         stats_flow.append(&self.build_stat_card("Containers", "0", Some("container")));
         stats_flow.append(&self.build_stat_card("Images", "0", Some("view-grid-symbolic")));
-        stats_flow.append(&self.build_stat_card("Running", "0", Some("media-playback-start-symbolic")));
-        stats_flow.append(&self.build_stat_card("Paused", "0", Some("media-playback-pause-symbolic")));
+        stats_flow.append(&self.build_stat_card(
+            "Running",
+            "0",
+            Some("media-playback-start-symbolic"),
+        ));
+        stats_flow.append(&self.build_stat_card(
+            "Paused",
+            "0",
+            Some("media-playback-pause-symbolic"),
+        ));
         box_.append(&stats_flow);
 
         let actions_section = gtk4::Box::new(gtk4::Orientation::Vertical, 16);
@@ -129,18 +139,30 @@ impl DockerManager {
         actions_section.append(&actions_title);
 
         let actions_grid = gtk4::Box::new(gtk4::Orientation::Horizontal, 18);
-        
-        let btn_containers = self.build_action_tile("Manage Containers", "View and control your containers", Some("container"));
-        let btn_images = self.build_action_tile("Manage Images", "Browse and prune images", Some("view-grid-symbolic"));
+
+        let btn_containers = self.build_action_tile(
+            "Manage Containers",
+            "View and control your containers",
+            Some("container"),
+        );
+        let btn_images = self.build_action_tile(
+            "Manage Images",
+            "Browse and prune images",
+            Some("view-grid-symbolic"),
+        );
 
         let s_c = self.stack.clone();
         let g_c = gtk4::GestureClick::new();
-        g_c.connect_released(move |_, _, _, _| { s_c.set_visible_child_name("containers"); });
+        g_c.connect_released(move |_, _, _, _| {
+            s_c.set_visible_child_name("containers");
+        });
         btn_containers.add_controller(g_c);
 
         let s_i = self.stack.clone();
         let g_i = gtk4::GestureClick::new();
-        g_i.connect_released(move |_, _, _, _| { s_i.set_visible_child_name("images"); });
+        g_i.connect_released(move |_, _, _, _| {
+            s_i.set_visible_child_name("images");
+        });
         btn_images.add_controller(g_i);
 
         actions_grid.append(&btn_containers);
@@ -174,7 +196,7 @@ impl DockerManager {
                 img
             }
         };
-        
+
         let text_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
         let label_title = gtk4::Label::builder()
             .label(title)
@@ -186,10 +208,10 @@ impl DockerManager {
             .halign(gtk4::Align::Start)
             .css_classes(vec!["caption".to_string(), "dim-label".to_string()])
             .build();
-        
+
         text_box.append(&label_title);
         text_box.append(&label_desc);
-        
+
         tile.append(&icon_img);
         tile.append(&text_box);
         tile
@@ -206,14 +228,16 @@ impl DockerManager {
         let back_btn = gtk4::Button::from_icon_name("go-previous-symbolic");
         back_btn.add_css_class("flat");
         let s_back = self.stack.clone();
-        back_btn.connect_clicked(move |_| { s_back.set_visible_child_name("dashboard"); });
+        back_btn.connect_clicked(move |_| {
+            s_back.set_visible_child_name("dashboard");
+        });
 
         let title_label = gtk4::Label::builder()
             .label(title)
             .halign(gtk4::Align::Start)
             .css_classes(vec!["title-2".to_string()])
             .build();
-        
+
         let refresh_btn = gtk4::Button::from_icon_name("view-refresh-symbolic");
         refresh_btn.add_css_class("flat");
 
@@ -225,9 +249,7 @@ impl DockerManager {
         header.append(&refresh_btn);
         box_.append(&header);
 
-        let scrolled = gtk4::ScrolledWindow::builder()
-            .vexpand(true)
-            .build();
+        let scrolled = gtk4::ScrolledWindow::builder().vexpand(true).build();
         let list_box = gtk4::ListBox::new();
         list_box.set_selection_mode(gtk4::SelectionMode::None);
         list_box.add_css_class("boxed-list");
@@ -250,16 +272,21 @@ impl DockerManager {
                 let h_for_fetch = h.clone();
                 let p_for_fetch = p.clone();
                 let is_containers = t == "Containers";
-                let result = list_docker_items(&h_for_fetch, p_for_fetch.as_deref(), is_containers).await;
+                let result =
+                    list_docker_items(&h_for_fetch, p_for_fetch.as_deref(), is_containers).await;
 
                 if let Ok(output) = result {
-                    while let Some(child) = lb.first_child() { lb.remove(&child); }
+                    while let Some(child) = lb.first_child() {
+                        lb.remove(&child);
+                    }
                     for line in output.lines() {
                         let parts: Vec<&str> = line.split('\t').collect();
                         let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
-                        row.set_margin_top(8); row.set_margin_bottom(8);
-                        row.set_margin_start(12); row.set_margin_end(12);
-                        
+                        row.set_margin_top(8);
+                        row.set_margin_bottom(8);
+                        row.set_margin_start(12);
+                        row.set_margin_end(12);
+
                         let text_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
                         let item_name = parts.first().copied().unwrap_or(line).to_string();
                         let name_label = gtk4::Label::builder()
@@ -277,7 +304,7 @@ impl DockerManager {
                                 .build();
                             text_box.append(&detail);
                         }
-                        
+
                         row.append(&text_box);
 
                         let spacer_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
@@ -286,24 +313,32 @@ impl DockerManager {
 
                         let actions = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
                         let is_container = t == "Containers";
-                        
+
                         if is_container {
                             let status = parts.get(1).copied().unwrap_or("");
                             let is_running = status.starts_with("Up");
-                            let icon_name = if is_running { "media-playback-stop-symbolic" } else { "media-playback-start-symbolic" };
+                            let icon_name = if is_running {
+                                "media-playback-stop-symbolic"
+                            } else {
+                                "media-playback-start-symbolic"
+                            };
                             let action_cmd = if is_running { "stop" } else { "start" };
-                            let tooltip = if is_running { "Stop Container" } else { "Start Container" };
+                            let tooltip = if is_running {
+                                "Stop Container"
+                            } else {
+                                "Start Container"
+                            };
 
                             let toggle_btn = gtk4::Button::from_icon_name(icon_name);
                             toggle_btn.add_css_class("flat");
                             toggle_btn.set_tooltip_text(Some(tooltip));
-                            
+
                             let h_toggle = h.clone();
                             let p_toggle = p.clone();
                             let n_toggle = item_name.clone();
                             let rb_toggle = rb_inner.clone();
                             let cmd_str = action_cmd.to_string();
-                            
+
                             toggle_btn.connect_clicked(move |_| {
                                 let h_c = h_toggle.clone();
                                 let p_c = p_toggle.clone();
@@ -311,17 +346,24 @@ impl DockerManager {
                                 let rb_c = rb_toggle.clone();
                                 let c_str = cmd_str.clone();
                                 glib::MainContext::default().spawn_local(async move {
-                                    let _ = perform_docker_action(&h_c, p_c.as_deref(), &c_str, &n_c).await;
+                                    let _ =
+                                        perform_docker_action(&h_c, p_c.as_deref(), &c_str, &n_c)
+                                            .await;
                                     rb_c.emit_clicked();
-                                });                            });
+                                });
+                            });
                             actions.append(&toggle_btn);
                         }
 
                         let delete_btn = gtk4::Button::from_icon_name("user-trash-symbolic");
                         delete_btn.add_css_class("flat");
                         delete_btn.add_css_class("error");
-                        delete_btn.set_tooltip_text(Some(if is_container { "Remove Container" } else { "Remove Image" }));
-                        
+                        delete_btn.set_tooltip_text(Some(if is_container {
+                            "Remove Container"
+                        } else {
+                            "Remove Image"
+                        }));
+
                         let h_del = h.clone();
                         let p_del = p.clone();
                         let n_del = item_name.clone();
@@ -334,9 +376,11 @@ impl DockerManager {
                             let rb_c = rb_del.clone();
                             glib::MainContext::default().spawn_local(async move {
                                 let sub_cmd = if is_c_del { "rm -f" } else { "rmi" };
-                                let _ = perform_docker_action(&h_c, p_c.as_deref(), sub_cmd, &n_c).await;
+                                let _ = perform_docker_action(&h_c, p_c.as_deref(), sub_cmd, &n_c)
+                                    .await;
                                 rb_c.emit_clicked();
-                            });                        });
+                            });
+                        });
 
                         actions.append(&delete_btn);
                         row.append(&actions);
@@ -366,7 +410,7 @@ impl DockerManager {
             .build();
         header.append(&icon_img);
         header.append(&label_title);
-        
+
         let label_value = gtk4::Label::builder()
             .label(value)
             .halign(gtk4::Align::Start)
@@ -395,7 +439,7 @@ impl DockerManager {
                             Self::update_stat(&dashboard, "stat_value_images", &parts[1]);
                             Self::update_stat(&dashboard, "stat_value_running", &parts[2]);
                             Self::update_stat(&dashboard, "stat_value_paused", &parts[3]);
-                            
+
                             if stack.visible_child_name() == Some(glib::GString::from("loading")) {
                                 stack.set_visible_child_name("dashboard");
                             }

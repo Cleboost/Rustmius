@@ -139,11 +139,15 @@ pub fn apply_to_terminal(theme: &TerminalTheme, terminal: &vte4::Terminal) {
 
 pub fn apply_to_open_terminals(notebook: &gtk4::Notebook, theme: &TerminalTheme) {
     for i in 0..notebook.n_pages() {
-        let Some(page) = notebook.nth_page(Some(i)) else { continue };
+        let Some(page) = notebook.nth_page(Some(i)) else {
+            continue;
+        };
         if !page.widget_name().starts_with("session:") {
             continue;
         }
-        let Some(bx) = page.downcast_ref::<gtk4::Box>() else { continue };
+        let Some(bx) = page.downcast_ref::<gtk4::Box>() else {
+            continue;
+        };
         let mut child = bx.first_child();
         while let Some(c) = child {
             if let Some(term) = c.downcast_ref::<vte4::Terminal>() {

@@ -1,13 +1,13 @@
+pub mod add_server_dialog;
+pub mod components;
+pub mod docker;
+pub mod file_explorer;
+pub mod monitor;
+pub mod server_list;
+pub mod ssh_keys;
 pub mod style;
 pub mod theme;
 pub mod window;
-pub mod server_list;
-pub mod components;
-pub mod add_server_dialog;
-pub mod file_explorer;
-pub mod ssh_keys;
-pub mod monitor;
-pub mod docker;
 
 use gtk4::{gio, glib};
 

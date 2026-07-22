@@ -1,10 +1,10 @@
-use gtk4::prelude::*;
 use crate::config_observer::SshHost;
 use crate::engines::monitor::fetch_system_metrics;
+use gtk4::glib;
+use gtk4::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
-use gtk4::glib;
 
 pub struct SystemMonitor {
     pub container: gtk4::ScrolledWindow,
@@ -36,7 +36,7 @@ impl SystemMonitor {
         let scrolled = gtk4::ScrolledWindow::builder()
             .hscrollbar_policy(gtk4::PolicyType::Never)
             .build();
-        
+
         let container = gtk4::Box::new(gtk4::Orientation::Vertical, 18);
         container.set_margin_top(18);
         container.set_margin_bottom(18);
@@ -47,13 +47,13 @@ impl SystemMonitor {
         let toolbar = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
         let refresh_label = gtk4::Label::new(Some("Refresh Rate:"));
         let refresh_dropdown = gtk4::DropDown::from_strings(&["1s", "3s", "5s", "10s"]);
-        
+
         let app_config = crate::config_observer::load_app_config().unwrap_or_else(|e| {
             tracing::error!("Failed to load app config: {}", e);
             crate::config_observer::AppConfig::default()
         });
         refresh_dropdown.set_selected(app_config.monitor_refresh_rate);
-        
+
         toolbar.append(&refresh_label);
         toolbar.append(&refresh_dropdown);
         toolbar.set_halign(gtk4::Align::End);
@@ -68,7 +68,7 @@ impl SystemMonitor {
             .margin_start(12)
             .margin_end(12)
             .build();
-        
+
         let hostname_label = Self::info_label("Hostname", "Loading...");
         let os_label = Self::info_label("OS", "Loading...");
         let kernel_label = Self::info_label("Kernel", "Loading...");
@@ -82,7 +82,7 @@ impl SystemMonitor {
         sys_grid.attach(&os_label.1, 1, 1, 1, 1);
         sys_grid.attach(&arch_label.0, 2, 0, 1, 1);
         sys_grid.attach(&arch_label.1, 2, 1, 1, 1);
-        
+
         sys_grid.attach(&kernel_label.0, 0, 2, 1, 1);
         sys_grid.attach(&kernel_label.1, 0, 3, 1, 1);
         sys_grid.attach(&uptime_label.0, 1, 2, 1, 1);
@@ -185,13 +185,15 @@ impl SystemMonitor {
         let rd_anim = r_draw.clone();
         let dd_anim = d_draw.clone();
         glib::timeout_add_local(Duration::from_millis(32), move || {
-            if cw_anim.upgrade().is_none() { return glib::ControlFlow::Break; }
+            if cw_anim.upgrade().is_none() {
+                return glib::ControlFlow::Break;
+            }
             if let Ok(mut st) = s_anim.try_borrow_mut() {
                 let step = 0.1;
                 st.current_cpu += (st.target_cpu - st.current_cpu) * step;
                 st.current_ram += (st.target_ram - st.current_ram) * step;
                 st.current_disk += (st.target_disk - st.current_disk) * step;
-                
+
                 cd_anim.queue_draw();
                 rd_anim.queue_draw();
                 dd_anim.queue_draw();
@@ -209,7 +211,9 @@ impl SystemMonitor {
                 };
 
                 if !alive {
-                    tracing::debug!("Stopping background monitoring: tab closed or widget disconnected");
+                    tracing::debug!(
+                        "Stopping background monitoring: tab closed or widget disconnected"
+                    );
                     break;
                 }
 
@@ -258,7 +262,9 @@ impl SystemMonitor {
             }
         });
 
-        Self { container: scrolled }
+        Self {
+            container: scrolled,
+        }
     }
 
     fn info_label(title: &str, value: &str) -> (gtk4::Label, gtk4::Label) {
@@ -283,12 +289,12 @@ impl SystemMonitor {
         bx.set_margin_bottom(12);
         bx.set_margin_start(12);
         bx.set_margin_end(12);
-        
+
         let da = gtk4::DrawingArea::builder()
             .content_width(120)
             .content_height(120)
             .build();
-        
+
         let detail_lbl = gtk4::Label::builder()
             .label(detail)
             .halign(gtk4::Align::Center)
@@ -320,18 +326,31 @@ impl SystemMonitor {
             (1.0, 1.0 - (percent - 0.5) * 2.0, 0.2)
         };
         cr.set_source_rgb(r, g, b);
-        
+
         cr.set_line_width(thickness);
         cr.set_line_cap(gtk4::cairo::LineCap::Round);
-        let _ = cr.arc(center_x, center_y, radius, -std::f64::consts::FRAC_PI_2, angle - std::f64::consts::FRAC_PI_2);
+        let _ = cr.arc(
+            center_x,
+            center_y,
+            radius,
+            -std::f64::consts::FRAC_PI_2,
+            angle - std::f64::consts::FRAC_PI_2,
+        );
         let _ = cr.stroke();
 
         cr.set_source_rgb(0.9, 0.9, 0.9);
-        cr.select_font_face("Sans", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Bold);
+        cr.select_font_face(
+            "Sans",
+            gtk4::cairo::FontSlant::Normal,
+            gtk4::cairo::FontWeight::Bold,
+        );
         cr.set_font_size(20.0);
         let text = format!("{:.0}%", percent * 100.0);
         if let Ok(extents) = cr.text_extents(&text) {
-            cr.move_to(center_x - extents.width() / 2.0, center_y + extents.height() / 2.0);
+            cr.move_to(
+                center_x - extents.width() / 2.0,
+                center_y + extents.height() / 2.0,
+            );
             let _ = cr.show_text(&text);
         }
     }

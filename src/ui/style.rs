@@ -1,5 +1,5 @@
-use gtk4::gdk;
 use gtk4::CssProvider;
+use gtk4::gdk;
 
 pub fn init_style() {
     let provider = CssProvider::new();
