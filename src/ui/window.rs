@@ -59,7 +59,7 @@ impl AppWindow {
         sessions_box.append(&notebook);
         stack.add_named(&sessions_box, Some("sessions"));
 
-        let settings = Settings::new();
+        let settings = Settings::new(&notebook);
         stack.add_named(&settings.container, Some("settings"));
 
         let keys_box = build_ssh_keys_ui(&window);
@@ -212,6 +212,10 @@ impl AppWindow {
         let font_desc = gtk4::pango::FontDescription::from_string(&app_config.terminal_font);
         terminal.set_font(Some(&font_desc));
         terminal.set_scrollback_lines(app_config.terminal_scrollback as i64);
+        crate::ui::theme::apply_to_terminal(
+            crate::ui::theme::get_theme(&app_config.terminal_theme),
+            &terminal,
+        );
 
         let key_controller = gtk4::EventControllerKey::new();
         let terminal_clone = terminal.clone();

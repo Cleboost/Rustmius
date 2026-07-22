@@ -113,13 +113,21 @@ pub async fn delete_keyring_password(alias: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub const DEFAULT_TERMINAL_THEME: &str = "Dracula";
+
 /// Global application configuration settings.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AppConfig {
     pub monitor_refresh_rate: u32, // index: 0=1s, 1=3s, 2=5s, 3=10s
     pub terminal_font: String,
     pub terminal_scrollback: u32,
+    #[serde(default = "default_terminal_theme")]
+    pub terminal_theme: String,
     pub confirm_tab_close: bool,
+}
+
+fn default_terminal_theme() -> String {
+    DEFAULT_TERMINAL_THEME.to_string()
 }
 
 impl Default for AppConfig {
@@ -128,6 +136,7 @@ impl Default for AppConfig {
             monitor_refresh_rate: 1, // 3s
             terminal_font: "Monospace 11".to_string(),
             terminal_scrollback: 10000,
+            terminal_theme: default_terminal_theme(),
             confirm_tab_close: false,
         }
     }
