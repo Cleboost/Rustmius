@@ -1,6 +1,6 @@
-use gtk4::prelude::*;
-use gtk4::glib;
 use crate::config_observer::{SshHost, load_hosts};
+use gtk4::glib;
+use gtk4::prelude::*;
 
 pub enum ServerAction {
     Connect(SshHost, Option<String>),
@@ -15,7 +15,8 @@ pub struct ServerList {
 
 impl ServerList {
     pub fn new<F>(on_action: F) -> Self
-    where F: Fn(ServerAction) + 'static + Clone
+    where
+        F: Fn(ServerAction) + 'static + Clone,
     {
         let scrolled = gtk4::ScrolledWindow::builder()
             .hscrollbar_policy(gtk4::PolicyType::Never)
@@ -35,13 +36,17 @@ impl ServerList {
             .build();
         scrolled.set_child(Some(&flow_box));
 
-        let sl = Self { container: scrolled, flow_box };
+        let sl = Self {
+            container: scrolled,
+            flow_box,
+        };
         sl.refresh(on_action);
         sl
     }
 
     pub fn refresh<F>(&self, on_action: F)
-    where F: Fn(ServerAction) + 'static + Clone
+    where
+        F: Fn(ServerAction) + 'static + Clone,
     {
         while let Some(child) = self.flow_box.first_child() {
             self.flow_box.remove(&child);
@@ -57,7 +62,8 @@ impl ServerList {
     }
 
     fn add_host_row<F>(&self, host: &SshHost, on_action: F)
-    where F: Fn(ServerAction) + 'static + Clone
+    where
+        F: Fn(ServerAction) + 'static + Clone,
     {
         let frame = gtk4::Frame::new(None);
         frame.add_css_class("card");
@@ -100,7 +106,11 @@ impl ServerList {
         header_box.append(&alias_label);
         header_box.append(&actions_box);
 
-        let host_info = format!("{}@{}", host.user.as_deref().unwrap_or("root"), host.hostname);
+        let host_info = format!(
+            "{}@{}",
+            host.user.as_deref().unwrap_or("root"),
+            host.hostname
+        );
         let host_label = gtk4::Label::builder()
             .label(&host_info)
             .halign(gtk4::Align::Start)

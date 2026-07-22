@@ -1,19 +1,19 @@
-use gtk4::prelude::*;
-use gtk4::{glib, gio, gdk};
-use crate::ui::style::init_style;
-use crate::ui::server_list::{ServerList, ServerAction};
+use crate::config_observer::{SshHost, add_host_to_config, delete_host_from_config, load_hosts};
 use crate::ui::add_server_dialog::show_server_dialog;
-use crate::ui::file_explorer::FileExplorer;
-use crate::ui::monitor::SystemMonitor;
-use crate::ui::docker::DockerManager;
-use crate::ui::ssh_keys::build_ssh_keys_ui;
-use crate::ui::components::sidebar::Sidebar;
 use crate::ui::components::header::Header;
 use crate::ui::components::settings::Settings;
-use crate::config_observer::{add_host_to_config, delete_host_from_config, load_hosts, SshHost};
-use vte4::prelude::*;
-use std::rc::Rc;
+use crate::ui::components::sidebar::Sidebar;
+use crate::ui::docker::DockerManager;
+use crate::ui::file_explorer::FileExplorer;
+use crate::ui::monitor::SystemMonitor;
+use crate::ui::server_list::{ServerAction, ServerList};
+use crate::ui::ssh_keys::build_ssh_keys_ui;
+use crate::ui::style::init_style;
+use gtk4::prelude::*;
+use gtk4::{gdk, gio, glib};
 use std::cell::RefCell;
+use std::rc::Rc;
+use vte4::prelude::*;
 
 #[derive(Clone)]
 pub struct AppWindow {
@@ -54,7 +54,7 @@ impl AppWindow {
         notebook.set_hexpand(true);
         notebook.set_scrollable(true);
         notebook.set_show_border(false);
-        
+
         let sessions_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         sessions_box.append(&notebook);
         stack.add_named(&sessions_box, Some("sessions"));
@@ -105,18 +105,24 @@ impl AppWindow {
             this.show_add_server_dialog();
         });
 
-        self.inner.notebook.connect_page_reordered(|nb, child, page_num| {
-            if page_num == 0 && child.widget_name() != "server_list_tab" {
-                nb.reorder_child(child, Some(1));
-            }
-        });
+        self.inner
+            .notebook
+            .connect_page_reordered(|nb, child, page_num| {
+                if page_num == 0 && child.widget_name() != "server_list_tab" {
+                    nb.reorder_child(child, Some(1));
+                }
+            });
     }
 
     fn show_sessions(&self) {
         let mut sl_idx = None;
         for i in 0..self.inner.notebook.n_pages() {
             if let Some(c) = self.inner.notebook.nth_page(Some(i))
-                && c.widget_name() == "server_list_tab" { sl_idx = Some(i); break; }
+                && c.widget_name() == "server_list_tab"
+            {
+                sl_idx = Some(i);
+                break;
+            }
         }
         if let Some(idx) = sl_idx {
             self.inner.notebook.set_current_page(Some(idx));
@@ -132,36 +138,50 @@ impl AppWindow {
             tracing::error!("Failed to load hosts: {}", e);
             Vec::new()
         });
-        let existing_aliases: Vec<String> = existing_hosts.iter().map(|h| h.alias.to_lowercase()).collect();
-        
-        show_server_dialog(self.inner.window.upcast_ref(), None, existing_aliases, move |new_host, password: String| {
-            if add_host_to_config(&new_host).is_ok() {
-                if !password.is_empty() {
-                    let host_alias = new_host.alias.clone();
-                    let password = zeroize::Zeroizing::new(password);
-                    glib::MainContext::default().spawn_local(async move {
-                        let _ = crate::config_observer::store_keyring_password(&host_alias, &password).await;
-                    });
+        let existing_aliases: Vec<String> = existing_hosts
+            .iter()
+            .map(|h| h.alias.to_lowercase())
+            .collect();
+
+        show_server_dialog(
+            self.inner.window.upcast_ref(),
+            None,
+            existing_aliases,
+            move |new_host, password: String| {
+                if add_host_to_config(&new_host).is_ok() {
+                    if !password.is_empty() {
+                        let host_alias = new_host.alias.clone();
+                        let password = zeroize::Zeroizing::new(password);
+                        glib::MainContext::default().spawn_local(async move {
+                            let _ = crate::config_observer::store_keyring_password(
+                                &host_alias,
+                                &password,
+                            )
+                            .await;
+                        });
+                    }
+                    this.refresh();
                 }
-                this.refresh();
-            }
-        });
+            },
+        );
     }
 
     pub fn refresh(&self) {
         let this = self.clone();
-        let sl = ServerList::new(move |action| {
-            match action {
-                ServerAction::Connect(host, password) => this.connect_to_server(host, password),
-                ServerAction::Delete(host) => this.delete_server(host),
-                ServerAction::Edit(host) => this.edit_server(host),
-            }
+        let sl = ServerList::new(move |action| match action {
+            ServerAction::Connect(host, password) => this.connect_to_server(host, password),
+            ServerAction::Delete(host) => this.delete_server(host),
+            ServerAction::Edit(host) => this.edit_server(host),
         });
 
         let mut server_list_idx = None;
         for i in 0..self.inner.notebook.n_pages() {
             if let Some(c) = self.inner.notebook.nth_page(Some(i))
-                && c.widget_name() == "server_list_tab" { server_list_idx = Some(i); break; }
+                && c.widget_name() == "server_list_tab"
+            {
+                server_list_idx = Some(i);
+                break;
+            }
         }
 
         sl.container.set_widget_name("server_list_tab");
@@ -171,19 +191,27 @@ impl AppWindow {
 
         if let Some(idx) = server_list_idx {
             self.inner.notebook.remove_page(Some(idx));
-            self.inner.notebook.insert_page(&sl.container, Some(&tab_box), Some(idx));
+            self.inner
+                .notebook
+                .insert_page(&sl.container, Some(&tab_box), Some(idx));
         } else {
-            self.inner.notebook.insert_page(&sl.container, Some(&tab_box), Some(0));
+            self.inner
+                .notebook
+                .insert_page(&sl.container, Some(&tab_box), Some(0));
             self.inner.notebook.set_current_page(Some(0));
         }
-        self.inner.notebook.set_tab_reorderable(&sl.container, false);
+        self.inner
+            .notebook
+            .set_tab_reorderable(&sl.container, false);
     }
 
     fn connect_to_server(&self, host: SshHost, password: Option<String>) {
         self.inner.stack.set_visible_child_name("sessions");
         let session_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         let toolbar = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-        toolbar.set_margin_top(4); toolbar.set_margin_bottom(4); toolbar.set_margin_start(6);
+        toolbar.set_margin_top(4);
+        toolbar.set_margin_bottom(4);
+        toolbar.set_margin_start(6);
 
         let explorer_btn = gtk4::Button::from_icon_name("folder-remote-symbolic");
         explorer_btn.add_css_class("flat");
@@ -224,11 +252,19 @@ impl AppWindow {
             let is_shift = state.contains(gdk::ModifierType::SHIFT_MASK);
             if is_ctrl && is_shift {
                 match keyval {
-                    gdk::Key::C => { terminal_clone.copy_clipboard_format(vte4::Format::Text); glib::Propagation::Stop }
-                    gdk::Key::V => { terminal_clone.paste_clipboard(); glib::Propagation::Stop }
+                    gdk::Key::C => {
+                        terminal_clone.copy_clipboard_format(vte4::Format::Text);
+                        glib::Propagation::Stop
+                    }
+                    gdk::Key::V => {
+                        terminal_clone.paste_clipboard();
+                        glib::Propagation::Stop
+                    }
                     _ => glib::Propagation::Proceed,
                 }
-            } else { glib::Propagation::Proceed }
+            } else {
+                glib::Propagation::Proceed
+            }
         });
         terminal.add_controller(key_controller);
         session_box.append(&terminal);
@@ -237,11 +273,18 @@ impl AppWindow {
         let session_prefix = format!("session:{}", host.alias);
         for i in 0..self.inner.notebook.n_pages() {
             if let Some(p) = self.inner.notebook.nth_page(Some(i))
-                && p.widget_name().starts_with(&session_prefix) { count += 1; }
+                && p.widget_name().starts_with(&session_prefix)
+            {
+                count += 1;
+            }
         }
         session_box.set_widget_name(&format!("{}:{}", session_prefix, count));
 
-        let display_name = if count > 0 { format!("{} ({})", host.alias, count) } else { host.alias.clone() };
+        let display_name = if count > 0 {
+            format!("{} ({})", host.alias, count)
+        } else {
+            host.alias.clone()
+        };
         let tab_label_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
         let label = gtk4::Label::new(Some(&display_name));
         let close_btn = gtk4::Button::from_icon_name("window-close-symbolic");
@@ -252,9 +295,15 @@ impl AppWindow {
         let mut insert_pos = self.inner.notebook.n_pages();
         for i in 0..self.inner.notebook.n_pages() {
             if let Some(c) = self.inner.notebook.nth_page(Some(i))
-                && c.widget_name() == "plus_tab_dummy" { insert_pos = i; break; }
+                && c.widget_name() == "plus_tab_dummy"
+            {
+                insert_pos = i;
+                break;
+            }
         }
-        self.inner.notebook.insert_page(&session_box, Some(&tab_label_box), Some(insert_pos));
+        self.inner
+            .notebook
+            .insert_page(&session_box, Some(&tab_label_box), Some(insert_pos));
         self.inner.notebook.set_tab_reorderable(&session_box, true);
         self.inner.notebook.set_current_page(Some(insert_pos));
 
@@ -264,11 +313,16 @@ impl AppWindow {
         close_btn.connect_clicked(move |_| {
             let nb = notebook.clone();
             let sb = sb_close.clone();
-            confirm_close(win.upcast_ref(), "Close Tab?", "Are you sure you want to close this session?", move || {
-                if let Some(i) = nb.page_num(&sb) {
-                    nb.remove_page(Some(i));
-                }
-            });
+            confirm_close(
+                win.upcast_ref(),
+                "Close Tab?",
+                "Are you sure you want to close this session?",
+                move || {
+                    if let Some(i) = nb.page_num(&sb) {
+                        nb.remove_page(Some(i));
+                    }
+                },
+            );
         });
 
         let nb_exited = self.inner.notebook.clone();
@@ -306,10 +360,15 @@ impl AppWindow {
     fn spawn_ssh_process(&self, terminal: &vte4::Terminal, host: &SshHost) {
         let host_str = host.hostname.clone();
         let user_str = host.user.clone().unwrap_or_else(|| "root".to_string());
-        let mut envv: Vec<String> = std::env::vars().map(|(k, v)| format!("{}={}", k, v)).collect();
+        let mut envv: Vec<String> = std::env::vars()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect();
         if host.identity_file.is_none() {
             // Only needed for the askpass fallback; skip the syscall + allocs otherwise.
-            let exe_path = std::env::current_exe().unwrap_or_default().to_string_lossy().into_owned();
+            let exe_path = std::env::current_exe()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
             envv.push(format!("SSH_ASKPASS={}", exe_path));
             envv.push("SSH_ASKPASS_REQUIRE=force".to_string());
             envv.push(format!("RUSTMIUS_ASKPASS_ALIAS={}", host.alias));
@@ -317,20 +376,39 @@ impl AppWindow {
         envv.push("DISPLAY=:0".to_string());
         let env_refs: Vec<&str> = envv.iter().map(|s| s.as_str()).collect();
         let port_str = host.port.unwrap_or(22).to_string();
-        let mut ssh_args = vec!["/usr/bin/ssh".to_string(), "-p".to_string(), port_str, "-o".to_string(), "StrictHostKeyChecking=no".to_string()];
+        let mut ssh_args = vec![
+            "/usr/bin/ssh".to_string(),
+            "-p".to_string(),
+            port_str,
+            "-o".to_string(),
+            "StrictHostKeyChecking=no".to_string(),
+        ];
         if let Some(identity_file) = &host.identity_file {
-            ssh_args.push("-i".to_string()); ssh_args.push(identity_file.clone());
+            ssh_args.push("-i".to_string());
+            ssh_args.push(identity_file.clone());
         }
         ssh_args.push(format!("{}@{}", user_str, host_str));
         let ssh_args_refs: Vec<&str> = ssh_args.iter().map(|s| s.as_str()).collect();
-        terminal.spawn_async(vte4::PtyFlags::DEFAULT, None, &ssh_args_refs, &env_refs, glib::SpawnFlags::SEARCH_PATH, || {}, -1, None::<&gio::Cancellable>, |_| {});
+        terminal.spawn_async(
+            vte4::PtyFlags::DEFAULT,
+            None,
+            &ssh_args_refs,
+            &env_refs,
+            glib::SpawnFlags::SEARCH_PATH,
+            || {},
+            -1,
+            None::<&gio::Cancellable>,
+            |_| {},
+        );
     }
 
     fn find_existing_tab(notebook: &gtk4::Notebook, prefix: &str, alias: &str) -> Option<u32> {
         let target = format!("{}:{}", prefix, alias);
         for i in 0..notebook.n_pages() {
             if let Some(p) = notebook.nth_page(Some(i)) {
-                if p.widget_name() == target { return Some(i); }
+                if p.widget_name() == target {
+                    return Some(i);
+                }
             }
         }
         None
@@ -347,19 +425,28 @@ impl AppWindow {
         glib::MainContext::default().spawn_local(async move {
             let password = crate::config_observer::get_keyring_password(&h_alias).await;
             let explorer = FileExplorer::new(host, password);
-            explorer.container.set_widget_name(&format!("explorer:{}", h_alias));
+            explorer
+                .container
+                .set_widget_name(&format!("explorer:{}", h_alias));
 
             let display_name = format!("📁 {}", h_alias);
-            
+
             let nb_inner = nb.clone();
             let ex_inner = explorer.container.clone();
             let win_inner = window.clone();
             let tab_box = Self::create_tab_label(&display_name, move || {
                 let nb_confirm = nb_inner.clone();
                 let ex_confirm = ex_inner.clone();
-                confirm_close(win_inner.upcast_ref(), "Close Explorer?", "Are you sure you want to close this explorer tab?", move || {
-                    if let Some(i) = nb_confirm.page_num(&ex_confirm) { nb_confirm.remove_page(Some(i)); }
-                });
+                confirm_close(
+                    win_inner.upcast_ref(),
+                    "Close Explorer?",
+                    "Are you sure you want to close this explorer tab?",
+                    move || {
+                        if let Some(i) = nb_confirm.page_num(&ex_confirm) {
+                            nb_confirm.remove_page(Some(i));
+                        }
+                    },
+                );
             });
 
             let ins_pos = Self::get_insert_position(&nb);
@@ -380,19 +467,28 @@ impl AppWindow {
         glib::MainContext::default().spawn_local(async move {
             let password = crate::config_observer::get_keyring_password(&h_alias).await;
             let monitor = SystemMonitor::new(host, password);
-            monitor.container.set_widget_name(&format!("monitor:{}", h_alias));
+            monitor
+                .container
+                .set_widget_name(&format!("monitor:{}", h_alias));
 
             let display_name = format!("📈 {}", h_alias);
-            
+
             let nb_inner = nb.clone();
             let mo_inner = monitor.container.clone();
             let win_inner = window.clone();
             let tab_box = Self::create_tab_label(&display_name, move || {
                 let nb_confirm = nb_inner.clone();
                 let mo_confirm = mo_inner.clone();
-                confirm_close(win_inner.upcast_ref(), "Close Monitor?", "Are you sure you want to close this monitoring tab?", move || {
-                    if let Some(i) = nb_confirm.page_num(&mo_confirm) { nb_confirm.remove_page(Some(i)); }
-                });
+                confirm_close(
+                    win_inner.upcast_ref(),
+                    "Close Monitor?",
+                    "Are you sure you want to close this monitoring tab?",
+                    move || {
+                        if let Some(i) = nb_confirm.page_num(&mo_confirm) {
+                            nb_confirm.remove_page(Some(i));
+                        }
+                    },
+                );
             });
 
             let ins_pos = Self::get_insert_position(&nb);
@@ -408,14 +504,16 @@ impl AppWindow {
             return;
         }
         let docker = DockerManager::new(host.clone(), password);
-        docker.container.set_widget_name(&format!("docker:{}", host.alias));
+        docker
+            .container
+            .set_widget_name(&format!("docker:{}", host.alias));
         let label_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
         label_box.append(&crate::ui::get_docker_icon());
         label_box.append(&gtk4::Label::new(Some(&format!("🐳 {}", host.alias))));
         let close_btn = gtk4::Button::from_icon_name("window-close-symbolic");
         close_btn.add_css_class("flat");
         label_box.append(&close_btn);
-        
+
         let ins_pos = Self::get_insert_position(notebook);
         notebook.insert_page(&docker.container, Some(&label_box), Some(ins_pos));
         notebook.set_tab_reorderable(&docker.container, true);
@@ -424,7 +522,9 @@ impl AppWindow {
         let nb_close = notebook.clone();
         let child_close = docker.container.clone();
         close_btn.connect_clicked(move |_| {
-            if let Some(i) = nb_close.page_num(&child_close) { nb_close.remove_page(Some(i)); }
+            if let Some(i) = nb_close.page_num(&child_close) {
+                nb_close.remove_page(Some(i));
+            }
         });
     }
 
@@ -441,29 +541,45 @@ impl AppWindow {
     fn edit_server(&self, host: SshHost) {
         let old_alias = host.alias.clone();
         let this = self.clone();
-        let existing_aliases: Vec<String> = load_hosts().unwrap_or_else(|e| {
-            tracing::error!("Failed to load hosts: {}", e);
-            Vec::new()
-        }).into_iter().map(|h| h.alias.to_lowercase()).collect();
-        show_server_dialog(self.inner.window.upcast_ref(), Some(&host), existing_aliases, move |new_host, password| {
-            let _ = delete_host_from_config(&old_alias);
-            if add_host_to_config(&new_host).is_ok() {
-                if !password.is_empty() {
-                    let host_alias = new_host.alias.clone();
-                    let password = zeroize::Zeroizing::new(password);
-                    glib::MainContext::default().spawn_local(async move {
-                        let _ = crate::config_observer::store_keyring_password(&host_alias, &password).await;
-                    });
+        let existing_aliases: Vec<String> = load_hosts()
+            .unwrap_or_else(|e| {
+                tracing::error!("Failed to load hosts: {}", e);
+                Vec::new()
+            })
+            .into_iter()
+            .map(|h| h.alias.to_lowercase())
+            .collect();
+        show_server_dialog(
+            self.inner.window.upcast_ref(),
+            Some(&host),
+            existing_aliases,
+            move |new_host, password| {
+                let _ = delete_host_from_config(&old_alias);
+                if add_host_to_config(&new_host).is_ok() {
+                    if !password.is_empty() {
+                        let host_alias = new_host.alias.clone();
+                        let password = zeroize::Zeroizing::new(password);
+                        glib::MainContext::default().spawn_local(async move {
+                            let _ = crate::config_observer::store_keyring_password(
+                                &host_alias,
+                                &password,
+                            )
+                            .await;
+                        });
+                    }
+                    this.refresh();
                 }
-                this.refresh();
-            }
-        });
+            },
+        );
     }
 
     fn get_insert_position(notebook: &gtk4::Notebook) -> u32 {
         for i in 0..notebook.n_pages() {
             if let Some(c) = notebook.nth_page(Some(i))
-                && c.widget_name() == "plus_tab_dummy" { return i; }
+                && c.widget_name() == "plus_tab_dummy"
+            {
+                return i;
+            }
         }
         notebook.n_pages()
     }
@@ -485,15 +601,28 @@ pub fn build_ui(app: &gtk4::Application) {
 
 /// Runs `on_confirm`, optionally gated behind the "confirm before closing tabs"
 /// preference. Centralizes the check duplicated across every tab-close handler.
-fn confirm_close(parent: &gtk4::Window, title: &str, message: &str, on_confirm: impl FnOnce() + 'static) {
-    if crate::config_observer::load_app_config().map(|c| c.confirm_tab_close).unwrap_or(false) {
+fn confirm_close(
+    parent: &gtk4::Window,
+    title: &str,
+    message: &str,
+    on_confirm: impl FnOnce() + 'static,
+) {
+    if crate::config_observer::load_app_config()
+        .map(|c| c.confirm_tab_close)
+        .unwrap_or(false)
+    {
         show_close_confirmation(parent, title, message, on_confirm);
     } else {
         on_confirm();
     }
 }
 
-fn show_close_confirmation(parent: &gtk4::Window, title: &str, message: &str, on_confirm: impl FnOnce() + 'static) {
+fn show_close_confirmation(
+    parent: &gtk4::Window,
+    title: &str,
+    message: &str,
+    on_confirm: impl FnOnce() + 'static,
+) {
     let dialog = gtk4::AlertDialog::builder()
         .modal(true)
         .message(title)
@@ -507,7 +636,9 @@ fn show_close_confirmation(parent: &gtk4::Window, title: &str, message: &str, on
     dialog.choose(Some(parent), None::<&gio::Cancellable>, move |res| {
         if let Ok(idx) = res {
             if idx == 1 {
-                if let Some(callback) = on_confirm.borrow_mut().take() { callback(); }
+                if let Some(callback) = on_confirm.borrow_mut().take() {
+                    callback();
+                }
             }
         }
     });

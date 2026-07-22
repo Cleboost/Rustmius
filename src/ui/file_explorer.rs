@@ -1,10 +1,12 @@
 #![allow(deprecated)]
-use gtk4::prelude::*;
-use gtk4::{glib, gio, gdk};
 use crate::config_observer::SshHost;
-use crate::engines::sftp::{list_files, delete_file, rename_file, create_dir, create_file, upload_file, RemoteFile};
-use std::rc::Rc;
+use crate::engines::sftp::{
+    RemoteFile, create_dir, create_file, delete_file, list_files, rename_file, upload_file,
+};
+use gtk4::prelude::*;
+use gtk4::{gdk, gio, glib};
 use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct FileExplorer {
     pub container: gtk4::Box,
@@ -31,8 +33,10 @@ impl FileExplorer {
         let files: Rc<RefCell<Vec<RemoteFile>>> = Rc::new(RefCell::new(Vec::new()));
 
         let path_bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-        path_bar.set_margin_top(6); path_bar.set_margin_bottom(6);
-        path_bar.set_margin_start(8); path_bar.set_margin_end(8);
+        path_bar.set_margin_top(6);
+        path_bar.set_margin_bottom(6);
+        path_bar.set_margin_start(8);
+        path_bar.set_margin_end(8);
 
         let back_btn = gtk4::Button::from_icon_name("go-up-symbolic");
         back_btn.set_tooltip_text(Some("Parent directory"));
@@ -119,19 +123,23 @@ impl FileExplorer {
 
             if let Ok(file_list) = value.get::<gdk::FileList>() {
                 for file in file_list.files() {
-                    if let Some(p) = file.path() { paths.push(p); }
+                    if let Some(p) = file.path() {
+                        paths.push(p);
+                    }
                 }
             }
 
             if paths.is_empty()
                 && let Ok(bytes) = value.get::<glib::Bytes>()
-                    && let Ok(uris_str) = std::str::from_utf8(bytes.as_ref()) {
-                        paths.extend(parse_uri_list_paths(uris_str));
-                    }
+                && let Ok(uris_str) = std::str::from_utf8(bytes.as_ref())
+            {
+                paths.extend(parse_uri_list_paths(uris_str));
+            }
             if paths.is_empty()
-                && let Ok(uris_str) = value.get::<String>() {
-                    paths.extend(parse_uri_list_paths(&uris_str));
-                }
+                && let Ok(uris_str) = value.get::<String>()
+            {
+                paths.extend(parse_uri_list_paths(&uris_str));
+            }
 
             if paths.is_empty() {
                 h.status_label.set_text("Drop: no valid files found.");
@@ -140,21 +148,35 @@ impl FileExplorer {
 
             let count = paths.len();
             tracing::debug!("Starting upload of {} files", count);
-            h.status_label.set_text(&format!("Uploading {} file(s)...", count));
+            h.status_label
+                .set_text(&format!("Uploading {} file(s)...", count));
 
             for local_path in paths {
-                let filename = local_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                let filename = local_path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
                 let remote_dest = format!("{}{}", remote_dir, filename);
                 let local_str = local_path.to_string_lossy().to_string();
                 let h_task = h.clone();
                 glib::MainContext::default().spawn_local(async move {
-                    match upload_file(&h_task.host, h_task.password.as_deref(), &local_str, &remote_dest).await {
+                    match upload_file(
+                        &h_task.host,
+                        h_task.password.as_deref(),
+                        &local_str,
+                        &remote_dest,
+                    )
+                    .await
+                    {
                         Ok(_) => {
                             h_task.status_label.set_text("Upload complete.");
                             h_task.refresh();
                         }
                         Err(e) => {
-                            h_task.status_label.set_text(&format!("Upload error: {}", e));
+                            h_task
+                                .status_label
+                                .set_text(&format!("Upload error: {}", e));
                         }
                     }
                 });
@@ -169,15 +191,19 @@ impl FileExplorer {
             let idx = row.index() as usize;
             let files_ref = files_activate.borrow();
             if let Some(f) = files_ref.get(idx)
-                && f.is_dir {
-                    let mut path = h_activate.current_path.borrow_mut();
-                    if !path.ends_with('/') { path.push('/'); }
-                    path.push_str(&f.name); path.push('/');
-                    h_activate.path_entry.set_text(&path);
-                    drop(path);
-                    drop(files_ref);
-                    h_activate.refresh();
+                && f.is_dir
+            {
+                let mut path = h_activate.current_path.borrow_mut();
+                if !path.ends_with('/') {
+                    path.push('/');
                 }
+                path.push_str(&f.name);
+                path.push('/');
+                h_activate.path_entry.set_text(&path);
+                drop(path);
+                drop(files_ref);
+                h_activate.refresh();
+            }
         });
 
         let sl_back = explorer.clone_handle();
@@ -188,9 +214,13 @@ impl FileExplorer {
                 let p = std::path::Path::new(&*path);
                 if let Some(parent) = p.parent() {
                     let mut new_p = parent.to_string_lossy().to_string();
-                    if !new_p.ends_with('/') { new_p.push('/'); }
-                    *path = new_p.clone(); pe_back.set_text(&new_p);
-                    drop(path); sl_back.refresh();
+                    if !new_p.ends_with('/') {
+                        new_p.push('/');
+                    }
+                    *path = new_p.clone();
+                    pe_back.set_text(&new_p);
+                    drop(path);
+                    sl_back.refresh();
                 }
             }
         });
@@ -198,25 +228,44 @@ impl FileExplorer {
         let sl_enter = explorer.clone_handle();
         path_entry.connect_activate(move |e| {
             let mut path = e.text().to_string();
-            if !path.starts_with('/') { path = format!("/{}", path); }
-            if !path.ends_with('/') { path.push('/'); }
+            if !path.starts_with('/') {
+                path = format!("/{}", path);
+            }
+            if !path.ends_with('/') {
+                path.push('/');
+            }
             *sl_enter.current_path.borrow_mut() = path;
             sl_enter.refresh();
         });
 
         let sl_refresh = explorer.clone_handle();
-        refresh_btn.connect_clicked(move |_| { sl_refresh.refresh(); });
+        refresh_btn.connect_clicked(move |_| {
+            sl_refresh.refresh();
+        });
 
         let sl_new_btn = explorer.clone_handle();
         new_folder_btn.connect_clicked(move |_| {
-            let sl = sl_new_btn.clone(); let cur = sl.current_path.borrow().clone();
-            let parent_window = sl.list_box.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-            show_input_dialog(parent_window.as_ref(), "New Folder", "Name:", "", move |n| {
-                let sli = sl.clone(); let p = format!("{}{}", cur, n);
-                glib::MainContext::default().spawn_local(async move {
-                    if let Ok(_) = create_dir(&sli.host, sli.password.as_deref(), &p).await { sli.refresh(); }
-                });
-            });
+            let sl = sl_new_btn.clone();
+            let cur = sl.current_path.borrow().clone();
+            let parent_window = sl
+                .list_box
+                .root()
+                .and_then(|r| r.downcast::<gtk4::Window>().ok());
+            show_input_dialog(
+                parent_window.as_ref(),
+                "New Folder",
+                "Name:",
+                "",
+                move |n| {
+                    let sli = sl.clone();
+                    let p = format!("{}{}", cur, n);
+                    glib::MainContext::default().spawn_local(async move {
+                        if let Ok(_) = create_dir(&sli.host, sli.password.as_deref(), &p).await {
+                            sli.refresh();
+                        }
+                    });
+                },
+            );
         });
 
         explorer.refresh();
@@ -263,7 +312,11 @@ impl ExplorerHandle {
             unparent_children(&row);
             lb.remove(&row);
         }
-        let loading = gtk4::Label::builder().label("Loading...").margin_top(12).margin_bottom(12).build();
+        let loading = gtk4::Label::builder()
+            .label("Loading...")
+            .margin_top(12)
+            .margin_bottom(12)
+            .build();
         lb.append(&loading);
 
         glib::MainContext::default().spawn_local(async move {
@@ -279,9 +332,11 @@ impl ExplorerHandle {
                         handle.add_file_row(f);
                     }
                     handle.status_label.set_text(&format!("{} items", count));
-                },
+                }
                 Err(e) => {
-                    while let Some(row) = lb.row_at_index(0) { lb.remove(&row); }
+                    while let Some(row) = lb.row_at_index(0) {
+                        lb.remove(&row);
+                    }
                     let err_label = gtk4::Label::new(Some(&format!("Error: {}", e)));
                     err_label.set_margin_top(12);
                     lb.append(&err_label);
@@ -293,7 +348,8 @@ impl ExplorerHandle {
 
     fn add_file_row(&self, file: RemoteFile) {
         let row_content = gtk4::Box::new(gtk4::Orientation::Horizontal, 10);
-        row_content.set_margin_top(4); row_content.set_margin_bottom(4);
+        row_content.set_margin_top(4);
+        row_content.set_margin_bottom(4);
 
         let theme = gtk4::IconTheme::for_display(&gdk::Display::default().unwrap());
         let paintable = theme.lookup_by_gicon(
@@ -335,7 +391,10 @@ impl ExplorerHandle {
                 let h = h_drag.clone();
                 let f = f_drag.clone();
                 let remote_path = format!("{}{}", h.current_path.borrow(), f.name);
-                let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros();
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_micros();
                 let local_tmp_part = format!("/tmp/rustmius_dnd_{}_{}.part", ts, f.name);
                 let local_tmp = format!("/tmp/rustmius_dnd_{}_{}", ts, f.name);
 
@@ -359,7 +418,13 @@ impl ExplorerHandle {
                 h.status_label.set_text(&format!("Preparing {}...", f.name));
                 let rt_blocking = rt.clone();
                 rt.spawn_blocking(move || {
-                    if let Ok(_) = crate::engines::sftp::download_file_sync(rt_blocking, host, password, rp, lp_part.clone()) {
+                    if let Ok(_) = crate::engines::sftp::download_file_sync(
+                        rt_blocking,
+                        host,
+                        password,
+                        rp,
+                        lp_part.clone(),
+                    ) {
                         let _ = std::fs::rename(lp_part, lp_final);
                     }
                 });
@@ -397,12 +462,17 @@ impl ExplorerHandle {
             let group = gio::SimpleActionGroup::new();
 
             if !f.is_dir {
-                let h_dl = h.clone(); let f_dl = f.clone();
+                let h_dl = h.clone();
+                let f_dl = f.clone();
                 let dl_action = gio::SimpleAction::new("download", None);
                 dl_action.connect_activate(move |_, _| {
-                    let hi = h_dl.clone(); let fi = f_dl.clone();
+                    let hi = h_dl.clone();
+                    let fi = f_dl.clone();
                     let rp = format!("{}{}", hi.current_path.borrow(), fi.name);
-                    let parent_window = hi.list_box.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
+                    let parent_window = hi
+                        .list_box
+                        .root()
+                        .and_then(|r| r.downcast::<gtk4::Window>().ok());
                     let dialog = gtk4::FileDialog::builder()
                         .title("Save As")
                         .initial_name(&fi.name)
@@ -411,72 +481,119 @@ impl ExplorerHandle {
                     if let Some(w) = parent_window {
                         dialog.save(Some(&w), gio::Cancellable::NONE, move |res| {
                             if let Ok(file) = res
-                                && let Some(path) = file.path() {
-                                    let lp = path.to_string_lossy().to_string();
-                                    hii.status_label.set_text(&format!("Downloading {}...", fi.name));
-                                    let hiii = hii.clone();
-                                    glib::MainContext::default().spawn_local(async move {
-                                        let rp = rp.clone();
-                                        match crate::engines::sftp::download_file(&hiii.host, hiii.password.as_deref(), &rp, &lp).await {
-                                            Ok(_) => hiii.status_label.set_text("Download complete."),
-                                            Err(e) => hiii.status_label.set_text(&format!("Download error: {}", e)),
-                                        }
-                                    });                                }
+                                && let Some(path) = file.path()
+                            {
+                                let lp = path.to_string_lossy().to_string();
+                                hii.status_label
+                                    .set_text(&format!("Downloading {}...", fi.name));
+                                let hiii = hii.clone();
+                                glib::MainContext::default().spawn_local(async move {
+                                    let rp = rp.clone();
+                                    match crate::engines::sftp::download_file(
+                                        &hiii.host,
+                                        hiii.password.as_deref(),
+                                        &rp,
+                                        &lp,
+                                    )
+                                    .await
+                                    {
+                                        Ok(_) => hiii.status_label.set_text("Download complete."),
+                                        Err(e) => hiii
+                                            .status_label
+                                            .set_text(&format!("Download error: {}", e)),
+                                    }
+                                });
+                            }
                         });
                     }
                 });
                 group.add_action(&dl_action);
             }
 
-            let h_del = h.clone(); let f_del = f.clone();
+            let h_del = h.clone();
+            let f_del = f.clone();
             let del_action = gio::SimpleAction::new("delete", None);
             del_action.connect_activate(move |_, _| {
-                let hi = h_del.clone(); let fi = f_del.clone();
+                let hi = h_del.clone();
+                let fi = f_del.clone();
                 let path = format!("{}{}", hi.current_path.borrow(), fi.name);
-                let parent_window = hi.list_box.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-                show_confirm_dialog(parent_window.as_ref(), "Confirm Delete", &format!("Delete '{}'?", fi.name), move || {
-                    let hii = hi.clone(); let p = path.clone(); let isd = fi.is_dir;
-                    glib::MainContext::default().spawn_local(async move {
-                        match delete_file(&hii.host, hii.password.as_deref(), &p, isd).await {
-                            Ok(_) => hii.refresh(),
-                            Err(e) => hii.status_label.set_text(&format!("Delete error: {}", e)),
-                        }
-                    });
-                });
+                let parent_window = hi
+                    .list_box
+                    .root()
+                    .and_then(|r| r.downcast::<gtk4::Window>().ok());
+                show_confirm_dialog(
+                    parent_window.as_ref(),
+                    "Confirm Delete",
+                    &format!("Delete '{}'?", fi.name),
+                    move || {
+                        let hii = hi.clone();
+                        let p = path.clone();
+                        let isd = fi.is_dir;
+                        glib::MainContext::default().spawn_local(async move {
+                            match delete_file(&hii.host, hii.password.as_deref(), &p, isd).await {
+                                Ok(_) => hii.refresh(),
+                                Err(e) => {
+                                    hii.status_label.set_text(&format!("Delete error: {}", e))
+                                }
+                            }
+                        });
+                    },
+                );
             });
             group.add_action(&del_action);
 
-            let h_ren = h.clone(); let f_ren = f.clone();
+            let h_ren = h.clone();
+            let f_ren = f.clone();
             let ren_action = gio::SimpleAction::new("rename", None);
             ren_action.connect_activate(move |_, _| {
-                let hi = h_ren.clone(); let fi = f_ren.clone();
+                let hi = h_ren.clone();
+                let fi = f_ren.clone();
                 let cur = hi.current_path.borrow().clone();
                 let old_name = fi.name.clone();
                 let old_name_cloned = old_name.clone();
-                let parent_window = hi.list_box.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-                show_input_dialog(parent_window.as_ref(), "Rename", "New name:", &old_name, move |new_n| {
-                    let hii = hi.clone();
-                    let old_p = format!("{}{}", cur, old_name_cloned);
-                    let new_p = format!("{}{}", cur, new_n);
-                    glib::MainContext::default().spawn_local(async move {
-                        match rename_file(&hii.host, hii.password.as_deref(), &old_p, &new_p).await {
-                            Ok(_) => hii.refresh(),
-                            Err(e) => hii.status_label.set_text(&format!("Rename error: {}", e)),
-                        }
-                    });
-                });
+                let parent_window = hi
+                    .list_box
+                    .root()
+                    .and_then(|r| r.downcast::<gtk4::Window>().ok());
+                show_input_dialog(
+                    parent_window.as_ref(),
+                    "Rename",
+                    "New name:",
+                    &old_name,
+                    move |new_n| {
+                        let hii = hi.clone();
+                        let old_p = format!("{}{}", cur, old_name_cloned);
+                        let new_p = format!("{}{}", cur, new_n);
+                        glib::MainContext::default().spawn_local(async move {
+                            match rename_file(&hii.host, hii.password.as_deref(), &old_p, &new_p)
+                                .await
+                            {
+                                Ok(_) => hii.refresh(),
+                                Err(e) => {
+                                    hii.status_label.set_text(&format!("Rename error: {}", e))
+                                }
+                            }
+                        });
+                    },
+                );
             });
             group.add_action(&ren_action);
 
             if f.is_dir {
-                let h_nf = h.clone(); let f_nf = f.clone();
+                let h_nf = h.clone();
+                let f_nf = f.clone();
                 let nf_action = gio::SimpleAction::new("new_file", None);
                 nf_action.connect_activate(move |_, _| {
-                    let hi = h_nf.clone(); let fi = f_nf.clone();
+                    let hi = h_nf.clone();
+                    let fi = f_nf.clone();
                     let pb = format!("{}{}/", hi.current_path.borrow(), fi.name);
-                    let parent_window = hi.list_box.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
+                    let parent_window = hi
+                        .list_box
+                        .root()
+                        .and_then(|r| r.downcast::<gtk4::Window>().ok());
                     show_input_dialog(parent_window.as_ref(), "New File", "Name:", "", move |n| {
-                        let hii = hi.clone(); let p = format!("{}{}", pb, n);
+                        let hii = hi.clone();
+                        let p = format!("{}{}", pb, n);
                         glib::MainContext::default().spawn_local(async move {
                             match create_file(&hii.host, hii.password.as_deref(), &p).await {
                                 Ok(_) => hii.refresh(),
@@ -487,33 +604,49 @@ impl ExplorerHandle {
                 });
                 group.add_action(&nf_action);
 
-                let h_nd = h.clone(); let f_nd = f.clone();
+                let h_nd = h.clone();
+                let f_nd = f.clone();
                 let nd_action = gio::SimpleAction::new("new_folder", None);
                 nd_action.connect_activate(move |_, _| {
-                    let hi = h_nd.clone(); let f_i = f_nd.clone();
+                    let hi = h_nd.clone();
+                    let f_i = f_nd.clone();
                     let pb = format!("{}{}/", hi.current_path.borrow(), f_i.name);
-                    let parent_window = hi.list_box.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
-                    show_input_dialog(parent_window.as_ref(), "New Folder", "Name:", "", move |n| {
-                        let hii = hi.clone(); let p = format!("{}{}", pb, n);
-                        glib::MainContext::default().spawn_local(async move {
-                            match create_dir(&hii.host, hii.password.as_deref(), &p).await {
-                                Ok(_) => hii.refresh(),
-                                Err(e) => hii.status_label.set_text(&format!("Error: {}", e)),
-                            }
-                        });
-                    });
+                    let parent_window = hi
+                        .list_box
+                        .root()
+                        .and_then(|r| r.downcast::<gtk4::Window>().ok());
+                    show_input_dialog(
+                        parent_window.as_ref(),
+                        "New Folder",
+                        "Name:",
+                        "",
+                        move |n| {
+                            let hii = hi.clone();
+                            let p = format!("{}{}", pb, n);
+                            glib::MainContext::default().spawn_local(async move {
+                                match create_dir(&hii.host, hii.password.as_deref(), &p).await {
+                                    Ok(_) => hii.refresh(),
+                                    Err(e) => hii.status_label.set_text(&format!("Error: {}", e)),
+                                }
+                            });
+                        },
+                    );
                 });
                 group.add_action(&nd_action);
             }
 
             if let Some(widget) = gesture_self.widget()
-                && let Some(parent_row) = row_content_ancestor::<gtk4::ListBoxRow>(&widget) {
-                    let popover = gtk4::PopoverMenu::builder().menu_model(&menu).has_arrow(false).build();
-                    popover.insert_action_group("row", Some(&group));
-                    popover.set_parent(&parent_row);
-                    popover.set_pointing_to(Some(&gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
-                    popover.popup();
-                }
+                && let Some(parent_row) = row_content_ancestor::<gtk4::ListBoxRow>(&widget)
+            {
+                let popover = gtk4::PopoverMenu::builder()
+                    .menu_model(&menu)
+                    .has_arrow(false)
+                    .build();
+                popover.insert_action_group("row", Some(&group));
+                popover.set_parent(&parent_row);
+                popover.set_pointing_to(Some(&gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
+                popover.popup();
+            }
         });
         row_content.add_controller(gesture);
 
@@ -583,8 +716,14 @@ fn format_file_size(bytes: u64) -> String {
     }
 }
 
-fn show_input_dialog<F>(parent: Option<&gtk4::Window>, title: &str, label: &str, initial: &str, on_submit: F)
-where F: Fn(String) + 'static
+fn show_input_dialog<F>(
+    parent: Option<&gtk4::Window>,
+    title: &str,
+    label: &str,
+    initial: &str,
+    on_submit: F,
+) where
+    F: Fn(String) + 'static,
 {
     let dialog = gtk4::Dialog::new();
     dialog.set_title(Some(title));
@@ -593,8 +732,10 @@ where F: Fn(String) + 'static
         dialog.set_transient_for(Some(p));
     }
     let content = dialog.content_area();
-    content.set_margin_top(12); content.set_margin_bottom(12);
-    content.set_margin_start(12); content.set_margin_end(12);
+    content.set_margin_top(12);
+    content.set_margin_bottom(12);
+    content.set_margin_start(12);
+    content.set_margin_end(12);
     content.set_spacing(12);
     content.append(&gtk4::Label::new(Some(label)));
     let entry = gtk4::Entry::builder().text(initial).build();
@@ -604,7 +745,9 @@ where F: Fn(String) + 'static
     dialog.connect_response(move |d, res| {
         if res == gtk4::ResponseType::Ok {
             let text = entry.text().to_string();
-            if !text.is_empty() { on_submit(text); }
+            if !text.is_empty() {
+                on_submit(text);
+            }
         }
         d.close();
     });
@@ -612,7 +755,8 @@ where F: Fn(String) + 'static
 }
 
 fn show_confirm_dialog<F>(parent: Option<&gtk4::Window>, title: &str, message: &str, on_confirm: F)
-where F: Fn() + 'static
+where
+    F: Fn() + 'static,
 {
     let dialog = gtk4::AlertDialog::builder()
         .modal(true)
@@ -625,7 +769,9 @@ where F: Fn() + 'static
 
     dialog.choose(parent, None::<&gio::Cancellable>, move |res| {
         if let Ok(idx) = res {
-            if idx == 1 { on_confirm(); }
+            if idx == 1 {
+                on_confirm();
+            }
         }
     });
 }

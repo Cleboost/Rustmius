@@ -1,8 +1,8 @@
+use anyhow::Context;
+use directories::UserDirs;
 use std::fs;
 use std::path::{Path, PathBuf};
-use directories::UserDirs;
-use anyhow::Context;
-use std::sync::{RwLock, OnceLock};
+use std::sync::{OnceLock, RwLock};
 
 static APP_CONFIG_CACHE: OnceLock<RwLock<AppConfig>> = OnceLock::new();
 static HOSTS_CACHE: OnceLock<RwLock<Vec<SshHost>>> = OnceLock::new();
@@ -23,9 +23,10 @@ pub fn expand_tilde(path: &str) -> PathBuf {
             return home.to_path_buf();
         }
     } else if let Some(rest) = path.strip_prefix("~/")
-        && let Some(home) = get_home_dir() {
-            return home.join(rest);
-        }
+        && let Some(home) = get_home_dir()
+    {
+        return home.join(rest);
+    }
     PathBuf::from(path)
 }
 
@@ -49,7 +50,8 @@ pub struct SshKeyPair {
 
 /// Scans the local `.ssh` directory for public keys with corresponding private keys.
 pub fn load_ssh_keys() -> anyhow::Result<Vec<SshKeyPair>> {
-    let ssh_dir = get_ssh_dir().ok_or_else(|| anyhow::anyhow!("Could not determine SSH directory"))?;
+    let ssh_dir =
+        get_ssh_dir().ok_or_else(|| anyhow::anyhow!("Could not determine SSH directory"))?;
     if !ssh_dir.exists() {
         return Ok(Vec::new());
     }
@@ -98,7 +100,9 @@ pub async fn store_keyring_password(alias: &str, password: &str) -> anyhow::Resu
     let alias_lower = alias.to_lowercase();
     let attr = [("rustmius-server-alias", alias_lower.as_str())];
     let label = format!("Rustmius: SSH Password for {}", alias);
-    keyring.create_item(&label, &attr, password.as_bytes(), true).await?;
+    keyring
+        .create_item(&label, &attr, password.as_bytes(), true)
+        .await?;
     Ok(())
 }
 
@@ -150,14 +154,18 @@ pub fn get_app_config_path() -> Option<PathBuf> {
 /// Loads the application configuration, using a cached version if available.
 pub fn load_app_config() -> anyhow::Result<AppConfig> {
     if let Some(cache) = APP_CONFIG_CACHE.get() {
-        return Ok(cache.read().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?.clone());
+        return Ok(cache
+            .read()
+            .map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?
+            .clone());
     }
     refresh_app_config()
 }
 
 /// Forces a reload of the application configuration from disk and updates the cache.
 pub fn refresh_app_config() -> anyhow::Result<AppConfig> {
-    let path = get_app_config_path().ok_or_else(|| anyhow::anyhow!("Could not determine app config path"))?;
+    let path = get_app_config_path()
+        .ok_or_else(|| anyhow::anyhow!("Could not determine app config path"))?;
     let config = if !path.exists() {
         AppConfig::default()
     } else {
@@ -166,7 +174,9 @@ pub fn refresh_app_config() -> anyhow::Result<AppConfig> {
     };
 
     if let Some(cache) = APP_CONFIG_CACHE.get() {
-        let mut guard = cache.write().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?;
+        let mut guard = cache
+            .write()
+            .map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?;
         *guard = config.clone();
     } else {
         let _ = APP_CONFIG_CACHE.get_or_init(|| RwLock::new(config.clone()));
@@ -176,7 +186,8 @@ pub fn refresh_app_config() -> anyhow::Result<AppConfig> {
 
 /// Saves the provided application configuration to disk and updates the cache.
 pub fn save_app_config(config: &AppConfig) -> anyhow::Result<()> {
-    let path = get_app_config_path().ok_or_else(|| anyhow::anyhow!("Could not find app config path"))?;
+    let path =
+        get_app_config_path().ok_or_else(|| anyhow::anyhow!("Could not find app config path"))?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -184,7 +195,9 @@ pub fn save_app_config(config: &AppConfig) -> anyhow::Result<()> {
     fs::write(path, content)?;
 
     if let Some(cache) = APP_CONFIG_CACHE.get() {
-        let mut guard = cache.write().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?;
+        let mut guard = cache
+            .write()
+            .map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?;
         *guard = config.clone();
     } else {
         let _ = APP_CONFIG_CACHE.get_or_init(|| RwLock::new(config.clone()));
@@ -214,14 +227,18 @@ pub fn get_default_config_path() -> Option<std::path::PathBuf> {
 /// Loads the list of SSH hosts from the default SSH config file, using a cached version if available.
 pub fn load_hosts() -> anyhow::Result<Vec<SshHost>> {
     if let Some(cache) = HOSTS_CACHE.get() {
-        return Ok(cache.read().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?.clone());
+        return Ok(cache
+            .read()
+            .map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?
+            .clone());
     }
     refresh_hosts()
 }
 
 /// Forces a reload of the SSH hosts from the config file and updates the cache.
 pub fn refresh_hosts() -> anyhow::Result<Vec<SshHost>> {
-    let path = get_default_config_path().ok_or_else(|| anyhow::anyhow!("Could not determine SSH config path"))?;
+    let path = get_default_config_path()
+        .ok_or_else(|| anyhow::anyhow!("Could not determine SSH config path"))?;
     let hosts = if !path.exists() {
         Vec::new()
     } else {
@@ -230,7 +247,9 @@ pub fn refresh_hosts() -> anyhow::Result<Vec<SshHost>> {
     };
 
     if let Some(cache) = HOSTS_CACHE.get() {
-        let mut guard = cache.write().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?;
+        let mut guard = cache
+            .write()
+            .map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?;
         *guard = hosts.clone();
     } else {
         let _ = HOSTS_CACHE.get_or_init(|| RwLock::new(hosts.clone()));
@@ -267,9 +286,11 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
 
         if key.eq_ignore_ascii_case("host") {
             if let Some(host) = current_host.take()
-                && !host.alias.is_empty() && !host.hostname.is_empty() {
-                    hosts.push(host);
-                }
+                && !host.alias.is_empty()
+                && !host.hostname.is_empty()
+            {
+                hosts.push(host);
+            }
             current_host = Some(SshHost {
                 alias: value.to_string(),
                 hostname: String::new(),
@@ -288,9 +309,10 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
             }
         } else if key.eq_ignore_ascii_case("port") {
             if let Some(ref mut host) = current_host
-                && let Ok(p) = value.parse::<u16>() {
-                    host.port = Some(p);
-                }
+                && let Ok(p) = value.parse::<u16>()
+            {
+                host.port = Some(p);
+            }
         } else if key.eq_ignore_ascii_case("identityfile") {
             if let Some(ref mut host) = current_host {
                 host.identity_file = Some(value.to_string());
@@ -307,9 +329,11 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
     }
 
     if let Some(host) = current_host
-        && !host.alias.is_empty() && !host.hostname.is_empty() {
-            hosts.push(host);
-        }
+        && !host.alias.is_empty()
+        && !host.hostname.is_empty()
+    {
+        hosts.push(host);
+    }
 
     if let Some(ref agent) = global_identity_agent {
         for host in &mut hosts {
@@ -324,7 +348,8 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshHost> {
 
 /// Appends a new SSH host entry to the user's SSH config file and updates the cache.
 pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
-    let path = get_default_config_path().ok_or_else(|| anyhow::anyhow!("Could not find SSH config path"))?;
+    let path = get_default_config_path()
+        .ok_or_else(|| anyhow::anyhow!("Could not find SSH config path"))?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -368,7 +393,9 @@ pub fn add_host_to_config(host: &SshHost) -> anyhow::Result<()> {
     std::fs::rename(tmp_path, path)?;
 
     if let Some(cache) = HOSTS_CACHE.get() {
-        let mut guard = cache.write().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?;
+        let mut guard = cache
+            .write()
+            .map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?;
         *guard = parse_ssh_config(&content);
     }
     Ok(())
@@ -389,7 +416,9 @@ fn remove_host_block(content: &str, alias: &str) -> String {
             .filter(|(kw, _)| kw.eq_ignore_ascii_case("host"))
             .map(|(_, v)| {
                 let v = v.trim();
-                v.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(v)
+                v.strip_prefix('"')
+                    .and_then(|s| s.strip_suffix('"'))
+                    .unwrap_or(v)
             });
 
         if let Some(block_alias) = block_alias {
@@ -410,7 +439,9 @@ fn remove_host_block(content: &str, alias: &str) -> String {
 /// Removes an SSH host entry from the config file by its alias and updates the cache.
 pub fn delete_host_from_config(alias: &str) -> anyhow::Result<()> {
     let path = get_default_config_path().ok_or_else(|| anyhow::anyhow!("No config path"))?;
-    if !path.exists() { return Ok(()); }
+    if !path.exists() {
+        return Ok(());
+    }
     let content = std::fs::read_to_string(&path)?;
     let new_content = remove_host_block(&content, alias);
     let tmp_path = path.with_extension("tmp");
@@ -418,7 +449,9 @@ pub fn delete_host_from_config(alias: &str) -> anyhow::Result<()> {
     std::fs::rename(tmp_path, path)?;
 
     if let Some(cache) = HOSTS_CACHE.get() {
-        let mut guard = cache.write().map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?;
+        let mut guard = cache
+            .write()
+            .map_err(|_| anyhow::anyhow!("Cache lock poisoned"))?;
         *guard = parse_ssh_config(&new_content);
     }
     Ok(())
@@ -479,7 +512,10 @@ mod tests {
         let config = "Host my-server\n  HostName 1.2.3.4\n  User root\n  IdentityAgent ~/.1password/agent.sock";
         let hosts = parse_ssh_config(config);
         assert_eq!(hosts.len(), 1);
-        assert_eq!(hosts[0].identity_agent, Some("~/.1password/agent.sock".to_string()));
+        assert_eq!(
+            hosts[0].identity_agent,
+            Some("~/.1password/agent.sock".to_string())
+        );
     }
 
     #[test]
@@ -488,7 +524,10 @@ mod tests {
         let hosts = parse_ssh_config(config);
         assert_eq!(hosts.len(), 1);
         assert_eq!(hosts[0].alias, "my-server");
-        assert_eq!(hosts[0].identity_agent, Some("~/.1password/agent.sock".to_string()));
+        assert_eq!(
+            hosts[0].identity_agent,
+            Some("~/.1password/agent.sock".to_string())
+        );
     }
 
     #[test]
@@ -496,7 +535,10 @@ mod tests {
         let config = "Host *\n  IdentityAgent ~/.1password/agent.sock\n\nHost my-server\n  HostName 1.2.3.4\n  IdentityAgent ~/.ssh/custom.sock";
         let hosts = parse_ssh_config(config);
         assert_eq!(hosts.len(), 1);
-        assert_eq!(hosts[0].identity_agent, Some("~/.ssh/custom.sock".to_string()));
+        assert_eq!(
+            hosts[0].identity_agent,
+            Some("~/.ssh/custom.sock".to_string())
+        );
     }
 
     #[test]
@@ -504,7 +546,10 @@ mod tests {
         let config = "Host my-server\n  HostName 1.2.3.4\n  User root\n  Port 22\n  IdentityFile ~/.ssh/id_ed25519";
         let hosts = parse_ssh_config(config);
         assert_eq!(hosts.len(), 1);
-        assert_eq!(hosts[0].identity_file, Some("~/.ssh/id_ed25519".to_string()));
+        assert_eq!(
+            hosts[0].identity_file,
+            Some("~/.ssh/id_ed25519".to_string())
+        );
     }
 
     #[test]
@@ -512,7 +557,10 @@ mod tests {
         let config = "Host my-server\n  HostName 1.2.3.4\n  User root\n  IdentityFile \"/home/user/my keys/id_ed25519\"";
         let hosts = parse_ssh_config(config);
         assert_eq!(hosts.len(), 1);
-        assert_eq!(hosts[0].identity_file, Some("/home/user/my keys/id_ed25519".to_string()));
+        assert_eq!(
+            hosts[0].identity_file,
+            Some("/home/user/my keys/id_ed25519".to_string())
+        );
     }
 
     #[test]
@@ -548,7 +596,10 @@ mod tests {
         assert!(entry.contains("IdentityFile ~/.ssh/id_ed25519"));
         let hosts = parse_ssh_config(&entry);
         assert_eq!(hosts.len(), 1);
-        assert_eq!(hosts[0].identity_file, Some("~/.ssh/id_ed25519".to_string()));
+        assert_eq!(
+            hosts[0].identity_file,
+            Some("~/.ssh/id_ed25519".to_string())
+        );
     }
 
     #[test]
@@ -563,7 +614,8 @@ mod tests {
         };
         let mut entry = format!(
             "\nHost {}\n    HostName {}\n    User {}\n    Port {}\n",
-            host.alias, host.hostname,
+            host.alias,
+            host.hostname,
             host.user.as_deref().unwrap_or("root"),
             host.port.unwrap_or(22)
         );
@@ -578,6 +630,9 @@ mod tests {
         assert!(entry.contains("IdentityFile \"/home/user/my keys/id_rsa\""));
         let hosts = parse_ssh_config(&entry);
         assert_eq!(hosts.len(), 1);
-        assert_eq!(hosts[0].identity_file, Some("/home/user/my keys/id_rsa".to_string()));
+        assert_eq!(
+            hosts[0].identity_file,
+            Some("/home/user/my keys/id_rsa".to_string())
+        );
     }
 }
