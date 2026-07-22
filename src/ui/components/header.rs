@@ -12,8 +12,10 @@ impl Header {
 
         let add_btn = gtk4::Button::from_icon_name("list-add-symbolic");
         add_btn.add_css_class("suggested-action");
-        add_btn.set_margin_start(11);
+        add_btn.add_css_class("header-add-btn");
+        add_btn.set_margin_start(8);
         add_btn.set_valign(gtk4::Align::Center);
+        add_btn.set_tooltip_text(Some("Add Server"));
 
         container.pack_start(&add_btn);
 

@@ -28,19 +28,28 @@ fn show_error_alert(parent: Option<&gtk4::Window>, title: &str, secondary: &str)
 }
 
 pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
-    let main_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
-    main_box.set_margin_top(24);
-    main_box.set_margin_bottom(24);
-    main_box.set_margin_start(24);
-    main_box.set_margin_end(24);
+    let main_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+    main_box.add_css_class("page");
 
     let header_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
+    header_box.add_css_class("page-header");
+    let title_box = gtk4::Box::new(gtk4::Orientation::Vertical, 4);
+    title_box.set_hexpand(true);
     let title = gtk4::Label::builder()
         .label("SSH Keys")
         .halign(gtk4::Align::Start)
-        .hexpand(true)
         .build();
     title.add_css_class("title-1");
+    let subtitle = gtk4::Label::builder()
+        .label("Manage your SSH key pairs")
+        .halign(gtk4::Align::Start)
+        .css_classes(vec!["page-subtitle".to_string()])
+        .build();
+    title_box.append(&title);
+    title_box.append(&subtitle);
+
+    let actions_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+    actions_box.add_css_class("page-header-actions");
     let gen_btn = gtk4::Button::from_icon_name("list-add-symbolic");
     gen_btn.set_tooltip_text(Some("Generate New Key"));
     gen_btn.add_css_class("suggested-action");
@@ -49,12 +58,14 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
     import_btn.add_css_class("flat");
     let refresh_btn = gtk4::Button::from_icon_name("view-refresh-symbolic");
     refresh_btn.set_tooltip_text(Some("Refresh"));
+    refresh_btn.add_css_class("flat");
 
-    header_box.append(&title);
-    header_box.append(&refresh_btn);
-    header_box.append(&import_btn);
-    header_box.append(&gen_btn);
+    actions_box.append(&refresh_btn);
+    actions_box.append(&import_btn);
+    actions_box.append(&gen_btn);
 
+    header_box.append(&title_box);
+    header_box.append(&actions_box);
     main_box.append(&header_box);
 
     let list_box = gtk4::ListBox::new();
@@ -94,13 +105,11 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
             } else {
                 for key in keys {
                     let row = gtk4::ListBoxRow::new();
-                    let hbox = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
-                    hbox.set_margin_start(12);
-                    hbox.set_margin_end(12);
-                    hbox.set_margin_top(12);
-                    hbox.set_margin_bottom(12);
+                    let hbox = gtk4::Box::new(gtk4::Orientation::Horizontal, 14);
+                    hbox.add_css_class("list-row-content");
                     let icon = gtk4::Image::from_icon_name("network-vpn-symbolic");
-                    icon.set_pixel_size(24);
+                    icon.set_pixel_size(20);
+                    icon.set_opacity(0.7);
                     let name_lbl = gtk4::Label::new(Some(&key.name));
                     name_lbl.set_halign(gtk4::Align::Start);
                     name_lbl.set_hexpand(true);
