@@ -9,7 +9,13 @@ pub mod style;
 pub mod theme;
 pub mod window;
 
+use gtk4::prelude::*;
 use gtk4::{gio, glib};
+
+/// Set hand cursor on widgets that act like buttons but aren't gtk::Button.
+pub fn set_pointer_cursor(widget: &impl IsA<gtk4::Widget>) {
+    widget.set_cursor_from_name(Some("pointer"));
+}
 
 pub fn get_docker_icon() -> gtk4::Image {
     let bytes = include_bytes!("../assets/docker.svg");
