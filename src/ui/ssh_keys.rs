@@ -35,7 +35,10 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
     header_box.add_css_class("page-header");
     let title_box = gtk4::Box::new(gtk4::Orientation::Vertical, 4);
     title_box.set_hexpand(true);
-    let title = gtk4::Label::builder().label("SSH Keys").halign(gtk4::Align::Start).build();
+    let title = gtk4::Label::builder()
+        .label("SSH Keys")
+        .halign(gtk4::Align::Start)
+        .build();
     title.add_css_class("title-1");
     let subtitle = gtk4::Label::builder()
         .label("Manage your SSH key pairs")

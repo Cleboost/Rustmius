@@ -82,7 +82,11 @@ impl ServerList {
             .halign(gtk4::Align::Start)
             .css_classes(vec!["heading".to_string()])
             .build();
-        let host_info = format!("{}@{}", host.user.as_deref().unwrap_or("root"), host.hostname);
+        let host_info = format!(
+            "{}@{}",
+            host.user.as_deref().unwrap_or("root"),
+            host.hostname
+        );
         let host_label = gtk4::Label::builder()
             .label(&host_info)
             .halign(gtk4::Align::Start)

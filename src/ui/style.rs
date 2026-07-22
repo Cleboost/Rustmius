@@ -3,7 +3,8 @@ use gtk4::gdk;
 
 pub fn init_style() {
     let provider = CssProvider::new();
-    provider.load_from_string("
+    provider.load_from_string(
+        "
         /* ── Cards ─────────────────────────────────────────── */
         .card, .docker-card, .action-card, .settings-group, .monitor-card {
             background-color: alpha(@theme_fg_color, 0.04);
@@ -400,7 +401,8 @@ pub fn init_style() {
         .sidebar-separator {
             opacity: 0.3;
         }
-    ");
+    ",
+    );
     gtk4::style_context_add_provider_for_display(
         &gdk::Display::default().expect("Could not connect to a display."),
         &provider,

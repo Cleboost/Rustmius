@@ -25,23 +25,38 @@ impl Settings {
 
         let header_box = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
         header_box.add_css_class("page-header");
-        header_box.append(&gtk4::Label::builder()
-            .label("Settings")
-            .halign(gtk4::Align::Start)
-            .css_classes(vec!["title-1".to_string()])
-            .build());
-        header_box.append(&gtk4::Label::builder()
-            .label("Configure your global preferences")
-            .halign(gtk4::Align::Start)
-            .css_classes(vec!["page-subtitle".to_string()])
-            .build());
+        header_box.append(
+            &gtk4::Label::builder()
+                .label("Settings")
+                .halign(gtk4::Align::Start)
+                .css_classes(vec!["title-1".to_string()])
+                .build(),
+        );
+        header_box.append(
+            &gtk4::Label::builder()
+                .label("Configure your global preferences")
+                .halign(gtk4::Align::Start)
+                .css_classes(vec!["page-subtitle".to_string()])
+                .build(),
+        );
         content.append(&header_box);
 
         let font_dialog = gtk4::FontDialog::new();
-        let font_button = gtk4::FontDialogButton::builder().dialog(&font_dialog).build();
-        font_button.set_font_desc(&gtk4::pango::FontDescription::from_string(&config.terminal_font));
+        let font_button = gtk4::FontDialogButton::builder()
+            .dialog(&font_dialog)
+            .build();
+        font_button.set_font_desc(&gtk4::pango::FontDescription::from_string(
+            &config.terminal_font,
+        ));
 
-        let scrollback_adj = gtk4::Adjustment::new(config.terminal_scrollback as f64, 100.0, 100000.0, 100.0, 1000.0, 0.0);
+        let scrollback_adj = gtk4::Adjustment::new(
+            config.terminal_scrollback as f64,
+            100.0,
+            100000.0,
+            100.0,
+            1000.0,
+            0.0,
+        );
         let scrollback_spinner = gtk4::SpinButton::new(Some(&scrollback_adj), 1.0, 0);
 
         let theme_labels: Vec<&str> = crate::ui::theme::THEMES.iter().map(|t| t.name).collect();
@@ -60,16 +75,32 @@ impl Settings {
 
         let terminal_group = Self::settings_group("Terminal");
         Self::add_row(&terminal_group, "Font", font_button.clone().upcast());
-        Self::add_row(&terminal_group, "Scrollback Lines", scrollback_spinner.clone().upcast());
-        Self::add_row(&terminal_group, "Color Theme", theme_dropdown.clone().upcast());
+        Self::add_row(
+            &terminal_group,
+            "Scrollback Lines",
+            scrollback_spinner.clone().upcast(),
+        );
+        Self::add_row(
+            &terminal_group,
+            "Color Theme",
+            theme_dropdown.clone().upcast(),
+        );
         content.append(&terminal_group);
 
         let monitor_group = Self::settings_group("System Monitor");
-        Self::add_row(&monitor_group, "Default Refresh Rate", refresh_dropdown.clone().upcast());
+        Self::add_row(
+            &monitor_group,
+            "Default Refresh Rate",
+            refresh_dropdown.clone().upcast(),
+        );
         content.append(&monitor_group);
 
         let ui_group = Self::settings_group("User Interface");
-        Self::add_row(&ui_group, "Confirm before closing tabs", confirm_switch.clone().upcast());
+        Self::add_row(
+            &ui_group,
+            "Confirm before closing tabs",
+            confirm_switch.clone().upcast(),
+        );
         content.append(&ui_group);
 
         let r_drop = refresh_dropdown.clone();
@@ -130,11 +161,13 @@ impl Settings {
     fn settings_group(title: &str) -> gtk4::Box {
         let group = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
         group.add_css_class("settings-group");
-        group.append(&gtk4::Label::builder()
-            .label(title)
-            .halign(gtk4::Align::Start)
-            .css_classes(vec!["settings-group-title".to_string()])
-            .build());
+        group.append(
+            &gtk4::Label::builder()
+                .label(title)
+                .halign(gtk4::Align::Start)
+                .css_classes(vec!["settings-group-title".to_string()])
+                .build(),
+        );
         group
     }
 

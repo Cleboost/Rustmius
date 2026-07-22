@@ -292,20 +292,21 @@ impl AppWindow {
         let notebook_close = self.inner.notebook.clone();
         let win_close = self.inner.window.clone();
         let sb_close = session_box.clone();
-        let tab_label_box = Self::create_tab_label("utilities-terminal-symbolic", &display_name, move || {
-            let nb = notebook_close.clone();
-            let sb = sb_close.clone();
-            confirm_close(
-                win_close.upcast_ref(),
-                "Close Tab?",
-                "Are you sure you want to close this session?",
-                move || {
-                    if let Some(i) = nb.page_num(&sb) {
-                        nb.remove_page(Some(i));
-                    }
-                },
-            );
-        });
+        let tab_label_box =
+            Self::create_tab_label("utilities-terminal-symbolic", &display_name, move || {
+                let nb = notebook_close.clone();
+                let sb = sb_close.clone();
+                confirm_close(
+                    win_close.upcast_ref(),
+                    "Close Tab?",
+                    "Are you sure you want to close this session?",
+                    move || {
+                        if let Some(i) = nb.page_num(&sb) {
+                            nb.remove_page(Some(i));
+                        }
+                    },
+                );
+            });
 
         let mut insert_pos = self.inner.notebook.n_pages();
         for i in 0..self.inner.notebook.n_pages() {
@@ -431,20 +432,21 @@ impl AppWindow {
             let nb_inner = nb.clone();
             let ex_inner = explorer.container.clone();
             let win_inner = window.clone();
-            let tab_box = Self::create_tab_label("folder-remote-symbolic", &display_name, move || {
-                let nb_confirm = nb_inner.clone();
-                let ex_confirm = ex_inner.clone();
-                confirm_close(
-                    win_inner.upcast_ref(),
-                    "Close Explorer?",
-                    "Are you sure you want to close this explorer tab?",
-                    move || {
-                        if let Some(i) = nb_confirm.page_num(&ex_confirm) {
-                            nb_confirm.remove_page(Some(i));
-                        }
-                    },
-                );
-            });
+            let tab_box =
+                Self::create_tab_label("folder-remote-symbolic", &display_name, move || {
+                    let nb_confirm = nb_inner.clone();
+                    let ex_confirm = ex_inner.clone();
+                    confirm_close(
+                        win_inner.upcast_ref(),
+                        "Close Explorer?",
+                        "Are you sure you want to close this explorer tab?",
+                        move || {
+                            if let Some(i) = nb_confirm.page_num(&ex_confirm) {
+                                nb_confirm.remove_page(Some(i));
+                            }
+                        },
+                    );
+                });
 
             let ins_pos = Self::get_insert_position(&nb);
             nb.insert_page(&explorer.container, Some(&tab_box), Some(ins_pos));
@@ -473,20 +475,24 @@ impl AppWindow {
             let nb_inner = nb.clone();
             let mo_inner = monitor.container.clone();
             let win_inner = window.clone();
-            let tab_box = Self::create_tab_label("utilities-system-monitor-symbolic", &display_name, move || {
-                let nb_confirm = nb_inner.clone();
-                let mo_confirm = mo_inner.clone();
-                confirm_close(
-                    win_inner.upcast_ref(),
-                    "Close Monitor?",
-                    "Are you sure you want to close this monitoring tab?",
-                    move || {
-                        if let Some(i) = nb_confirm.page_num(&mo_confirm) {
-                            nb_confirm.remove_page(Some(i));
-                        }
-                    },
-                );
-            });
+            let tab_box = Self::create_tab_label(
+                "utilities-system-monitor-symbolic",
+                &display_name,
+                move || {
+                    let nb_confirm = nb_inner.clone();
+                    let mo_confirm = mo_inner.clone();
+                    confirm_close(
+                        win_inner.upcast_ref(),
+                        "Close Monitor?",
+                        "Are you sure you want to close this monitoring tab?",
+                        move || {
+                            if let Some(i) = nb_confirm.page_num(&mo_confirm) {
+                                nb_confirm.remove_page(Some(i));
+                            }
+                        },
+                    );
+                },
+            );
 
             let ins_pos = Self::get_insert_position(&nb);
             nb.insert_page(&monitor.container, Some(&tab_box), Some(ins_pos));

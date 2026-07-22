@@ -344,7 +344,11 @@ impl SystemMonitor {
         let _ = cr.stroke();
 
         cr.set_source_rgb(0.85, 0.85, 0.85);
-        cr.select_font_face("Sans", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Bold);
+        cr.select_font_face(
+            "Sans",
+            gtk4::cairo::FontSlant::Normal,
+            gtk4::cairo::FontWeight::Bold,
+        );
         cr.set_font_size(18.0);
         let text = format!("{:.0}%", percent * 100.0);
         if let Ok(extents) = cr.text_extents(&text) {
