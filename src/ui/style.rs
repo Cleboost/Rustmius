@@ -315,20 +315,32 @@ pub fn init_style() {
             opacity: 0.9;
         }
         .tab-close-btn {
-            min-width: 16px;
-            min-height: 16px;
+            min-width: 20px;
+            min-height: 20px;
             padding: 0;
-            margin: 0 0 0 1px;
-            border-radius: 4px;
-            opacity: 0;
-            transition: opacity 100ms ease, background-color 100ms ease;
+            margin: 0 0 0 6px;
+            border-radius: 5px;
+            color: alpha(@theme_fg_color, 0.7);
+            background-color: alpha(@theme_fg_color, 0.06);
+            transition: color 120ms ease, background-color 120ms ease;
+        }
+        .tab-close-btn .tab-close-icon {
+            opacity: 1;
+        }
+        .session-notebook tab:checked .tab-label .tab-close-btn {
+            color: alpha(@theme_fg_color, 0.85);
+            background-color: alpha(@theme_fg_color, 0.08);
         }
         .tab-label:hover .tab-close-btn {
-            opacity: 0.5;
+            color: alpha(@theme_fg_color, 0.95);
+            background-color: alpha(@theme_fg_color, 0.1);
         }
         .tab-close-btn:hover {
-            opacity: 1;
-            background-color: alpha(@theme_fg_color, 0.1);
+            color: @theme_fg_color;
+            background-color: alpha(@theme_fg_color, 0.14);
+        }
+        .tab-close-btn:active {
+            background-color: alpha(@theme_fg_color, 0.2);
         }
 
         /* ── Monitor ───────────────────────────────────────── */

@@ -617,7 +617,14 @@ impl AppWindow {
         tab_box.append(&label);
 
         if closable {
-            let close_btn = gtk4::Button::from_icon_name("window-close-symbolic");
+            let close_icon = gtk4::Image::from_icon_name("window-close-symbolic");
+            close_icon.set_pixel_size(14);
+            close_icon.add_css_class("tab-close-icon");
+            let close_btn = gtk4::Button::builder()
+                .child(&close_icon)
+                .tooltip_text("Close tab")
+                .valign(gtk4::Align::Center)
+                .build();
             close_btn.add_css_class("flat");
             close_btn.add_css_class("tab-close-btn");
             close_btn.connect_clicked(move |_| on_close());
