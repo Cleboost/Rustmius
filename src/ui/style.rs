@@ -202,6 +202,18 @@ pub fn init_style() {
             padding: 4px;
             border-radius: 8px;
         }
+        .session-toolbar .docker-icon,
+        .session-toolbar .container-icon {
+            color: alpha(@theme_fg_color, 0.8);
+        }
+        .session-toolbar button:hover .docker-icon,
+        .session-toolbar button:hover .container-icon {
+            color: @theme_fg_color;
+        }
+        .docker-icon,
+        .container-icon {
+            color: @theme_fg_color;
+        }
 
         /* ── Header ────────────────────────────────────────── */
         .main-headerbar {

@@ -23,6 +23,7 @@ pub fn get_docker_icon() -> gtk4::Image {
     let icon = gio::BytesIcon::new(&gbytes);
     let image = gtk4::Image::from_gicon(&icon);
     image.set_pixel_size(16);
+    image.add_css_class("docker-icon");
     image
 }
 
@@ -32,5 +33,6 @@ pub fn get_container_icon() -> gtk4::Image {
     let icon = gio::BytesIcon::new(&gbytes);
     let image = gtk4::Image::from_gicon(&icon);
     image.set_pixel_size(16);
+    image.add_css_class("container-icon");
     image
 }
