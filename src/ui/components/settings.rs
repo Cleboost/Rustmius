@@ -49,11 +49,14 @@ impl Settings {
         scrollback_row.append(&scrollback_label); scrollback_row.append(&scrollback_spinner);
         terminal_group.append(&scrollback_row);
 
-        let theme_names = crate::ui::theme::theme_names();
+        let theme_labels: Vec<&str> = crate::ui::theme::THEMES.iter().map(|t| t.name).collect();
         let theme_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
         let theme_label = gtk4::Label::new(Some("Color Theme")); theme_label.set_hexpand(true); theme_label.set_halign(gtk4::Align::Start);
-        let theme_dropdown = gtk4::DropDown::from_strings(&theme_names);
-        let current_theme_idx = theme_names.iter().position(|n| *n == config.terminal_theme).unwrap_or(0) as u32;
+        let theme_dropdown = gtk4::DropDown::from_strings(&theme_labels);
+        let current_theme_idx = crate::ui::theme::THEMES
+            .iter()
+            .position(|t| t.name == config.terminal_theme)
+            .unwrap_or(0) as u32;
         theme_dropdown.set_selected(current_theme_idx);
         theme_row.append(&theme_label); theme_row.append(&theme_dropdown);
         terminal_group.append(&theme_row);
@@ -86,7 +89,6 @@ impl Settings {
         let s_spin = scrollback_spinner.clone();
         let t_drop = theme_dropdown.clone();
         let c_switch = confirm_switch.clone();
-        let theme_names_saved = theme_names.clone();
 
         let save_config = move || {
             let mut new_config = AppConfig::default();
@@ -95,10 +97,7 @@ impl Settings {
                 .map(|fd| fd.to_string())
                 .unwrap_or_else(|| "Monospace 11".to_string());
             new_config.terminal_scrollback = s_spin.value() as u32;
-            new_config.terminal_theme = theme_names_saved
-                .get(t_drop.selected() as usize)
-                .map(|n| n.to_string())
-                .unwrap_or_else(|| crate::ui::theme::default_theme_name().to_string());
+            new_config.terminal_theme = crate::ui::theme::theme_at(t_drop.selected() as usize).name.to_string();
             new_config.confirm_tab_close = c_switch.is_active();
             let _ = crate::config_observer::save_app_config(&new_config);
         };
@@ -109,14 +108,14 @@ impl Settings {
         let s3 = save_fn.clone(); scrollback_spinner.connect_value_changed(move |_| { s3(); });
         let s5 = save_fn.clone(); confirm_switch.connect_active_notify(move |_| { s5(); });
 
-        // Theme changes save and re-color every open terminal immediately.
         let s4 = save_fn.clone();
         let nb = notebook.clone();
         theme_dropdown.connect_selected_notify(move |dd| {
             s4();
-            if let Some(name) = crate::ui::theme::theme_names().get(dd.selected() as usize) {
-                crate::ui::theme::apply_to_open_terminals(&nb, crate::ui::theme::get_theme(name));
-            }
+            crate::ui::theme::apply_to_open_terminals(
+                &nb,
+                crate::ui::theme::theme_at(dd.selected() as usize),
+            );
         });
 
         scrolled.set_child(Some(&content));

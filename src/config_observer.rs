@@ -113,6 +113,8 @@ pub async fn delete_keyring_password(alias: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub const DEFAULT_TERMINAL_THEME: &str = "Dracula";
+
 /// Global application configuration settings.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AppConfig {
@@ -125,7 +127,7 @@ pub struct AppConfig {
 }
 
 fn default_terminal_theme() -> String {
-    crate::ui::theme::default_theme_name().to_string()
+    DEFAULT_TERMINAL_THEME.to_string()
 }
 
 impl Default for AppConfig {

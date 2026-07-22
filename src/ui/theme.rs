@@ -116,46 +116,33 @@ pub static THEMES: &[TerminalTheme] = &[
     },
 ];
 
-/// The default theme name, used when the config value is empty or unrecognized.
-pub fn default_theme_name() -> &'static str {
-    THEMES[0].name
-}
-
-/// Returns the theme matching `name`, falling back to the default if not found.
 pub fn get_theme(name: &str) -> &'static TerminalTheme {
     THEMES.iter().find(|t| t.name == name).unwrap_or(&THEMES[0])
 }
 
-/// The names of all built-in themes, in display order.
-pub fn theme_names() -> Vec<&'static str> {
-    THEMES.iter().map(|t| t.name).collect()
+pub fn theme_at(index: usize) -> &'static TerminalTheme {
+    THEMES.get(index).unwrap_or(&THEMES[0])
 }
 
-fn parse_color(hex: &str, fallback: RGBA) -> RGBA {
-    RGBA::from_str(hex).unwrap_or(fallback)
-}
-
-/// Applies the given theme's colors to a single terminal.
 pub fn apply_to_terminal(theme: &TerminalTheme, terminal: &vte4::Terminal) {
-    let fg = parse_color(theme.foreground, RGBA::WHITE);
-    let bg = parse_color(theme.background, RGBA::BLACK);
-    let cursor = parse_color(theme.cursor, fg);
-    let palette: Vec<RGBA> = theme
-        .palette
-        .iter()
-        .map(|c| parse_color(c, RGBA::BLACK))
-        .collect();
+    let fg = RGBA::from_str(theme.foreground).unwrap_or(RGBA::WHITE);
+    let bg = RGBA::from_str(theme.background).unwrap_or(RGBA::BLACK);
+    let cursor = RGBA::from_str(theme.cursor).unwrap_or(fg);
+    let mut palette = [RGBA::BLACK; 16];
+    for (i, hex) in theme.palette.iter().enumerate() {
+        palette[i] = RGBA::from_str(hex).unwrap_or(RGBA::BLACK);
+    }
     let palette_refs: Vec<&RGBA> = palette.iter().collect();
     terminal.set_colors(Some(&fg), Some(&bg), &palette_refs);
     terminal.set_color_cursor(Some(&cursor));
 }
 
-/// Re-applies a theme to every open terminal currently living in the notebook.
-/// Session pages are vertical boxes whose direct children include the VTE
-/// terminal; other page types (explorer, monitor, docker) are skipped.
 pub fn apply_to_open_terminals(notebook: &gtk4::Notebook, theme: &TerminalTheme) {
     for i in 0..notebook.n_pages() {
         let Some(page) = notebook.nth_page(Some(i)) else { continue };
+        if !page.widget_name().starts_with("session:") {
+            continue;
+        }
         let Some(bx) = page.downcast_ref::<gtk4::Box>() else { continue };
         let mut child = bx.first_child();
         while let Some(c) = child {
