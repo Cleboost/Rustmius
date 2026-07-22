@@ -36,16 +36,15 @@ impl SystemMonitor {
         let scrolled = gtk4::ScrolledWindow::builder()
             .hscrollbar_policy(gtk4::PolicyType::Never)
             .build();
-
-        let container = gtk4::Box::new(gtk4::Orientation::Vertical, 18);
-        container.set_margin_top(18);
-        container.set_margin_bottom(18);
-        container.set_margin_start(18);
-        container.set_margin_end(18);
+        let container = gtk4::Box::new(gtk4::Orientation::Vertical, 24);
+        container.add_css_class("page");
         scrolled.set_child(Some(&container));
 
         let toolbar = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
-        let refresh_label = gtk4::Label::new(Some("Refresh Rate:"));
+        let refresh_label = gtk4::Label::builder()
+            .label("Refresh Rate")
+            .css_classes(vec!["caption".to_string(), "dim-label".to_string()])
+            .build();
         let refresh_dropdown = gtk4::DropDown::from_strings(&["1s", "3s", "5s", "10s"]);
 
         let app_config = crate::config_observer::load_app_config().unwrap_or_else(|e| {
@@ -60,14 +59,16 @@ impl SystemMonitor {
         container.append(&toolbar);
 
         let sys_frame = gtk4::Frame::new(Some("System Information"));
+        sys_frame.add_css_class("monitor-card");
         let sys_grid = gtk4::Grid::builder()
-            .column_spacing(32)
-            .row_spacing(12)
-            .margin_top(12)
-            .margin_bottom(12)
-            .margin_start(12)
-            .margin_end(12)
+            .column_spacing(40)
+            .row_spacing(16)
+            .margin_top(16)
+            .margin_bottom(16)
+            .margin_start(20)
+            .margin_end(20)
             .build();
+        sys_grid.add_css_class("info-grid");
 
         let hostname_label = Self::info_label("Hostname", "Loading...");
         let os_label = Self::info_label("OS", "Loading...");
@@ -94,7 +95,7 @@ impl SystemMonitor {
         sys_frame.set_child(Some(&sys_grid));
         container.append(&sys_frame);
 
-        let resource_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 18);
+        let resource_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 16);
         resource_box.set_homogeneous(true);
 
         let cpu_card = Self::resource_card("CPU Load", "");
@@ -107,14 +108,16 @@ impl SystemMonitor {
         container.append(&resource_box);
 
         let net_frame = gtk4::Frame::new(Some("Network Interfaces"));
+        net_frame.add_css_class("monitor-card");
         let ips_label = gtk4::Label::builder()
             .label("Loading...")
             .halign(gtk4::Align::Start)
-            .margin_top(12)
-            .margin_bottom(12)
-            .margin_start(12)
-            .margin_end(12)
+            .margin_top(16)
+            .margin_bottom(16)
+            .margin_start(20)
+            .margin_end(20)
             .wrap(true)
+            .css_classes(vec!["caption".to_string()])
             .build();
         net_frame.set_child(Some(&ips_label));
         container.append(&net_frame);
@@ -284,22 +287,24 @@ impl SystemMonitor {
 
     fn resource_card(title: &str, detail: &str) -> (gtk4::Frame, gtk4::DrawingArea, gtk4::Label) {
         let frame = gtk4::Frame::new(Some(title));
-        let bx = gtk4::Box::new(gtk4::Orientation::Vertical, 8);
-        bx.set_margin_top(12);
-        bx.set_margin_bottom(12);
-        bx.set_margin_start(12);
-        bx.set_margin_end(12);
+        frame.add_css_class("monitor-card");
+        let bx = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
+        bx.set_margin_top(16);
+        bx.set_margin_bottom(16);
+        bx.set_margin_start(16);
+        bx.set_margin_end(16);
 
         let da = gtk4::DrawingArea::builder()
-            .content_width(120)
-            .content_height(120)
+            .content_width(110)
+            .content_height(110)
+            .halign(gtk4::Align::Center)
             .build();
 
         let detail_lbl = gtk4::Label::builder()
             .label(detail)
             .halign(gtk4::Align::Center)
+            .css_classes(vec!["caption".to_string(), "dim-label".to_string()])
             .build();
-        detail_lbl.set_opacity(0.8);
 
         bx.append(&da);
         bx.append(&detail_lbl);
@@ -311,10 +316,10 @@ impl SystemMonitor {
         let percent = percent.clamp(0.0, 1.0);
         let center_x = width / 2.0;
         let center_y = height / 2.0;
-        let radius = width.min(height) / 2.0 - 10.0;
-        let thickness = 14.0;
+        let radius = width.min(height) / 2.0 - 12.0;
+        let thickness = 10.0;
 
-        cr.set_source_rgba(0.5, 0.5, 0.5, 0.15);
+        cr.set_source_rgba(0.5, 0.5, 0.5, 0.1);
         cr.set_line_width(thickness);
         let _ = cr.arc(center_x, center_y, radius, 0.0, 2.0 * std::f64::consts::PI);
         let _ = cr.stroke();
@@ -338,13 +343,13 @@ impl SystemMonitor {
         );
         let _ = cr.stroke();
 
-        cr.set_source_rgb(0.9, 0.9, 0.9);
+        cr.set_source_rgb(0.85, 0.85, 0.85);
         cr.select_font_face(
             "Sans",
             gtk4::cairo::FontSlant::Normal,
             gtk4::cairo::FontWeight::Bold,
         );
-        cr.set_font_size(20.0);
+        cr.set_font_size(18.0);
         let text = format!("{:.0}%", percent * 100.0);
         if let Ok(extents) = cr.text_extents(&text) {
             cr.move_to(

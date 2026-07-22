@@ -25,15 +25,12 @@ impl ServerList {
         let flow_box = gtk4::FlowBox::builder()
             .selection_mode(gtk4::SelectionMode::None)
             .valign(gtk4::Align::Start)
-            .max_children_per_line(4)
+            .max_children_per_line(3)
             .min_children_per_line(1)
-            .column_spacing(12)
-            .row_spacing(12)
-            .margin_top(24)
-            .margin_bottom(24)
-            .margin_start(24)
-            .margin_end(24)
+            .column_spacing(16)
+            .row_spacing(16)
             .build();
+        flow_box.add_css_class("page");
         scrolled.set_child(Some(&flow_box));
 
         let sl = Self {
@@ -67,22 +64,39 @@ impl ServerList {
     {
         let frame = gtk4::Frame::new(None);
         frame.add_css_class("card");
+        frame.set_width_request(260);
+        crate::ui::set_pointer_cursor(&frame);
 
-        let content_box = gtk4::Box::new(gtk4::Orientation::Vertical, 8);
-        content_box.set_margin_top(12);
-        content_box.set_margin_bottom(12);
-        content_box.set_margin_start(12);
-        content_box.set_margin_end(12);
+        let content_box = gtk4::Box::new(gtk4::Orientation::Vertical, 10);
+        crate::ui::set_pointer_cursor(&content_box);
 
-        let header_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+        let header_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 10);
+        let icon = gtk4::Image::from_icon_name("computer-symbolic");
+        icon.set_pixel_size(20);
+        icon.add_css_class("server-card-icon");
+
+        let title_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
+        title_box.set_hexpand(true);
         let alias_label = gtk4::Label::builder()
             .label(&host.alias)
             .halign(gtk4::Align::Start)
-            .hexpand(true)
             .css_classes(vec!["heading".to_string()])
             .build();
+        let host_info = format!(
+            "{}@{}",
+            host.user.as_deref().unwrap_or("root"),
+            host.hostname
+        );
+        let host_label = gtk4::Label::builder()
+            .label(&host_info)
+            .halign(gtk4::Align::Start)
+            .css_classes(vec!["dim-label".to_string(), "caption".to_string()])
+            .build();
+        title_box.append(&alias_label);
+        title_box.append(&host_label);
 
-        let actions_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
+        let actions_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 2);
+        actions_box.add_css_class("server-card-actions");
         let edit_btn = gtk4::Button::from_icon_name("document-edit-symbolic");
         edit_btn.add_css_class("flat");
         let host_edit = host.clone();
@@ -103,22 +117,10 @@ impl ServerList {
         actions_box.append(&edit_btn);
         actions_box.append(&delete_btn);
 
-        header_box.append(&alias_label);
+        header_box.append(&icon);
+        header_box.append(&title_box);
         header_box.append(&actions_box);
-
-        let host_info = format!(
-            "{}@{}",
-            host.user.as_deref().unwrap_or("root"),
-            host.hostname
-        );
-        let host_label = gtk4::Label::builder()
-            .label(&host_info)
-            .halign(gtk4::Align::Start)
-            .css_classes(vec!["dim-label".to_string(), "caption".to_string()])
-            .build();
-
         content_box.append(&header_box);
-        content_box.append(&host_label);
 
         let gesture = gtk4::GestureClick::new();
         let host_conn = host.clone();

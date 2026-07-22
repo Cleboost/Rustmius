@@ -32,11 +32,8 @@ impl FileExplorer {
         let current_path = Rc::new(RefCell::new(initial_path.clone()));
         let files: Rc<RefCell<Vec<RemoteFile>>> = Rc::new(RefCell::new(Vec::new()));
 
-        let path_bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-        path_bar.set_margin_top(6);
-        path_bar.set_margin_bottom(6);
-        path_bar.set_margin_start(8);
-        path_bar.set_margin_end(8);
+        let path_bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+        path_bar.add_css_class("path-bar");
 
         let back_btn = gtk4::Button::from_icon_name("go-up-symbolic");
         back_btn.set_tooltip_text(Some("Parent directory"));
@@ -347,9 +344,10 @@ impl ExplorerHandle {
     }
 
     fn add_file_row(&self, file: RemoteFile) {
-        let row_content = gtk4::Box::new(gtk4::Orientation::Horizontal, 10);
-        row_content.set_margin_top(4);
-        row_content.set_margin_bottom(4);
+        let row_content = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
+        row_content.add_css_class("list-row-content");
+        row_content.add_css_class("clickable-row");
+        crate::ui::set_pointer_cursor(&row_content);
 
         let theme = gtk4::IconTheme::for_display(&gdk::Display::default().unwrap());
         let paintable = theme.lookup_by_gicon(
@@ -360,7 +358,7 @@ impl ExplorerHandle {
             gtk4::IconLookupFlags::FORCE_REGULAR,
         );
         let icon = gtk4::Image::from_paintable(Some(&paintable));
-        icon.set_pixel_size(32);
+        icon.set_pixel_size(24);
         row_content.append(&icon);
 
         let name_label = gtk4::Label::builder()

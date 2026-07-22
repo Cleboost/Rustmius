@@ -89,13 +89,11 @@ impl DockerManager {
     }
 
     fn build_dashboard(&self) -> gtk4::Box {
-        let box_ = gtk4::Box::new(gtk4::Orientation::Vertical, 32);
-        box_.set_margin_top(32);
-        box_.set_margin_bottom(32);
-        box_.set_margin_start(48);
-        box_.set_margin_end(48);
+        let box_ = gtk4::Box::new(gtk4::Orientation::Vertical, 28);
+        box_.add_css_class("page");
 
-        let header_box = gtk4::Box::new(gtk4::Orientation::Vertical, 4);
+        let header_box = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
+        header_box.add_css_class("page-header");
         let title = gtk4::Label::builder()
             .label("Docker Management")
             .halign(gtk4::Align::Start)
@@ -104,7 +102,7 @@ impl DockerManager {
         let subtitle = gtk4::Label::builder()
             .label(&format!("Server: {}", self.host.alias))
             .halign(gtk4::Align::Start)
-            .css_classes(vec!["dim-label".to_string()])
+            .css_classes(vec!["page-subtitle".to_string()])
             .build();
         header_box.append(&title);
         header_box.append(&subtitle);
@@ -112,8 +110,8 @@ impl DockerManager {
 
         let stats_flow = gtk4::FlowBox::new();
         stats_flow.set_selection_mode(gtk4::SelectionMode::None);
-        stats_flow.set_column_spacing(18);
-        stats_flow.set_row_spacing(18);
+        stats_flow.set_column_spacing(16);
+        stats_flow.set_row_spacing(16);
         stats_flow.set_max_children_per_line(4);
 
         stats_flow.append(&self.build_stat_card("Containers", "0", Some("container")));
@@ -130,7 +128,7 @@ impl DockerManager {
         ));
         box_.append(&stats_flow);
 
-        let actions_section = gtk4::Box::new(gtk4::Orientation::Vertical, 16);
+        let actions_section = gtk4::Box::new(gtk4::Orientation::Vertical, 14);
         let actions_title = gtk4::Label::builder()
             .label("Quick Actions")
             .halign(gtk4::Align::Start)
@@ -138,7 +136,7 @@ impl DockerManager {
             .build();
         actions_section.append(&actions_title);
 
-        let actions_grid = gtk4::Box::new(gtk4::Orientation::Horizontal, 18);
+        let actions_grid = gtk4::Box::new(gtk4::Orientation::Horizontal, 16);
 
         let btn_containers = self.build_action_tile(
             "Manage Containers",
@@ -174,30 +172,30 @@ impl DockerManager {
     }
 
     fn build_action_tile(&self, title: &str, desc: &str, icon_name: Option<&str>) -> gtk4::Box {
-        let tile = gtk4::Box::new(gtk4::Orientation::Horizontal, 16);
+        let tile = gtk4::Box::new(gtk4::Orientation::Horizontal, 14);
         tile.add_css_class("action-card");
         tile.set_hexpand(true);
-        tile.set_cursor_from_name(Some("pointer"));
+        crate::ui::set_pointer_cursor(&tile);
 
         let icon_img = match icon_name {
             Some("container") => {
                 let img = crate::ui::get_container_icon();
-                img.set_pixel_size(32);
+                img.set_pixel_size(28);
                 img
             }
             Some(name) => {
                 let img = gtk4::Image::from_icon_name(name);
-                img.set_pixel_size(32);
+                img.set_pixel_size(28);
                 img
             }
             None => {
                 let img = crate::ui::get_docker_icon();
-                img.set_pixel_size(32);
+                img.set_pixel_size(28);
                 img
             }
         };
 
-        let text_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
+        let text_box = gtk4::Box::new(gtk4::Orientation::Vertical, 4);
         let label_title = gtk4::Label::builder()
             .label(title)
             .halign(gtk4::Align::Start)
@@ -218,13 +216,11 @@ impl DockerManager {
     }
 
     fn build_list_view(&self, title: &str) -> gtk4::Box {
-        let box_ = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
-        box_.set_margin_top(24);
-        box_.set_margin_bottom(24);
-        box_.set_margin_start(24);
-        box_.set_margin_end(24);
+        let box_ = gtk4::Box::new(gtk4::Orientation::Vertical, 16);
+        box_.add_css_class("page");
 
-        let header = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
+        let header = gtk4::Box::new(gtk4::Orientation::Horizontal, 10);
+        header.add_css_class("page-header");
         let back_btn = gtk4::Button::from_icon_name("go-previous-symbolic");
         back_btn.add_css_class("flat");
         let s_back = self.stack.clone();
@@ -282,12 +278,9 @@ impl DockerManager {
                     for line in output.lines() {
                         let parts: Vec<&str> = line.split('\t').collect();
                         let row = gtk4::Box::new(gtk4::Orientation::Horizontal, 12);
-                        row.set_margin_top(8);
-                        row.set_margin_bottom(8);
-                        row.set_margin_start(12);
-                        row.set_margin_end(12);
+                        row.add_css_class("list-row-content");
 
-                        let text_box = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
+                        let text_box = gtk4::Box::new(gtk4::Orientation::Vertical, 4);
                         let item_name = parts.first().copied().unwrap_or(line).to_string();
                         let name_label = gtk4::Label::builder()
                             .label(&item_name)
@@ -394,8 +387,8 @@ impl DockerManager {
     }
 
     fn build_stat_card(&self, title: &str, value: &str, icon_name: Option<&str>) -> gtk4::Box {
-        let card = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
-        card.set_width_request(160);
+        let card = gtk4::Box::new(gtk4::Orientation::Vertical, 10);
+        card.set_width_request(150);
         card.add_css_class("docker-card");
 
         let header = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);

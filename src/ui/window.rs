@@ -24,6 +24,7 @@ struct AppWindowInner {
     window: gtk4::ApplicationWindow,
     stack: gtk4::Stack,
     notebook: gtk4::Notebook,
+    sidebar: Sidebar,
 }
 
 impl AppWindow {
@@ -39,6 +40,7 @@ impl AppWindow {
         let root = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
         let sidebar = Sidebar::new();
         let separator = gtk4::Separator::new(gtk4::Orientation::Vertical);
+        separator.add_css_class("sidebar-separator");
         let content_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         content_box.set_hexpand(true);
 
@@ -50,6 +52,7 @@ impl AppWindow {
         content_box.append(&stack);
 
         let notebook = gtk4::Notebook::new();
+        notebook.add_css_class("session-notebook");
         notebook.set_vexpand(true);
         notebook.set_hexpand(true);
         notebook.set_scrollable(true);
@@ -75,6 +78,7 @@ impl AppWindow {
                 window,
                 stack,
                 notebook,
+                sidebar: sidebar.clone(),
             }),
         };
 
@@ -88,16 +92,19 @@ impl AppWindow {
         let this = self.clone();
         sidebar.btn_servers.connect_clicked(move |_| {
             this.show_sessions();
+            this.inner.sidebar.set_active("sessions");
         });
 
         let this = self.clone();
         sidebar.btn_keys.connect_clicked(move |_| {
             this.inner.stack.set_visible_child_name("ssh_keys");
+            this.inner.sidebar.set_active("ssh_keys");
         });
 
         let this = self.clone();
         sidebar.btn_settings.connect_clicked(move |_| {
             this.inner.stack.set_visible_child_name("settings");
+            this.inner.sidebar.set_active("settings");
         });
 
         let this = self.clone();
@@ -185,9 +192,7 @@ impl AppWindow {
         }
 
         sl.container.set_widget_name("server_list_tab");
-        let tab_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-        tab_box.append(&gtk4::Image::from_icon_name("view-grid-symbolic"));
-        tab_box.append(&gtk4::Label::new(Some("Connect")));
+        let tab_box = Self::create_static_tab_label("view-grid-symbolic", "Connect");
 
         if let Some(idx) = server_list_idx {
             self.inner.notebook.remove_page(Some(idx));
@@ -208,10 +213,8 @@ impl AppWindow {
     fn connect_to_server(&self, host: SshHost, password: Option<String>) {
         self.inner.stack.set_visible_child_name("sessions");
         let session_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        let toolbar = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-        toolbar.set_margin_top(4);
-        toolbar.set_margin_bottom(4);
-        toolbar.set_margin_start(6);
+        let toolbar = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
+        toolbar.add_css_class("session-toolbar");
 
         let explorer_btn = gtk4::Button::from_icon_name("folder-remote-symbolic");
         explorer_btn.add_css_class("flat");
@@ -285,12 +288,25 @@ impl AppWindow {
         } else {
             host.alias.clone()
         };
-        let tab_label_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-        let label = gtk4::Label::new(Some(&display_name));
-        let close_btn = gtk4::Button::from_icon_name("window-close-symbolic");
-        close_btn.add_css_class("flat");
-        tab_label_box.append(&label);
-        tab_label_box.append(&close_btn);
+
+        let notebook_close = self.inner.notebook.clone();
+        let win_close = self.inner.window.clone();
+        let sb_close = session_box.clone();
+        let tab_label_box =
+            Self::create_tab_label("utilities-terminal-symbolic", &display_name, move || {
+                let nb = notebook_close.clone();
+                let sb = sb_close.clone();
+                confirm_close(
+                    win_close.upcast_ref(),
+                    "Close Tab?",
+                    "Are you sure you want to close this session?",
+                    move || {
+                        if let Some(i) = nb.page_num(&sb) {
+                            nb.remove_page(Some(i));
+                        }
+                    },
+                );
+            });
 
         let mut insert_pos = self.inner.notebook.n_pages();
         for i in 0..self.inner.notebook.n_pages() {
@@ -306,24 +322,6 @@ impl AppWindow {
             .insert_page(&session_box, Some(&tab_label_box), Some(insert_pos));
         self.inner.notebook.set_tab_reorderable(&session_box, true);
         self.inner.notebook.set_current_page(Some(insert_pos));
-
-        let notebook = self.inner.notebook.clone();
-        let win = self.inner.window.clone();
-        let sb_close = session_box.clone();
-        close_btn.connect_clicked(move |_| {
-            let nb = notebook.clone();
-            let sb = sb_close.clone();
-            confirm_close(
-                win.upcast_ref(),
-                "Close Tab?",
-                "Are you sure you want to close this session?",
-                move || {
-                    if let Some(i) = nb.page_num(&sb) {
-                        nb.remove_page(Some(i));
-                    }
-                },
-            );
-        });
 
         let nb_exited = self.inner.notebook.clone();
         let sb_exited = session_box.clone();
@@ -429,25 +427,26 @@ impl AppWindow {
                 .container
                 .set_widget_name(&format!("explorer:{}", h_alias));
 
-            let display_name = format!("📁 {}", h_alias);
+            let display_name = h_alias.clone();
 
             let nb_inner = nb.clone();
             let ex_inner = explorer.container.clone();
             let win_inner = window.clone();
-            let tab_box = Self::create_tab_label(&display_name, move || {
-                let nb_confirm = nb_inner.clone();
-                let ex_confirm = ex_inner.clone();
-                confirm_close(
-                    win_inner.upcast_ref(),
-                    "Close Explorer?",
-                    "Are you sure you want to close this explorer tab?",
-                    move || {
-                        if let Some(i) = nb_confirm.page_num(&ex_confirm) {
-                            nb_confirm.remove_page(Some(i));
-                        }
-                    },
-                );
-            });
+            let tab_box =
+                Self::create_tab_label("folder-remote-symbolic", &display_name, move || {
+                    let nb_confirm = nb_inner.clone();
+                    let ex_confirm = ex_inner.clone();
+                    confirm_close(
+                        win_inner.upcast_ref(),
+                        "Close Explorer?",
+                        "Are you sure you want to close this explorer tab?",
+                        move || {
+                            if let Some(i) = nb_confirm.page_num(&ex_confirm) {
+                                nb_confirm.remove_page(Some(i));
+                            }
+                        },
+                    );
+                });
 
             let ins_pos = Self::get_insert_position(&nb);
             nb.insert_page(&explorer.container, Some(&tab_box), Some(ins_pos));
@@ -471,25 +470,29 @@ impl AppWindow {
                 .container
                 .set_widget_name(&format!("monitor:{}", h_alias));
 
-            let display_name = format!("📈 {}", h_alias);
+            let display_name = h_alias.clone();
 
             let nb_inner = nb.clone();
             let mo_inner = monitor.container.clone();
             let win_inner = window.clone();
-            let tab_box = Self::create_tab_label(&display_name, move || {
-                let nb_confirm = nb_inner.clone();
-                let mo_confirm = mo_inner.clone();
-                confirm_close(
-                    win_inner.upcast_ref(),
-                    "Close Monitor?",
-                    "Are you sure you want to close this monitoring tab?",
-                    move || {
-                        if let Some(i) = nb_confirm.page_num(&mo_confirm) {
-                            nb_confirm.remove_page(Some(i));
-                        }
-                    },
-                );
-            });
+            let tab_box = Self::create_tab_label(
+                "utilities-system-monitor-symbolic",
+                &display_name,
+                move || {
+                    let nb_confirm = nb_inner.clone();
+                    let mo_confirm = mo_inner.clone();
+                    confirm_close(
+                        win_inner.upcast_ref(),
+                        "Close Monitor?",
+                        "Are you sure you want to close this monitoring tab?",
+                        move || {
+                            if let Some(i) = nb_confirm.page_num(&mo_confirm) {
+                                nb_confirm.remove_page(Some(i));
+                            }
+                        },
+                    );
+                },
+            );
 
             let ins_pos = Self::get_insert_position(&nb);
             nb.insert_page(&monitor.container, Some(&tab_box), Some(ins_pos));
@@ -507,25 +510,20 @@ impl AppWindow {
         docker
             .container
             .set_widget_name(&format!("docker:{}", host.alias));
-        let label_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
-        label_box.append(&crate::ui::get_docker_icon());
-        label_box.append(&gtk4::Label::new(Some(&format!("🐳 {}", host.alias))));
-        let close_btn = gtk4::Button::from_icon_name("window-close-symbolic");
-        close_btn.add_css_class("flat");
-        label_box.append(&close_btn);
+        let label_box = Self::create_tab_label("docker", &host.alias, {
+            let nb_close = notebook.clone();
+            let child_close = docker.container.clone();
+            move || {
+                if let Some(i) = nb_close.page_num(&child_close) {
+                    nb_close.remove_page(Some(i));
+                }
+            }
+        });
 
         let ins_pos = Self::get_insert_position(notebook);
         notebook.insert_page(&docker.container, Some(&label_box), Some(ins_pos));
         notebook.set_tab_reorderable(&docker.container, true);
         notebook.set_current_page(Some(ins_pos));
-
-        let nb_close = notebook.clone();
-        let child_close = docker.container.clone();
-        close_btn.connect_clicked(move |_| {
-            if let Some(i) = nb_close.page_num(&child_close) {
-                nb_close.remove_page(Some(i));
-            }
-        });
     }
 
     fn delete_server(&self, host: SshHost) {
@@ -584,13 +582,61 @@ impl AppWindow {
         notebook.n_pages()
     }
 
-    fn create_tab_label(text: &str, on_close: impl Fn() + 'static) -> gtk4::Box {
-        let tab_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-        tab_box.append(&gtk4::Label::new(Some(text)));
-        let close_btn = gtk4::Button::from_icon_name("window-close-symbolic");
-        close_btn.add_css_class("flat");
-        close_btn.connect_clicked(move |_| on_close());
-        tab_box.append(&close_btn);
+    fn create_static_tab_label(icon: &str, text: &str) -> gtk4::Box {
+        Self::build_tab_label(icon, text, false, || {})
+    }
+
+    fn create_tab_label(icon: &str, text: &str, on_close: impl Fn() + 'static) -> gtk4::Box {
+        Self::build_tab_label(icon, text, true, on_close)
+    }
+
+    fn build_tab_label(
+        icon: &str,
+        text: &str,
+        closable: bool,
+        on_close: impl Fn() + 'static,
+    ) -> gtk4::Box {
+        let tab_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
+        tab_box.add_css_class("tab-label");
+        crate::ui::set_pointer_cursor(&tab_box);
+
+        if icon == "docker" {
+            let docker_icon = crate::ui::get_docker_icon();
+            docker_icon.set_pixel_size(11);
+            docker_icon.add_css_class("tab-icon");
+            tab_box.append(&docker_icon);
+        } else {
+            let icon_img = gtk4::Image::from_icon_name(icon);
+            icon_img.set_pixel_size(11);
+            icon_img.add_css_class("tab-icon");
+            tab_box.append(&icon_img);
+        }
+
+        let label = gtk4::Label::builder()
+            .label(text)
+            .halign(gtk4::Align::Start)
+            .hexpand(false)
+            .tooltip_text(text)
+            .build();
+        // No ellipsize — tab keeps natural width, notebook scrolls if needed.
+        label.add_css_class("tab-text");
+        tab_box.append(&label);
+
+        if closable {
+            let close_icon = gtk4::Image::from_icon_name("window-close-symbolic");
+            close_icon.set_pixel_size(14);
+            close_icon.add_css_class("tab-close-icon");
+            let close_btn = gtk4::Button::builder()
+                .child(&close_icon)
+                .tooltip_text("Close tab")
+                .valign(gtk4::Align::Center)
+                .build();
+            close_btn.add_css_class("flat");
+            close_btn.add_css_class("tab-close-btn");
+            close_btn.connect_clicked(move |_| on_close());
+            tab_box.append(&close_btn);
+        }
+
         tab_box
     }
 }
