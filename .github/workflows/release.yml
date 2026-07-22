@@ -110,26 +110,73 @@ jobs:
           name: binary-${{ matrix.suffix }}
           path: target/${{ matrix.target }}/release/rustmius-${{ matrix.suffix }}
 
+  deb:
+    name: Build .deb (Debian/Ubuntu)
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+
+      - name: Install packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libvte-2.91-gtk4-dev dpkg-dev imagemagick
+
+      - name: Download prebuilt generic binary
+        uses: actions/download-artifact@v8
+        with:
+          name: binary-x86_64
+          path: prebuilt
+
+      - name: Stage binary for packaging
+        run: |
+          mkdir -p target/release
+          install -m755 prebuilt/rustmius-x86_64 target/release/rustmius
+
+      - name: Build .deb package
+        env:
+          SKIP_BUILD: "1"
+        run: ./packages/deb/build-deb.sh
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: deb
+          path: dist/*.deb
+
   release:
     name: Create Release
-    needs: [prepare, build]
+    needs: [prepare, build, deb]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download Artifacts
+      - name: Download binary artifacts
         uses: actions/download-artifact@v8
         with:
           path: artifacts
           pattern: binary-*
           merge-multiple: true
 
+      - name: Download .deb artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: deb
+          path: artifacts
+
       - name: Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare.outputs.new_version }}
           target_commitish: ${{ needs.prepare.outputs.sha }}
-          files: artifacts/rustmius-*
+          files: |
+            artifacts/rustmius-*
+            artifacts/*.deb
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

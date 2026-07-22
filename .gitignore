@@ -1,2 +1,10 @@
 /target
 .idea/
+
+# Packaging build artifacts
+/dist
+packages/**/pkg/
+packages/**/src/
+packages/**/*.tar.gz
+packages/**/*.tar.zst
+packages/**/*.pkg.tar.*
