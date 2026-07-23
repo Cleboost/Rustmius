@@ -419,8 +419,8 @@ impl DockerManager {
         glib::MainContext::default().spawn_local(async move {
             let result = get_docker_stats(&host, password.as_deref()).await;
 
-            if let Ok(parts) = result {
-                if parts.len() >= 4
+            if let Ok(parts) = result
+                && parts.len() >= 4
                     && let Some(dashboard) = stack.child_by_name("dashboard") {
                         Self::update_stat(&dashboard, "stat_value_containers", &parts[0]);
                         Self::update_stat(&dashboard, "stat_value_images", &parts[1]);
@@ -431,7 +431,6 @@ impl DockerManager {
                             stack.set_visible_child_name("dashboard");
                         }
                     }
-            }
         });
     }
 
