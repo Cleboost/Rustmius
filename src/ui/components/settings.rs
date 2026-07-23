@@ -110,17 +110,18 @@ impl Settings {
         let c_switch = confirm_switch.clone();
 
         let save_config = move || {
-            let mut new_config = AppConfig::default();
-            new_config.monitor_refresh_rate = r_drop.selected();
-            new_config.terminal_font = f_btn
-                .font_desc()
-                .map(|fd| fd.to_string())
-                .unwrap_or_else(|| "Monospace 11".to_string());
-            new_config.terminal_scrollback = s_spin.value() as u32;
-            new_config.terminal_theme = crate::ui::theme::theme_at(t_drop.selected() as usize)
-                .name
-                .to_string();
-            new_config.confirm_tab_close = c_switch.is_active();
+            let new_config = AppConfig {
+                monitor_refresh_rate: r_drop.selected(),
+                terminal_font: f_btn
+                    .font_desc()
+                    .map(|fd| fd.to_string())
+                    .unwrap_or_else(|| "Monospace 11".to_string()),
+                terminal_scrollback: s_spin.value() as u32,
+                terminal_theme: crate::ui::theme::theme_at(t_drop.selected() as usize)
+                    .name
+                    .to_string(),
+                confirm_tab_close: c_switch.is_active(),
+            };
             let _ = crate::config_observer::save_app_config(&new_config);
         };
 

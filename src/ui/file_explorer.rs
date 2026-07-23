@@ -257,7 +257,10 @@ impl FileExplorer {
                     let sli = sl.clone();
                     let p = format!("{}{}", cur, n);
                     glib::MainContext::default().spawn_local(async move {
-                        if let Ok(_) = create_dir(&sli.host, sli.password.as_deref(), &p).await {
+                        if create_dir(&sli.host, sli.password.as_deref(), &p)
+                            .await
+                            .is_ok()
+                        {
                             sli.refresh();
                         }
                     });
@@ -416,13 +419,15 @@ impl ExplorerHandle {
                 h.status_label.set_text(&format!("Preparing {}...", f.name));
                 let rt_blocking = rt.clone();
                 rt.spawn_blocking(move || {
-                    if let Ok(_) = crate::engines::sftp::download_file_sync(
+                    if crate::engines::sftp::download_file_sync(
                         rt_blocking,
                         host,
                         password,
                         rp,
                         lp_part.clone(),
-                    ) {
+                    )
+                    .is_ok()
+                    {
                         let _ = std::fs::rename(lp_part, lp_final);
                     }
                 });

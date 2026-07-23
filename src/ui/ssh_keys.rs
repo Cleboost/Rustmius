@@ -5,6 +5,8 @@ use gtk4::{gio, glib};
 use std::cell::RefCell;
 use std::rc::Rc;
 
+type RefreshUiCallback = Rc<RefCell<Option<Rc<dyn Fn()>>>>;
+
 fn is_valid_key_name(name: &str) -> bool {
     if name.is_empty() || name.contains('\0') {
         return false;
@@ -80,7 +82,7 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
     let list_box_rc = Rc::new(list_box);
     let window_rc = window.clone();
 
-    let refresh_ui: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::new(RefCell::new(None));
+    let refresh_ui: RefreshUiCallback = Rc::new(RefCell::new(None));
 
     let do_refresh = {
         let lb = list_box_rc.clone();
