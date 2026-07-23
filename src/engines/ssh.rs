@@ -88,11 +88,12 @@ pub async fn establish_ssh_session(
         tracing::trace!("Attempting TCP connection to {}", addr);
         if let Ok(stream) =
             tokio::time::timeout(Duration::from_secs(5), TcpStream::connect(&addr)).await
-            && let Ok(stream) = stream {
-                tracing::trace!("TCP connection established to {}", addr);
-                tcp_opt = Some(stream);
-                break;
-            }
+            && let Ok(stream) = stream
+        {
+            tracing::trace!("TCP connection established to {}", addr);
+            tcp_opt = Some(stream);
+            break;
+        }
     }
 
     let tcp = tcp_opt.ok_or_else(|| anyhow::anyhow!("Connection timeout to {}", host.hostname))?;

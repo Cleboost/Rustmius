@@ -404,9 +404,10 @@ impl AppWindow {
         let target = format!("{}:{}", prefix, alias);
         for i in 0..notebook.n_pages() {
             if let Some(p) = notebook.nth_page(Some(i))
-                && p.widget_name() == target {
-                    return Some(i);
-                }
+                && p.widget_name() == target
+            {
+                return Some(i);
+            }
         }
         None
     }
@@ -681,8 +682,9 @@ fn show_close_confirmation(
     dialog.choose(Some(parent), None::<&gio::Cancellable>, move |res| {
         if let Ok(idx) = res
             && idx == 1
-                && let Some(callback) = on_confirm.borrow_mut().take() {
-                    callback();
-                }
+            && let Some(callback) = on_confirm.borrow_mut().take()
+        {
+            callback();
+        }
     });
 }

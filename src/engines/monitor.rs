@@ -60,10 +60,9 @@ pub async fn fetch_system_metrics(
             "---CPU_CORES---" => metrics.cpu_cores = line.to_string(),
             "---ARCH---" => metrics.arch = line.to_string(),
             "---HOSTNAME---" => metrics.hostname = line.to_string(),
-            "---IPS---"
-                if !line.is_empty() => {
-                    metrics.ips.push(line.to_string());
-                }
+            "---IPS---" if !line.is_empty() => {
+                metrics.ips.push(line.to_string());
+            }
             "---RAM---" => {
                 let parts: Vec<&str> = line.split(" / ").collect();
                 if parts.len() == 2 {
