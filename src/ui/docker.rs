@@ -61,21 +61,21 @@ impl DockerManager {
         self.stack.connect_visible_child_notify(move |s| {
             if let Some(name) = s.visible_child_name()
                 && (name == "containers" || name == "images")
-                    && let Some(view) = s.visible_child()
-                        && let Some(box_) = view.downcast_ref::<gtk4::Box>()
-                            && let Some(header) = box_.first_child() {
-                                let mut next = header.first_child();
-                                while let Some(child) = next {
-                                    if let Some(btn) = child.downcast_ref::<gtk4::Button>()
-                                        && btn.icon_name()
-                                            == Some(glib::GString::from("view-refresh-symbolic"))
-                                        {
-                                            btn.emit_clicked();
-                                            break;
-                                        }
-                                    next = child.next_sibling();
-                                }
-                            }
+                && let Some(view) = s.visible_child()
+                && let Some(box_) = view.downcast_ref::<gtk4::Box>()
+                && let Some(header) = box_.first_child()
+            {
+                let mut next = header.first_child();
+                while let Some(child) = next {
+                    if let Some(btn) = child.downcast_ref::<gtk4::Button>()
+                        && btn.icon_name() == Some(glib::GString::from("view-refresh-symbolic"))
+                    {
+                        btn.emit_clicked();
+                        break;
+                    }
+                    next = child.next_sibling();
+                }
+            }
         });
 
         // Start on dashboard and refresh
@@ -421,24 +421,26 @@ impl DockerManager {
 
             if let Ok(parts) = result
                 && parts.len() >= 4
-                    && let Some(dashboard) = stack.child_by_name("dashboard") {
-                        Self::update_stat(&dashboard, "stat_value_containers", &parts[0]);
-                        Self::update_stat(&dashboard, "stat_value_images", &parts[1]);
-                        Self::update_stat(&dashboard, "stat_value_running", &parts[2]);
-                        Self::update_stat(&dashboard, "stat_value_paused", &parts[3]);
+                && let Some(dashboard) = stack.child_by_name("dashboard")
+            {
+                Self::update_stat(&dashboard, "stat_value_containers", &parts[0]);
+                Self::update_stat(&dashboard, "stat_value_images", &parts[1]);
+                Self::update_stat(&dashboard, "stat_value_running", &parts[2]);
+                Self::update_stat(&dashboard, "stat_value_paused", &parts[3]);
 
-                        if stack.visible_child_name() == Some(glib::GString::from("loading")) {
-                            stack.set_visible_child_name("dashboard");
-                        }
-                    }
+                if stack.visible_child_name() == Some(glib::GString::from("loading")) {
+                    stack.set_visible_child_name("dashboard");
+                }
+            }
         });
     }
 
     fn update_stat(root: &gtk4::Widget, name: &str, value: &str) {
         if let Some(label) = Self::find_child_by_name(root, name)
-            && let Some(label) = label.downcast_ref::<gtk4::Label>() {
-                label.set_text(value);
-            }
+            && let Some(label) = label.downcast_ref::<gtk4::Label>()
+        {
+            label.set_text(value);
+        }
     }
 
     fn find_child_by_name(widget: &gtk4::Widget, name: &str) -> Option<gtk4::Widget> {

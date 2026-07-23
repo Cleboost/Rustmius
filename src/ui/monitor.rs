@@ -223,23 +223,24 @@ impl SystemMonitor {
                 let result = fetch_system_metrics(&h_clone, p_clone.as_deref()).await;
 
                 if let Ok(m) = result
-                    && let Ok(mut st) = s_clone.try_borrow_mut() {
-                        st.os = m.os;
-                        st.kernel = m.kernel;
-                        st.uptime = m.uptime;
-                        st.cpu_model = m.cpu_model;
-                        st.cpu_cores = m.cpu_cores;
-                        st.arch = m.arch;
-                        st.hostname = m.hostname;
-                        st.ips = m.ips.join("\n");
-                        st.ram_used = m.ram_used;
-                        st.ram_total = m.ram_total;
-                        st.target_ram = m.ram_percent;
-                        st.target_disk = m.disk_percent;
-                        st.disk_used = m.disk_used;
-                        st.disk_total = m.disk_total;
-                        st.target_cpu = m.cpu_percent;
-                    }
+                    && let Ok(mut st) = s_clone.try_borrow_mut()
+                {
+                    st.os = m.os;
+                    st.kernel = m.kernel;
+                    st.uptime = m.uptime;
+                    st.cpu_model = m.cpu_model;
+                    st.cpu_cores = m.cpu_cores;
+                    st.arch = m.arch;
+                    st.hostname = m.hostname;
+                    st.ips = m.ips.join("\n");
+                    st.ram_used = m.ram_used;
+                    st.ram_total = m.ram_total;
+                    st.target_ram = m.ram_percent;
+                    st.target_disk = m.disk_percent;
+                    st.disk_used = m.disk_used;
+                    st.disk_total = m.disk_total;
+                    st.target_cpu = m.cpu_percent;
+                }
 
                 if let Ok(st) = s_clone.try_borrow() {
                     host_l.set_label(&st.hostname);

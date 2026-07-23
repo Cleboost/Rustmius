@@ -772,8 +772,9 @@ where
 
     dialog.choose(parent, None::<&gio::Cancellable>, move |res| {
         if let Ok(idx) = res
-            && idx == 1 {
-                on_confirm();
-            }
+            && idx == 1
+        {
+            on_confirm();
+        }
     });
 }
