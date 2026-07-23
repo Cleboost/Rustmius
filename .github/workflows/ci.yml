@@ -59,7 +59,7 @@ jobs:
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
-          commit_message: "style: apply rustfmt [skip ci]"
+          commit_message: "style: apply rustfmt"
 
   clippy:
     name: Clippy
