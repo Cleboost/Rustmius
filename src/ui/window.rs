@@ -403,11 +403,10 @@ impl AppWindow {
     fn find_existing_tab(notebook: &gtk4::Notebook, prefix: &str, alias: &str) -> Option<u32> {
         let target = format!("{}:{}", prefix, alias);
         for i in 0..notebook.n_pages() {
-            if let Some(p) = notebook.nth_page(Some(i)) {
-                if p.widget_name() == target {
+            if let Some(p) = notebook.nth_page(Some(i))
+                && p.widget_name() == target {
                     return Some(i);
                 }
-            }
         }
         None
     }
@@ -680,12 +679,10 @@ fn show_close_confirmation(
 
     let on_confirm = RefCell::new(Some(on_confirm));
     dialog.choose(Some(parent), None::<&gio::Cancellable>, move |res| {
-        if let Ok(idx) = res {
-            if idx == 1 {
-                if let Some(callback) = on_confirm.borrow_mut().take() {
+        if let Ok(idx) = res
+            && idx == 1
+                && let Some(callback) = on_confirm.borrow_mut().take() {
                     callback();
                 }
-            }
-        }
     });
 }

@@ -145,8 +145,8 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
                         let w_del = w_clone.clone();
 
                         dialog.choose(Some(&w_clone), None::<&gio::Cancellable>, move |res| {
-                            if let Ok(idx) = res {
-                                if idx == 1 {
+                            if let Ok(idx) = res
+                                && idx == 1 {
                                     if let Err(e) = std::fs::remove_file(&p2) {
                                         show_error_alert(Some(w_del.upcast_ref::<gtk4::Window>()), "Failed to Delete Key", &format!("Could not delete private key: {}", e));
                                         return;
@@ -158,7 +158,6 @@ pub fn build_ssh_keys_ui(window: &gtk4::ApplicationWindow) -> gtk4::Box {
                                     if let Some(rc) = h.upgrade()
                                         && let Some(r) = rc.borrow().as_ref() { r(); }
                                 }
-                            }
                         });
                     });
 

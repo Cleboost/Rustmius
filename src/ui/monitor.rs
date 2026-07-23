@@ -222,8 +222,8 @@ impl SystemMonitor {
 
                 let result = fetch_system_metrics(&h_clone, p_clone.as_deref()).await;
 
-                if let Ok(m) = result {
-                    if let Ok(mut st) = s_clone.try_borrow_mut() {
+                if let Ok(m) = result
+                    && let Ok(mut st) = s_clone.try_borrow_mut() {
                         st.os = m.os;
                         st.kernel = m.kernel;
                         st.uptime = m.uptime;
@@ -240,7 +240,6 @@ impl SystemMonitor {
                         st.disk_total = m.disk_total;
                         st.target_cpu = m.cpu_percent;
                     }
-                }
 
                 if let Ok(st) = s_clone.try_borrow() {
                     host_l.set_label(&st.hostname);
@@ -321,7 +320,7 @@ impl SystemMonitor {
 
         cr.set_source_rgba(0.5, 0.5, 0.5, 0.1);
         cr.set_line_width(thickness);
-        let _ = cr.arc(center_x, center_y, radius, 0.0, 2.0 * std::f64::consts::PI);
+        cr.arc(center_x, center_y, radius, 0.0, 2.0 * std::f64::consts::PI);
         let _ = cr.stroke();
 
         let angle = percent * 2.0 * std::f64::consts::PI;
@@ -334,7 +333,7 @@ impl SystemMonitor {
 
         cr.set_line_width(thickness);
         cr.set_line_cap(gtk4::cairo::LineCap::Round);
-        let _ = cr.arc(
+        cr.arc(
             center_x,
             center_y,
             radius,
