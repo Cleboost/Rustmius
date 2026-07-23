@@ -64,6 +64,8 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -81,6 +83,14 @@ jobs:
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
+
+      - name: Auto-fix clippy
+        run: cargo clippy --fix --allow-dirty -- -D warnings
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: "fix: apply clippy suggestions"
 
       - name: Clippy
         run: cargo clippy -- -D warnings
