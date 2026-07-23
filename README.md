@@ -33,6 +33,13 @@ The easiest way on Arch Linux is to use the `-bin` package (pre-compiled and opt
 yay -S rustmius-bin
 ```
 
+### Debian / Ubuntu (.deb)
+Download the `.deb` from the [Releases](https://github.com/Cleboost/Rustmius/releases) page and install it (this pulls in the required GTK4/VTE libraries automatically):
+```bash
+sudo apt install ./rustmius_<version>_amd64.deb
+```
+> Built against GTK4 ≥ 4.12, so it targets Ubuntu 24.04+ and Debian 13+. On older releases, build from source instead. You can also build the package yourself with `packages/deb/build-deb.sh`.
+
 ### Other Distributions (Binaries)
 Download the binary matching your hardware from the [Releases](https://github.com/Cleboost/Rustmius/releases) page:
 - `rustmius-x86_64`: For standard 64-bit Linux PCs.
