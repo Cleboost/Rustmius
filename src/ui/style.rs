@@ -1,5 +1,101 @@
 use gtk4::CssProvider;
 use gtk4::gdk;
+use gtk4::gio;
+use gtk4::gio::prelude::*;
+
+const PORTAL_BUS_NAME: &str = "org.freedesktop.portal.Desktop";
+const PORTAL_OBJECT_PATH: &str = "/org/freedesktop/portal/desktop";
+const PORTAL_SETTINGS_IFACE: &str = "org.freedesktop.portal.Settings";
+const APPEARANCE_NAMESPACE: &str = "org.freedesktop.appearance";
+const COLOR_SCHEME_KEY: &str = "color-scheme";
+
+/// Peels away GVariant `v` (variant) wrapper layers until a non-variant value
+/// is reached. Some portal backends (notably xdg-desktop-portal-gnome) wrap
+/// the `Read`/`SettingChanged` payload in an extra variant layer on top of
+/// the `v` already mandated by the portal spec, so a single unwrap isn't
+/// always enough.
+fn unwrap_variant(mut value: gtk4::glib::Variant) -> gtk4::glib::Variant {
+    while let Some(inner) = value.as_variant() {
+        value = inner;
+    }
+    value
+}
+
+/// Maps the portal's `color-scheme` value (0 = no preference, 1 = prefer
+/// dark, 2 = prefer light) to a `prefer-dark-theme` bool, if it expresses one.
+fn color_scheme_prefers_dark(value: u32) -> Option<bool> {
+    match value {
+        1 => Some(true),
+        2 => Some(false),
+        _ => None,
+    }
+}
+
+fn apply_color_scheme(value: u32) {
+    tracing::debug!(value, "portal color-scheme received");
+    match color_scheme_prefers_dark(value) {
+        Some(prefer_dark) => match gtk4::Settings::default() {
+            Some(settings) => {
+                settings.set_gtk_application_prefer_dark_theme(prefer_dark);
+                tracing::debug!(
+                    prefer_dark,
+                    now = settings.is_gtk_application_prefer_dark_theme(),
+                    "applied gtk-application-prefer-dark-theme"
+                );
+            }
+            None => tracing::warn!("no default GtkSettings available (no display?)"),
+        },
+        None => tracing::debug!(value, "color-scheme value expresses no preference"),
+    }
+}
+
+/// Syncs the app's light/dark mode with the desktop's system-wide preference
+/// via the XDG Desktop Portal, since plain GTK4 (without libadwaita) does not
+/// do this on its own. Keeps following live changes for the rest of the run.
+pub fn init_theme_sync() {
+    let proxy = match gio::DBusProxy::for_bus_sync(
+        gio::BusType::Session,
+        gio::DBusProxyFlags::NONE,
+        None,
+        PORTAL_BUS_NAME,
+        PORTAL_OBJECT_PATH,
+        PORTAL_SETTINGS_IFACE,
+        gio::Cancellable::NONE,
+    ) {
+        Ok(proxy) => proxy,
+        Err(err) => {
+            tracing::warn!(%err, "could not connect to xdg-desktop-portal Settings interface");
+            return;
+        }
+    };
+
+    match proxy.call_sync(
+        "Read",
+        Some(&(APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY).to_variant()),
+        gio::DBusCallFlags::NONE,
+        1000,
+        gio::Cancellable::NONE,
+    ) {
+        Ok(reply) => match unwrap_variant(reply.child_value(0)).get::<u32>() {
+            Some(value) => apply_color_scheme(value),
+            None => tracing::warn!(reply = %reply, "unexpected reply shape from portal Read"),
+        },
+        Err(err) => tracing::warn!(%err, "portal Settings.Read call failed"),
+    }
+
+    proxy.connect_g_signal(move |_proxy, _sender, signal, params| {
+        if signal != "SettingChanged" {
+            return;
+        }
+        if let Some((namespace, key, value)) = params.get::<(String, String, gtk4::glib::Variant)>()
+            && namespace == APPEARANCE_NAMESPACE
+            && key == COLOR_SCHEME_KEY
+            && let Some(value) = unwrap_variant(value).get::<u32>()
+        {
+            apply_color_scheme(value);
+        }
+    });
+}
 
 pub fn init_style() {
     let provider = CssProvider::new();
