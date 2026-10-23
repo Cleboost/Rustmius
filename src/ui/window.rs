@@ -8,7 +8,7 @@ use crate::ui::file_explorer::FileExplorer;
 use crate::ui::monitor::SystemMonitor;
 use crate::ui::server_list::{ServerAction, ServerList};
 use crate::ui::ssh_keys::build_ssh_keys_ui;
-use crate::ui::style::init_style;
+use crate::ui::style::{init_style, init_theme_sync};
 use gtk4::prelude::*;
 use gtk4::{gdk, gio, glib};
 use std::cell::RefCell;
@@ -29,6 +29,7 @@ struct AppWindowInner {
 
 impl AppWindow {
     pub fn new(app: &gtk4::Application) -> Self {
+        init_theme_sync();
         init_style();
         let window = gtk4::ApplicationWindow::builder()
             .application(app)

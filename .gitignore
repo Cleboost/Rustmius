@@ -8,3 +8,5 @@ packages/**/src/
 packages/**/*.tar.gz
 packages/**/*.tar.zst
 packages/**/*.pkg.tar.*
+packages/**/*.rpm
+rpmbuild/
