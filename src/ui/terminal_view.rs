@@ -1,0 +1,238 @@
+use crate::core::ssh::SshCommand;
+use crate::core::terminal::TerminalState;
+use crate::ui::theme;
+use alacritty_terminal::term::cell::Flags;
+use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor};
+use egui::{Color32, Event, FontId, Key, Pos2, Rect, Sense, Ui, Vec2};
+use tokio::sync::mpsc::UnboundedSender;
+
+fn ansi_to_color32(color: AnsiColor, is_fg: bool) -> Color32 {
+    match color {
+        AnsiColor::Spec(rgb) => Color32::from_rgb(rgb.r, rgb.g, rgb.b),
+        AnsiColor::Named(named) => match named {
+            NamedColor::Black => Color32::from_rgb(0x14, 0x17, 0x1F),
+            NamedColor::Red => Color32::from_rgb(0xEF, 0x44, 0x44),
+            NamedColor::Green => Color32::from_rgb(0x00, 0xC4, 0x8C),
+            NamedColor::Yellow => Color32::from_rgb(0xF5, 0x9E, 0x0B),
+            NamedColor::Blue => Color32::from_rgb(0x3B, 0x82, 0xF6),
+            NamedColor::Magenta => Color32::from_rgb(0xA8, 0x55, 0xF7),
+            NamedColor::Cyan => Color32::from_rgb(0x06, 0xB6, 0xD4),
+            NamedColor::White => Color32::from_rgb(0xE6, 0xEA, 0xF2),
+            NamedColor::BrightBlack => Color32::from_rgb(0x64, 0x74, 0x8B),
+            NamedColor::BrightRed => Color32::from_rgb(0xF8, 0x71, 0x71),
+            NamedColor::BrightGreen => Color32::from_rgb(0x34, 0xD3, 0x99),
+            NamedColor::BrightYellow => Color32::from_rgb(0xFB, 0xBF, 0x24),
+            NamedColor::BrightBlue => Color32::from_rgb(0x60, 0xA5, 0xFA),
+            NamedColor::BrightMagenta => Color32::from_rgb(0xC0, 0x84, 0xFC),
+            NamedColor::BrightCyan => Color32::from_rgb(0x22, 0xD3, 0xEE),
+            NamedColor::BrightWhite => Color32::WHITE,
+            NamedColor::Foreground => theme::TERM_FG,
+            NamedColor::Background => theme::TERM_BG,
+            _ => {
+                if is_fg {
+                    theme::TERM_FG
+                } else {
+                    theme::TERM_BG
+                }
+            }
+        },
+        AnsiColor::Indexed(idx) => {
+            if idx < 16 {
+                let named = match idx {
+                    0 => NamedColor::Black,
+                    1 => NamedColor::Red,
+                    2 => NamedColor::Green,
+                    3 => NamedColor::Yellow,
+                    4 => NamedColor::Blue,
+                    5 => NamedColor::Magenta,
+                    6 => NamedColor::Cyan,
+                    7 => NamedColor::White,
+                    8 => NamedColor::BrightBlack,
+                    9 => NamedColor::BrightRed,
+                    10 => NamedColor::BrightGreen,
+                    11 => NamedColor::BrightYellow,
+                    12 => NamedColor::BrightBlue,
+                    13 => NamedColor::BrightMagenta,
+                    14 => NamedColor::BrightCyan,
+                    _ => NamedColor::BrightWhite,
+                };
+                ansi_to_color32(AnsiColor::Named(named), is_fg)
+            } else if idx < 232 {
+                let i = idx - 16;
+                let r = (i / 36) * 51;
+                let g = ((i % 36) / 6) * 51;
+                let b = (i % 6) * 51;
+                Color32::from_rgb(r, g, b)
+            } else {
+                let gray = 8 + (idx - 232) * 10;
+                Color32::from_rgb(gray, gray, gray)
+            }
+        }
+    }
+}
+
+pub fn render_terminal(
+    ui: &mut Ui,
+    terminal: &mut TerminalState,
+    cmd_tx: &UnboundedSender<SshCommand>,
+) {
+    let font_id = FontId::monospace(14.0);
+    let (cell_w, cell_h) = ui.fonts(|f| {
+        let w = f.glyph_width(&font_id, 'W');
+        let h = f.row_height(&font_id);
+        (w.max(6.0), h.max(12.0))
+    });
+
+    const PAD: f32 = 12.0;
+    let avail = ui.available_size();
+    let inner_w = (avail.x - PAD * 2.0).max(cell_w * 10.0);
+    let inner_h = (avail.y - PAD * 2.0).max(cell_h * 4.0);
+    let cols = ((inner_w / cell_w).floor() as usize).max(10);
+    let rows = ((inner_h / cell_h).floor() as usize).max(4);
+
+    if terminal.resize(cols, rows) {
+        let _ = cmd_tx.send(SshCommand::Resize {
+            cols: cols as u32,
+            rows: rows as u32,
+        });
+    }
+
+    let (rect, response) = ui.allocate_exact_size(avail, Sense::click_and_drag());
+    if response.clicked() {
+        response.request_focus();
+    }
+
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, 0.0, theme::TERM_BG);
+
+    let origin = Pos2::new(rect.min.x + PAD, rect.min.y + PAD);
+
+    // Rendu des cellules
+    let content = terminal.term().renderable_content();
+    let display_offset = content.display_offset as i32;
+    let cursor_point = content.cursor.point;
+
+    for indexed in content.display_iter {
+        let row_idx = indexed.point.line.0 + display_offset;
+        if row_idx < 0 || row_idx >= rows as i32 {
+            continue;
+        }
+        let col_idx = indexed.point.column.0;
+        if col_idx >= cols {
+            continue;
+        }
+
+        let x = origin.x + col_idx as f32 * cell_w;
+        let y = origin.y + row_idx as f32 * cell_h;
+        let cell_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(cell_w, cell_h));
+
+        let mut fg = ansi_to_color32(indexed.fg, true);
+        let mut bg = ansi_to_color32(indexed.bg, false);
+        if indexed.flags.contains(Flags::INVERSE) {
+            std::mem::swap(&mut fg, &mut bg);
+        }
+
+        if bg != theme::TERM_BG {
+            painter.rect_filled(cell_rect, 0.0, bg);
+        }
+
+        if indexed.c != ' ' && indexed.c != '\0' {
+            let mut buf = [0u8; 4];
+            let s = indexed.c.encode_utf8(&mut buf);
+            painter.text(
+                Pos2::new(x, y),
+                egui::Align2::LEFT_TOP,
+                s,
+                font_id.clone(),
+                fg,
+            );
+        }
+    }
+
+    // Curseur
+    let cur_row = cursor_point.line.0 + display_offset;
+    if cur_row >= 0 && cur_row < rows as i32 && cursor_point.column.0 < cols {
+        let cx = origin.x + cursor_point.column.0 as f32 * cell_w;
+        let cy = origin.y + cur_row as f32 * cell_h;
+        let cur_rect = Rect::from_min_size(Pos2::new(cx, cy), Vec2::new(cell_w, cell_h));
+        painter.rect_filled(cur_rect, 0.0, theme::ACCENT_GREEN.linear_multiply(0.55));
+    }
+
+    // Gestion clavier & scroll
+    if response.has_focus() {
+        let events = ui.input(|i| i.events.clone());
+        for ev in events {
+            match ev {
+                Event::Text(text) => {
+                    let _ = cmd_tx.send(SshCommand::Data(text.into_bytes()));
+                }
+                Event::Key {
+                    key,
+                    pressed: true,
+                    modifiers,
+                    ..
+                } => {
+                    if modifiers.ctrl {
+                        if let Some(byte) = ctrl_key_byte(key) {
+                            let _ = cmd_tx.send(SshCommand::Data(vec![byte]));
+                            continue;
+                        }
+                    }
+                    if let Some(seq) = special_key_bytes(key) {
+                        let _ = cmd_tx.send(SshCommand::Data(seq.to_vec()));
+                    }
+                }
+                Event::MouseWheel { delta, .. } => {
+                    let lines = (delta.y / 20.0).round() as i32;
+                    if lines != 0 {
+                        terminal.scroll_display(lines);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+fn ctrl_key_byte(key: Key) -> Option<u8> {
+    let b = match key {
+        Key::A => 0x01,
+        Key::B => 0x02,
+        Key::C => 0x03,
+        Key::D => 0x04,
+        Key::E => 0x05,
+        Key::F => 0x06,
+        Key::G => 0x07,
+        Key::H => 0x08,
+        Key::K => 0x0B,
+        Key::L => 0x0C,
+        Key::N => 0x0E,
+        Key::P => 0x10,
+        Key::R => 0x12,
+        Key::U => 0x15,
+        Key::W => 0x17,
+        Key::Z => 0x1A,
+        _ => return None,
+    };
+    Some(b)
+}
+
+fn special_key_bytes(key: Key) -> Option<&'static [u8]> {
+    let seq: &'static [u8] = match key {
+        Key::Enter => b"\r",
+        Key::Backspace => b"\x7f",
+        Key::Tab => b"\t",
+        Key::Escape => b"\x1b",
+        Key::ArrowUp => b"\x1b[A",
+        Key::ArrowDown => b"\x1b[B",
+        Key::ArrowRight => b"\x1b[C",
+        Key::ArrowLeft => b"\x1b[D",
+        Key::Home => b"\x1b[H",
+        Key::End => b"\x1b[F",
+        Key::PageUp => b"\x1b[5~",
+        Key::PageDown => b"\x1b[6~",
+        Key::Delete => b"\x1b[3~",
+        _ => return None,
+    };
+    Some(seq)
+}

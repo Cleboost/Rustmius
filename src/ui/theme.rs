@@ -1,159 +1,157 @@
-use gtk4::gdk::RGBA;
-use std::str::FromStr;
-use vte4::prelude::*;
+//! Termius design tokens.
+//!
+//! All metrics are logical pixels measured from a 1920×1028 Termius reference
+//! capture (Linux, light "Vaults" view).
 
-/// A terminal color scheme: default foreground/background/cursor colors plus the
-/// 16-entry ANSI palette (8 normal + 8 bright).
-pub struct TerminalTheme {
-    pub name: &'static str,
-    pub foreground: &'static str,
-    pub background: &'static str,
-    pub cursor: &'static str,
-    pub palette: [&'static str; 16],
+use egui::{Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Stroke, Style, Visuals};
+
+// ---------------------------------------------------------------- layout ---
+pub const TITLEBAR_H: f32 = 48.0;
+pub const SIDEBAR_W: f32 = 184.0;
+pub const HEADER_H: f32 = 106.0;
+
+// ------------------------------------------------------------ title bar ---
+pub const TOPBAR_LEFT: Color32 = Color32::from_rgb(0x24, 0x2A, 0x38);
+pub const TOPBAR_MID: Color32 = Color32::from_rgb(0x2E, 0x37, 0x43);
+pub const TOPBAR_RIGHT: Color32 = Color32::from_rgb(0x2A, 0x30, 0x3E);
+pub const TOPBAR_TAB_ACTIVE: Color32 = Color32::from_rgb(0x3E, 0x43, 0x4F);
+pub const TOPBAR_TAB_INACTIVE: Color32 = Color32::from_rgb(0x2F, 0x33, 0x3E);
+pub const TOPBAR_TAB_HOVER: Color32 = Color32::from_rgb(0x37, 0x3C, 0x48);
+pub const TOPBAR_TEXT: Color32 = Color32::from_rgb(0xE8, 0xEA, 0xF0);
+pub const TOPBAR_MUTED: Color32 = Color32::from_rgb(0x96, 0x9A, 0xA5);
+pub const TOPBAR_ICON: Color32 = Color32::from_rgb(0x9A, 0xA0, 0xAC);
+pub const WINDOW_CLOSE_HOVER: Color32 = Color32::from_rgb(0xE8, 0x11, 0x23);
+
+// ------------------------------------------------------------ workspace ---
+pub const BG_BASE: Color32 = Color32::from_rgb(0xD5, 0xDA, 0xDB);
+/// Translucent black overlays (premultiplied).
+pub const fn shade(alpha: u8) -> Color32 {
+    Color32::from_rgba_premultiplied(0, 0, 0, alpha)
+}
+/// Translucent white overlays (premultiplied).
+pub const fn light(alpha: u8) -> Color32 {
+    Color32::from_rgba_premultiplied(alpha, alpha, alpha, alpha)
+}
+pub const SEPARATOR: Color32 = shade(16);
+
+pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(0x1B, 0x21, 0x29);
+pub const TEXT_SIDEBAR: Color32 = Color32::from_rgb(0x24, 0x29, 0x2E);
+pub const TEXT_MUTED: Color32 = Color32::from_rgb(0x66, 0x72, 0x7A);
+pub const TEXT_PLACEHOLDER: Color32 = Color32::from_rgb(0x7D, 0x87, 0x8A);
+pub const TEXT_DISABLED: Color32 = Color32::from_rgb(0x7C, 0x87, 0x89);
+pub const ICON_DARK: Color32 = Color32::from_rgb(0x1D, 0x25, 0x2F);
+pub const ICON_MUTED: Color32 = Color32::from_rgb(0x98, 0xA0, 0xA6);
+
+pub const ACCENT_BLUE: Color32 = Color32::from_rgb(0x24, 0x96, 0xEE);
+pub const ACCENT_BLUE_TOP: Color32 = Color32::from_rgb(0x2A, 0x9C, 0xF1);
+pub const ACCENT_BLUE_BOTTOM: Color32 = Color32::from_rgb(0x1E, 0x8A, 0xE5);
+pub const FOCUS_RING: Color32 = Color32::from_rgb(0x3D, 0x8F, 0xE0);
+pub const ACCENT_GREEN: Color32 = Color32::from_rgb(0x00, 0xC4, 0x8C);
+pub const ACCENT_ORANGE: Color32 = Color32::from_rgb(0xF2, 0x99, 0x4A);
+pub const DANGER: Color32 = Color32::from_rgb(0xEF, 0x44, 0x44);
+
+// ------------------------------------------------------------- terminal ---
+pub const TERM_BG: Color32 = Color32::from_rgb(0x14, 0x17, 0x1F);
+pub const TERM_FG: Color32 = Color32::from_rgb(0xE6, 0xEA, 0xF2);
+
+// ----------------------------------------------------------------- fonts ---
+const INTER_REGULAR: &str = "inter-regular";
+const INTER_MEDIUM: &str = "inter-medium";
+const INTER_SEMIBOLD: &str = "inter-semibold";
+pub const PH_REGULAR: &str = "ph-regular";
+pub const PH_FILL: &str = "ph-fill";
+pub const PH_BOLD: &str = "ph-bold";
+
+pub fn regular(size: f32) -> FontId {
+    FontId::proportional(size)
+}
+pub fn medium(size: f32) -> FontId {
+    FontId::new(size, FontFamily::Name(INTER_MEDIUM.into()))
+}
+pub fn semibold(size: f32) -> FontId {
+    FontId::new(size, FontFamily::Name(INTER_SEMIBOLD.into()))
 }
 
-/// Built-in terminal themes. The first entry is used as the fallback default.
-pub static THEMES: &[TerminalTheme] = &[
-    TerminalTheme {
-        name: "Dracula",
-        foreground: "#f8f8f2",
-        background: "#282a36",
-        cursor: "#f8f8f2",
-        palette: [
-            "#21222c", "#ff5555", "#50fa7b", "#f1fa8c", "#bd93f9", "#ff79c6", "#8be9fd", "#f8f8f2",
-            "#6272a4", "#ff6e6e", "#69ff94", "#ffffa5", "#d6acff", "#ff92df", "#a4ffff", "#ffffff",
-        ],
-    },
-    TerminalTheme {
-        name: "Nord",
-        foreground: "#d8dee9",
-        background: "#2e3440",
-        cursor: "#d8dee9",
-        palette: [
-            "#3b4252", "#bf616a", "#a3be8c", "#ebcb8b", "#81a1c1", "#b48ead", "#88c0d0", "#e5e9f0",
-            "#4c566a", "#bf616a", "#a3be8c", "#ebcb8b", "#81a1c1", "#b48ead", "#8fbcbb", "#eceff4",
-        ],
-    },
-    TerminalTheme {
-        name: "Tokyo Night",
-        foreground: "#c0caf5",
-        background: "#1a1b26",
-        cursor: "#c0caf5",
-        palette: [
-            "#15161e", "#f7768e", "#9ece6a", "#e0af68", "#7aa2f7", "#bb9af7", "#7dcfff", "#a9b1d6",
-            "#414868", "#f7768e", "#9ece6a", "#e0af68", "#7aa2f7", "#bb9af7", "#7dcfff", "#c0caf5",
-        ],
-    },
-    TerminalTheme {
-        name: "Catppuccin Mocha",
-        foreground: "#cdd6f4",
-        background: "#1e1e2e",
-        cursor: "#f5e0dc",
-        palette: [
-            "#45475a", "#f38ba8", "#a6e3a1", "#f9e2af", "#89b4fa", "#f5c2e7", "#94e2d5", "#bac2de",
-            "#585b70", "#f38ba8", "#a6e3a1", "#f9e2af", "#89b4fa", "#f5c2e7", "#94e2d5", "#a6adc8",
-        ],
-    },
-    TerminalTheme {
-        name: "Gruvbox Dark",
-        foreground: "#ebdbb2",
-        background: "#282828",
-        cursor: "#ebdbb2",
-        palette: [
-            "#282828", "#cc241d", "#98971a", "#d79921", "#458588", "#b16286", "#689d6a", "#a89984",
-            "#928374", "#fb4934", "#b8bb26", "#fabd2f", "#83a598", "#d3869b", "#8ec07c", "#ebdbb2",
-        ],
-    },
-    TerminalTheme {
-        name: "One Dark",
-        foreground: "#abb2bf",
-        background: "#282c34",
-        cursor: "#528bff",
-        palette: [
-            "#282c34", "#e06c75", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#abb2bf",
-            "#5c6370", "#e06c75", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#ffffff",
-        ],
-    },
-    TerminalTheme {
-        name: "Solarized Dark",
-        foreground: "#839496",
-        background: "#002b36",
-        cursor: "#93a1a1",
-        palette: [
-            "#073642", "#dc322f", "#859900", "#b58900", "#268bd2", "#d33682", "#2aa198", "#eee8d5",
-            "#002b36", "#cb4b16", "#586e75", "#657b83", "#839496", "#6c71c4", "#93a1a1", "#fdf6e3",
-        ],
-    },
-    TerminalTheme {
-        name: "Monokai",
-        foreground: "#f8f8f2",
-        background: "#272822",
-        cursor: "#f8f8f0",
-        palette: [
-            "#272822", "#f92672", "#a6e22e", "#f4bf75", "#66d9ef", "#ae81ff", "#a1efe4", "#f8f8f2",
-            "#75715e", "#f92672", "#a6e22e", "#f4bf75", "#66d9ef", "#ae81ff", "#a1efe4", "#f9f8f5",
-        ],
-    },
-    TerminalTheme {
-        name: "Solarized Light",
-        foreground: "#657b83",
-        background: "#fdf6e3",
-        cursor: "#586e75",
-        palette: [
-            "#073642", "#dc322f", "#859900", "#b58900", "#268bd2", "#d33682", "#2aa198", "#eee8d5",
-            "#002b36", "#cb4b16", "#586e75", "#657b83", "#839496", "#6c71c4", "#93a1a1", "#fdf6e3",
-        ],
-    },
-    TerminalTheme {
-        name: "GitHub Light",
-        foreground: "#24292e",
-        background: "#ffffff",
-        cursor: "#24292e",
-        palette: [
-            "#24292e", "#d73a49", "#28a745", "#dbab09", "#0366d6", "#5a32a3", "#0598bc", "#6a737d",
-            "#959da5", "#cb2431", "#22863a", "#b08800", "#005cc5", "#5a32a3", "#3192aa", "#d1d5da",
-        ],
-    },
-];
+pub fn install_fonts(ctx: &egui::Context) {
+    let mut fonts = FontDefinitions::default();
 
-pub fn get_theme(name: &str) -> &'static TerminalTheme {
-    THEMES.iter().find(|t| t.name == name).unwrap_or(&THEMES[0])
-}
+    let mut add = |name: &str, data: FontData| {
+        fonts.font_data.insert(name.to_owned(), data.into());
+    };
+    add(INTER_REGULAR, FontData::from_static(include_bytes!("../../assets/fonts/Inter-Regular.ttf")));
+    add(INTER_MEDIUM, FontData::from_static(include_bytes!("../../assets/fonts/Inter-Medium.ttf")));
+    add(INTER_SEMIBOLD, FontData::from_static(include_bytes!("../../assets/fonts/Inter-SemiBold.ttf")));
+    add(PH_REGULAR, egui_phosphor::Variant::Regular.font_data());
+    add(PH_FILL, egui_phosphor::Variant::Fill.font_data());
+    add(PH_BOLD, egui_phosphor::Variant::Bold.font_data());
 
-pub fn theme_at(index: usize) -> &'static TerminalTheme {
-    THEMES.get(index).unwrap_or(&THEMES[0])
-}
+    let defaults = fonts
+        .families
+        .get(&FontFamily::Proportional)
+        .cloned()
+        .unwrap_or_default();
 
-pub fn apply_to_terminal(theme: &TerminalTheme, terminal: &vte4::Terminal) {
-    let fg = RGBA::from_str(theme.foreground).unwrap_or(RGBA::WHITE);
-    let bg = RGBA::from_str(theme.background).unwrap_or(RGBA::BLACK);
-    let cursor = RGBA::from_str(theme.cursor).unwrap_or(fg);
-    let mut palette = [RGBA::BLACK; 16];
-    for (i, hex) in theme.palette.iter().enumerate() {
-        palette[i] = RGBA::from_str(hex).unwrap_or(RGBA::BLACK);
+    let family = |primary: &str| {
+        let mut v = vec![primary.to_owned(), PH_REGULAR.to_owned()];
+        v.extend(defaults.iter().cloned());
+        v
+    };
+
+    fonts.families.insert(FontFamily::Proportional, family(INTER_REGULAR));
+    fonts.families.insert(FontFamily::Name(INTER_MEDIUM.into()), family(INTER_MEDIUM));
+    fonts.families.insert(FontFamily::Name(INTER_SEMIBOLD.into()), family(INTER_SEMIBOLD));
+    for ph in [PH_REGULAR, PH_FILL, PH_BOLD] {
+        fonts.families.insert(FontFamily::Name(ph.into()), vec![ph.to_owned()]);
     }
-    let palette_refs: Vec<&RGBA> = palette.iter().collect();
-    terminal.set_colors(Some(&fg), Some(&bg), &palette_refs);
-    terminal.set_color_cursor(Some(&cursor));
+
+    ctx.set_fonts(fonts);
 }
 
-pub fn apply_to_open_terminals(notebook: &gtk4::Notebook, theme: &TerminalTheme) {
-    for i in 0..notebook.n_pages() {
-        let Some(page) = notebook.nth_page(Some(i)) else {
-            continue;
-        };
-        if !page.widget_name().starts_with("session:") {
-            continue;
-        }
-        let Some(bx) = page.downcast_ref::<gtk4::Box>() else {
-            continue;
-        };
-        let mut child = bx.first_child();
-        while let Some(c) = child {
-            if let Some(term) = c.downcast_ref::<vte4::Terminal>() {
-                apply_to_terminal(theme, term);
-            }
-            child = c.next_sibling();
-        }
+pub fn apply_termius_theme(ctx: &egui::Context) {
+    install_fonts(ctx);
+
+    let mut style = Style::default();
+    let mut visuals = Visuals::light();
+
+    visuals.panel_fill = Color32::TRANSPARENT;
+    visuals.window_fill = Color32::from_rgb(0xF4, 0xF6, 0xF7);
+    visuals.window_stroke = Stroke::new(1.0_f32, shade(24));
+    visuals.window_corner_radius = CornerRadius::same(10);
+    visuals.faint_bg_color = light(60);
+    visuals.extreme_bg_color = light(90);
+    visuals.text_cursor.stroke = Stroke::new(1.5_f32, TEXT_PRIMARY);
+
+    for w in [
+        &mut visuals.widgets.noninteractive,
+        &mut visuals.widgets.inactive,
+        &mut visuals.widgets.hovered,
+        &mut visuals.widgets.active,
+        &mut visuals.widgets.open,
+    ] {
+        w.corner_radius = CornerRadius::same(6);
+        w.fg_stroke = Stroke::new(1.0_f32, TEXT_PRIMARY);
     }
+    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, shade(20));
+    visuals.widgets.inactive.weak_bg_fill = shade(18);
+    visuals.widgets.inactive.bg_fill = shade(18);
+    visuals.widgets.inactive.bg_stroke = Stroke::NONE;
+    visuals.widgets.hovered.weak_bg_fill = shade(28);
+    visuals.widgets.hovered.bg_fill = shade(28);
+    visuals.widgets.hovered.bg_stroke = Stroke::NONE;
+    visuals.widgets.active.weak_bg_fill = shade(38);
+    visuals.widgets.active.bg_fill = shade(38);
+    visuals.widgets.active.bg_stroke = Stroke::NONE;
+
+    visuals.selection.bg_fill = ACCENT_BLUE.linear_multiply(0.25);
+    visuals.selection.stroke = Stroke::new(1.0_f32, FOCUS_RING);
+
+    style.visuals = visuals;
+    style.spacing.item_spacing = egui::vec2(8.0, 8.0);
+    style.spacing.button_padding = egui::vec2(12.0, 6.0);
+    style.text_styles.insert(egui::TextStyle::Body, regular(13.0));
+    style.text_styles.insert(egui::TextStyle::Button, medium(13.0));
+    style.text_styles.insert(egui::TextStyle::Small, regular(11.0));
+    style.text_styles.insert(egui::TextStyle::Heading, semibold(16.0));
+
+    ctx.set_style(style);
 }
