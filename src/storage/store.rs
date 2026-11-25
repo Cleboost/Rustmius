@@ -1,4 +1,6 @@
+use crate::i18n::Language;
 use crate::storage::Vault;
+use serde::{Deserialize, Serialize};
 use aes_gcm::{
     Aes256Gcm, Key, Nonce,
     aead::{Aead, KeyInit},
@@ -21,6 +23,51 @@ pub fn default_vault_path() -> Result<PathBuf> {
     let data_dir = dirs.data_dir();
     fs::create_dir_all(data_dir)?;
     Ok(data_dir.join("vault.json"))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AppSettings {
+    pub language: Language,
+    pub text_size: f32,
+    pub copy_on_select: bool,
+    pub bright_bold: bool,
+    pub auto_unlock_password: Option<String>,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            language: Language::En,
+            text_size: 14.0,
+            copy_on_select: false,
+            bright_bold: false,
+            auto_unlock_password: None,
+        }
+    }
+}
+
+pub fn default_settings_path() -> Result<PathBuf> {
+    let dirs = ProjectDirs::from("com", "cleboost", "rustmius")
+        .context("Impossible de déterminer le répertoire de données de l'application")?;
+    let data_dir = dirs.data_dir();
+    fs::create_dir_all(data_dir)?;
+    Ok(data_dir.join("settings.json"))
+}
+
+pub fn save_app_settings(path: &Path, settings: &AppSettings) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, serde_json::to_string_pretty(settings)?)?;
+    Ok(())
+}
+
+pub fn load_app_settings(path: &Path) -> AppSettings {
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
 }
 
 pub fn default_sync_config_path() -> Result<PathBuf> {

@@ -1,5 +1,6 @@
 mod app;
 mod core;
+mod i18n;
 mod storage;
 mod ui;
 
