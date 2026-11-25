@@ -1,3 +1,4 @@
+pub mod gist_sync;
 pub mod ssh_config;
 pub mod store;
 

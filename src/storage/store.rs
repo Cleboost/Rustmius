@@ -23,6 +23,14 @@ pub fn default_vault_path() -> Result<PathBuf> {
     Ok(data_dir.join("vault.json"))
 }
 
+pub fn default_sync_config_path() -> Result<PathBuf> {
+    let dirs = ProjectDirs::from("com", "cleboost", "rustmius")
+        .context("Impossible de déterminer le répertoire de données de l'application")?;
+    let data_dir = dirs.data_dir();
+    fs::create_dir_all(data_dir)?;
+    Ok(data_dir.join("sync.enc"))
+}
+
 pub fn save_plain_vault(path: &Path, vault: &Vault) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -49,8 +57,7 @@ fn derive_key(password: &str, salt: &[u8]) -> Result<Zeroizing<[u8; 32]>> {
     Ok(key)
 }
 
-pub fn encrypt_vault(vault: &Vault, password: &str) -> Result<Vec<u8>> {
-    let json = Zeroizing::new(serde_json::to_vec(vault)?);
+pub fn encrypt_bytes(plaintext: &[u8], password: &str) -> Result<Vec<u8>> {
     let mut salt = [0u8; SALT_LEN];
     let mut nonce_bytes = [0u8; NONCE_LEN];
     rand::thread_rng().fill_bytes(&mut salt);
@@ -62,7 +69,7 @@ pub fn encrypt_vault(vault: &Vault, password: &str) -> Result<Vec<u8>> {
     let nonce = Nonce::from_slice(&nonce_bytes);
 
     let ciphertext = cipher
-        .encrypt(nonce, json.as_ref())
+        .encrypt(nonce, plaintext)
         .map_err(|e| anyhow::anyhow!("Échec du chiffrement: {e}"))?;
 
     let mut out = Vec::with_capacity(MAGIC.len() + SALT_LEN + NONCE_LEN + ciphertext.len());
@@ -73,10 +80,10 @@ pub fn encrypt_vault(vault: &Vault, password: &str) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-pub fn decrypt_vault(data: &[u8], password: &str) -> Result<Vault> {
+pub fn decrypt_bytes(data: &[u8], password: &str) -> Result<Zeroizing<Vec<u8>>> {
     let header_len = MAGIC.len() + SALT_LEN + NONCE_LEN;
     if data.len() < header_len || &data[..MAGIC.len()] != MAGIC {
-        bail!("Format de coffre invalide");
+        bail!("Format de fichier chiffré invalide");
     }
 
     let salt = &data[MAGIC.len()..MAGIC.len() + SALT_LEN];
@@ -88,12 +95,19 @@ pub fn decrypt_vault(data: &[u8], password: &str) -> Result<Vault> {
     let cipher = Aes256Gcm::new(key);
     let nonce = Nonce::from_slice(nonce_bytes);
 
-    let plaintext = Zeroizing::new(
-        cipher
-            .decrypt(nonce, ciphertext)
-            .map_err(|_| anyhow::anyhow!("Mot de passe maître incorrect ou fichier corrompu"))?,
-    );
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|_| anyhow::anyhow!("Mot de passe maître incorrect ou fichier corrompu"))?;
+    Ok(Zeroizing::new(plaintext))
+}
 
+pub fn encrypt_vault(vault: &Vault, password: &str) -> Result<Vec<u8>> {
+    let json = Zeroizing::new(serde_json::to_vec(vault)?);
+    encrypt_bytes(&json, password)
+}
+
+pub fn decrypt_vault(data: &[u8], password: &str) -> Result<Vault> {
+    let plaintext = decrypt_bytes(data, password)?;
     let vault: Vault = serde_json::from_slice(&plaintext)?;
     Ok(vault)
 }
