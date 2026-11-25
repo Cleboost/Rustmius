@@ -1,4 +1,5 @@
 pub mod background;
+pub mod connecting;
 pub mod host_grid;
 pub mod host_modal;
 pub mod icons;
