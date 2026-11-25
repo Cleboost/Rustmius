@@ -75,8 +75,9 @@ pub fn render_terminal(
     ui: &mut Ui,
     terminal: &mut TerminalState,
     cmd_tx: &UnboundedSender<SshCommand>,
+    font_size: f32,
 ) {
-    let font_id = FontId::monospace(14.0);
+    let font_id = FontId::monospace(font_size);
     let (cell_w, cell_h) = ui.fonts(|f| {
         let w = f.glyph_width(&font_id, 'W');
         let h = f.row_height(&font_id);
@@ -173,7 +174,9 @@ pub fn render_terminal(
             painter.rect_filled(cell_rect, 0.0, bg);
         }
 
-        if indexed.c != ' ' && indexed.c != '\0' {
+        if ('\u{2800}'..='\u{28FF}').contains(&indexed.c) {
+            paint_braille(&painter, cell_rect, indexed.c, fg);
+        } else if indexed.c != ' ' && indexed.c != '\0' {
             let mut buf = [0u8; 4];
             let s = indexed.c.encode_utf8(&mut buf);
             painter.text(
@@ -238,6 +241,30 @@ pub fn render_terminal(
                 }
                 _ => {}
             }
+        }
+    }
+}
+
+fn paint_braille(painter: &egui::Painter, cell: Rect, ch: char, fg: Color32) {
+    let bits = (ch as u32) - 0x2800;
+    if bits == 0 {
+        return;
+    }
+    const DOTS: [(u32, f32, f32); 8] = [
+        (0x01, 0.28, 0.14),
+        (0x02, 0.28, 0.38),
+        (0x04, 0.28, 0.62),
+        (0x40, 0.28, 0.86),
+        (0x08, 0.72, 0.14),
+        (0x10, 0.72, 0.38),
+        (0x20, 0.72, 0.62),
+        (0x80, 0.72, 0.86),
+    ];
+    let r = (cell.width() * 0.14).clamp(1.0, 2.2);
+    for (mask, fx, fy) in DOTS {
+        if bits & mask != 0 {
+            let p = Pos2::new(cell.min.x + cell.width() * fx, cell.min.y + cell.height() * fy);
+            painter.circle_filled(p, r, fg);
         }
     }
 }
