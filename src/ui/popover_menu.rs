@@ -87,7 +87,7 @@ pub fn render_popover_menu(
                         selected,
                     } => {
                         let row = Rect::from_min_size(pos2(rect.left() + 6.0, y), vec2(width - 12.0, 34.0));
-                        let resp = ui.interact(row, ui.id().with((salt, idx)), Sense::click());
+                        let resp = ui.interact(row, ui.id().with((salt, idx)), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
                         if resp.hovered() {
                             painter.rect_filled(row, CornerRadius::same(7), theme::shade((14.0 * anim_t) as u8));
                         }

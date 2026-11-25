@@ -33,7 +33,7 @@ pub fn render_sidebar(ui: &mut Ui, active: &mut NavSection) {
             pos2(rect.left() + 6.0, rect.top() + 12.0 + 45.0 * i as f32),
             vec2(rect.width() - 12.0, 34.0),
         );
-        let resp = ui.interact(item, ui.id().with(("nav", i)), Sense::click());
+        let resp = ui.interact(item, ui.id().with(("nav", i)), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
         let selected = *active == *section;
         if selected {
             painter.rect_filled(item, CornerRadius::same(6), theme::shade(16));

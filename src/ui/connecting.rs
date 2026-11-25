@@ -52,7 +52,7 @@ pub fn render_connecting_screen(
     );
 
     let logs_btn = Rect::from_min_size(pos2(left + block_w - 102.0, top + 3.0), vec2(102.0, 36.0));
-    let lresp = ui.interact(logs_btn, ui.id().with("conn_show_logs"), Sense::click());
+    let lresp = ui.interact(logs_btn, ui.id().with("conn_show_logs"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
     painter.rect_filled(
         logs_btn,
         CornerRadius::same(8),
@@ -109,7 +109,7 @@ pub fn render_connecting_screen(
 
     // 3. Close button
     let close_btn = Rect::from_min_size(pos2(left, line_y + 38.0), vec2(82.0, 36.0));
-    let cresp = ui.interact(close_btn, ui.id().with("conn_close"), Sense::click());
+    let cresp = ui.interact(close_btn, ui.id().with("conn_close"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
     painter.rect_filled(
         close_btn,
         CornerRadius::same(8),

@@ -202,6 +202,7 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState) -> HostModalAc
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let (close_rect, close_resp) =
                     ui.allocate_exact_size(vec2(28.0, 28.0), Sense::click());
+                let close_resp = close_resp.on_hover_cursor(egui::CursorIcon::PointingHand);
                 if close_resp.hovered() {
                     ui.painter().rect_filled(close_rect, CornerRadius::same(6), theme::shade(16));
                 }
@@ -346,6 +347,7 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState) -> HostModalAc
                         });
                         let (eye_rect, eye_resp) =
                             ui.allocate_exact_size(vec2(eye_w, 34.0), Sense::click());
+                        let eye_resp = eye_resp.on_hover_cursor(egui::CursorIcon::PointingHand);
                         if eye_resp.hovered() {
                             ui.painter().rect_filled(eye_rect, CornerRadius::same(6), theme::shade(12));
                         }

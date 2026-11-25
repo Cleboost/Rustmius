@@ -136,7 +136,7 @@ fn render_header(
     let btn_h = 30.0;
 
     let new_host = Rect::from_min_max(pos2(l + 13.0, cy - btn_h / 2.0), pos2(l + 113.0, cy + btn_h / 2.0));
-    let nresp = ui.interact(new_host, ui.id().with("tb_new_host"), Sense::click());
+    let nresp = ui.interact(new_host, ui.id().with("tb_new_host"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
     painter.rect_filled(
         new_host,
         CornerRadius { nw: 6, ne: 2, sw: 6, se: 2 },
@@ -152,7 +152,7 @@ fn render_header(
     }
 
     let chevron = Rect::from_min_max(pos2(l + 115.0, cy - btn_h / 2.0), pos2(l + 145.0, cy + btn_h / 2.0));
-    let chresp = ui.interact(chevron, ui.id().with("tb_new_menu"), Sense::click());
+    let chresp = ui.interact(chevron, ui.id().with("tb_new_menu"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
     painter.rect_filled(
         chevron,
         CornerRadius { nw: 2, ne: 6, sw: 2, se: 6 },
@@ -182,7 +182,7 @@ fn render_header(
 
     // Right-aligned view toggles
     let view_btn_rect = Rect::from_center_size(pos2(r - 103.0, cy), vec2(30.0, 30.0));
-    let vresp = ui.interact(view_btn_rect, ui.id().with("tb_grid"), Sense::click());
+    let vresp = ui.interact(view_btn_rect, ui.id().with("tb_grid"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
     if vresp.hovered() || *view_menu_open {
         painter.rect_filled(view_btn_rect, CornerRadius::same(6), theme::shade(if *view_menu_open { 18 } else { 12 }));
     }
@@ -199,14 +199,14 @@ fn render_header(
     }
 
     let tags_rect = Rect::from_center_size(pos2(r - 65.0, cy), vec2(30.0, 30.0));
-    let tresp = ui.interact(tags_rect, ui.id().with("tb_tags"), Sense::click());
+    let tresp = ui.interact(tags_rect, ui.id().with("tb_tags"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
     if tresp.hovered() {
         painter.rect_filled(tags_rect, CornerRadius::same(6), theme::shade(12));
     }
     icons::paint(&painter, tags_rect.center(), fill::TAG, 15.0, theme::ICON_DARK, IconStyle::Fill);
 
     let sort_btn_rect = Rect::from_center_size(pos2(r - 27.0, cy), vec2(30.0, 30.0));
-    let sresp = ui.interact(sort_btn_rect, ui.id().with("tb_sort"), Sense::click());
+    let sresp = ui.interact(sort_btn_rect, ui.id().with("tb_sort"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
     if sresp.hovered() || *sort_menu_open {
         painter.rect_filled(sort_btn_rect, CornerRadius::same(6), theme::shade(if *sort_menu_open { 18 } else { 12 }));
     }
@@ -264,7 +264,7 @@ fn render_empty_state(ui: &mut Ui, area: Rect, input: &mut String, action: &mut 
 
     // Continue
     let button = Rect::from_min_size(pos2(cx - 196.0, top + 222.0), vec2(392.0, 36.0));
-    let bresp = ui.interact(button, ui.id().with("empty_continue"), Sense::click());
+    let bresp = ui.interact(button, ui.id().with("empty_continue"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
     let (t, b) = if bresp.hovered() {
         (theme::ACCENT_BLUE_TOP.gamma_multiply(1.08), theme::ACCENT_BLUE)
     } else {
@@ -322,9 +322,9 @@ fn render_cards(
                 pos2(grid.left() + col as f32 * (card_w + gap), grid.top() + row as f32 * (card_h + gap)),
                 vec2(card_w, card_h),
             );
-            let resp = ui.interact(rect, ui.id().with(("host_card", host.id)), Sense::click());
+            let resp = ui.interact(rect, ui.id().with(("host_card", host.id)), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
             let edit_rect = Rect::from_center_size(pos2(rect.right() - 22.0, rect.center().y), vec2(28.0, 28.0));
-            let edit_resp = ui.interact(edit_rect, ui.id().with(("host_edit", host.id)), Sense::click());
+            let edit_resp = ui.interact(edit_rect, ui.id().with(("host_edit", host.id)), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
             let hovered = resp.hovered() || edit_resp.hovered();
 
             let card_bg = if hovered {
@@ -332,6 +332,12 @@ fn render_cards(
             } else {
                 Color32::from_rgba_unmultiplied(0xF6, 0xF8, 0xF9, 200)
             };
+            let shadow_alpha = if hovered { 26 } else { 16 };
+            painter.rect_filled(
+                rect.translate(vec2(0.0, 3.0)),
+                CornerRadius::same(8),
+                Color32::from_black_alpha(shadow_alpha),
+            );
             painter.rect_filled(rect, CornerRadius::same(8), card_bg);
             painter.rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0_f32, theme::shade(12)), StrokeKind::Inside);
 
@@ -445,7 +451,7 @@ fn render_cards(
                     import_rect,
                     ui.id().with(("ghost_import", &host.label, idx)),
                     Sense::click(),
-                );
+                ).on_hover_cursor(egui::CursorIcon::PointingHand);
                 painter.rect_filled(
                     import_rect,
                     CornerRadius::same(6),
