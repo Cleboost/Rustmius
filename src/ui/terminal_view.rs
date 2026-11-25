@@ -98,7 +98,15 @@ pub fn render_terminal(
     }
 
     let (rect, response) = ui.allocate_exact_size(avail, Sense::click_and_drag());
-    if response.clicked() {
+    let init_id = response.id.with("terminal_initial_focus");
+    let did_focus = ui.data_mut(|d| {
+        let already = d.get_temp::<bool>(init_id).unwrap_or(false);
+        if !already {
+            d.insert_temp(init_id, true);
+        }
+        already
+    });
+    if !did_focus || response.clicked() {
         response.request_focus();
     }
 
@@ -163,6 +171,12 @@ pub fn render_terminal(
         let events = ui.input(|i| i.events.clone());
         for ev in events {
             match ev {
+                Event::Copy => {
+                    let _ = cmd_tx.send(SshCommand::Data(vec![0x03]));
+                }
+                Event::Paste(text) => {
+                    let _ = cmd_tx.send(SshCommand::Data(text.into_bytes()));
+                }
                 Event::Text(text) => {
                     let _ = cmd_tx.send(SshCommand::Data(text.into_bytes()));
                 }
