@@ -179,24 +179,6 @@ fn render_header(
         }
     });
 
-    let text_btn = |ui: &mut Ui, id: &str, x0: f32, x1: f32| {
-        let r = Rect::from_min_max(pos2(x0, cy - btn_h / 2.0), pos2(x1, cy + btn_h / 2.0));
-        let resp = ui.interact(r, ui.id().with(id), Sense::click());
-        if resp.hovered() {
-            painter.rect_filled(r, CornerRadius::same(6), theme::shade(12));
-        }
-        resp
-    };
-
-    text_btn(ui, "tb_terminal", l + 161.0, l + 257.0);
-    icons::paint(&painter, pos2(l + 174.0, cy), fill::TERMINAL_WINDOW, 15.0, theme::ICON_DARK, IconStyle::Fill);
-    painter.text(pos2(l + 192.0, cy), Align2::LEFT_CENTER, "Terminal", theme::semibold(13.0), theme::TEXT_PRIMARY);
-
-    text_btn(ui, "tb_serial", l + 271.0, l + 345.0);
-    icons::paint_serial(&painter, pos2(l + 284.0, cy), theme::ICON_DARK);
-    painter.text(pos2(l + 304.0, cy), Align2::LEFT_CENTER, "Serial", theme::semibold(13.0), theme::TEXT_PRIMARY);
-    icons::paint(&painter, pos2(l + 357.0, cy), fill::INFO, 15.0, theme::ICON_MUTED, IconStyle::Fill);
-
     // Right-aligned view toggles
     let view_btn_rect = Rect::from_center_size(pos2(r - 103.0, cy), vec2(30.0, 30.0));
     let vresp = ui.interact(view_btn_rect, ui.id().with("tb_grid"), Sense::click());
