@@ -1,5 +1,6 @@
 use crate::core::ssh::{SshCommand, SshEvent, SshSession, spawn_ssh_session};
 use crate::core::terminal::TerminalState;
+use crate::i18n::tr;
 use crate::storage::gist_sync::{
     SyncConfig, create_vault_gist, decode_encrypted_vault, encode_encrypted_vault,
     fetch_vault_gist, find_existing_vault_gist, load_sync_config, merge_vaults, save_sync_config,
@@ -7,7 +8,8 @@ use crate::storage::gist_sync::{
 };
 use crate::storage::ssh_config::{find_unimported_ssh_hosts, import_ssh_config_into_vault};
 use crate::storage::store::{
-    default_sync_config_path, default_vault_path, load_plain_vault, save_plain_vault,
+    AppSettings, default_settings_path, default_sync_config_path, default_vault_path,
+    load_app_settings, load_plain_vault, save_app_settings, save_plain_vault,
 };
 use crate::storage::{Host, HostSource, OsKind, Vault};
 use crate::ui::background::paint_backdrop;
@@ -15,7 +17,7 @@ use crate::ui::connecting::{ConnectingAction, render_connecting_screen};
 use crate::ui::host_grid::{HostGridAction, HostSortMode, HostViewMode, render_host_grid};
 use crate::ui::host_modal::{HostModalAction, HostModalState, render_host_panel};
 use crate::ui::settings_modal::{
-    SettingsModalState, SyncOnboardingStep, SyncUiAction, TerminalSettings, render_settings_modal,
+    SettingsModalState, SyncOnboardingStep, SyncUiAction, render_settings_modal,
 };
 use crate::ui::sidebar::{NavSection, render_sidebar};
 use crate::ui::terminal_view::render_terminal;
@@ -64,6 +66,7 @@ pub struct RustmiusApp {
     rt: Runtime,
     vault_path: PathBuf,
     sync_path: PathBuf,
+    settings_path: PathBuf,
     vault: Vault,
     ghost_hosts: Vec<Host>,
     nav: NavSection,
@@ -79,9 +82,10 @@ pub struct RustmiusApp {
     sort_menu_open: bool,
     titlebar_menu_open: bool,
     settings_modal: SettingsModalState,
-    term_settings: TerminalSettings,
+    app_settings: AppSettings,
     sync_locked: bool,
     unlock_password: String,
+    unlock_show_password: bool,
     unlock_error: Option<String>,
     sync_cfg: Option<SyncConfig>,
     master_password: Option<String>,
@@ -96,7 +100,23 @@ impl RustmiusApp {
         let vault_path = default_vault_path().expect("Impossible de résoudre le chemin du coffre");
         let sync_path =
             default_sync_config_path().expect("Impossible de résoudre le chemin sync.enc");
-        let sync_locked = sync_path.exists();
+        let settings_path =
+            default_settings_path().expect("Impossible de résoudre le chemin settings.json");
+        let app_settings = load_app_settings(&settings_path);
+        let mut sync_locked = sync_path.exists();
+        let mut sync_cfg = None;
+        let mut master_password = None;
+        let mut initial_pull = false;
+        if sync_locked {
+            if let Some(pw) = &app_settings.auto_unlock_password {
+                if let Ok(cfg) = load_sync_config(&sync_path, pw) {
+                    initial_pull = cfg.auto_sync;
+                    sync_cfg = Some(cfg);
+                    master_password = Some(pw.clone());
+                    sync_locked = false;
+                }
+            }
+        }
 
         let vault = load_plain_vault(&vault_path).unwrap_or_else(|e| {
             tracing::error!("Erreur chargement vault.json: {e:#}");
@@ -108,10 +128,11 @@ impl RustmiusApp {
         let ghost_hosts = find_unimported_ssh_hosts(&vault);
         let (sync_tx, sync_rx) = mpsc::unbounded_channel();
 
-        Self {
+        let mut app = Self {
             rt,
             vault_path,
             sync_path,
+            settings_path,
             vault,
             ghost_hosts,
             nav: NavSection::Hosts,
@@ -127,15 +148,20 @@ impl RustmiusApp {
             sort_menu_open: false,
             titlebar_menu_open: false,
             settings_modal: SettingsModalState::default(),
-            term_settings: TerminalSettings::default(),
+            app_settings,
             sync_locked,
             unlock_password: String::new(),
+            unlock_show_password: false,
             unlock_error: None,
-            sync_cfg: None,
-            master_password: None,
+            sync_cfg,
+            master_password,
             sync_tx,
             sync_rx,
+        };
+        if initial_pull {
+            app.spawn_pull(cc.egui_ctx.clone());
         }
+        app
     }
 
     fn persist_vault(&mut self, ctx: Option<&egui::Context>) {
@@ -568,77 +594,154 @@ impl eframe::App for RustmiusApp {
                         title: t,
                     })
                     .collect();
-                tb_action = render_titlebar(ui, self.active, &views, &mut self.titlebar_menu_open);
+                tb_action = render_titlebar(
+                    ui,
+                    self.active,
+                    &views,
+                    &mut self.titlebar_menu_open,
+                    self.app_settings.language,
+                );
             });
 
+        let s = tr(self.app_settings.language);
         if self.sync_locked {
             egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx, |ui| {
-                ui.centered_and_justified(|ui| {
-                    egui::Frame::NONE
-                        .fill(theme::light(150))
-                        .stroke(Stroke::new(1.0_f32, theme::shade(20)))
-                        .corner_radius(CornerRadius::same(12))
-                        .inner_margin(28.0)
-                        .show(ui, |ui| {
-                            ui.set_width(340.0);
-                            ui.vertical_centered(|ui| {
-                                ui.label(
-                                    RichText::new("Déverrouiller Sync Vault")
-                                        .font(theme::semibold(17.0))
-                                        .color(theme::TEXT_PRIMARY),
-                                );
-                                ui.add_space(6.0);
-                                ui.label(
-                                    RichText::new("Entrez votre mot de passe maître pour synchroniser votre coffre.")
-                                        .font(theme::regular(12.5))
-                                        .color(theme::TEXT_MUTED),
-                                );
-                                ui.add_space(16.0);
-                                let pw_resp = ui.add(
-                                    egui::TextEdit::singleline(&mut self.unlock_password)
-                                        .password(true)
-                                        .hint_text("Mot de passe maître")
-                                        .desired_width(f32::INFINITY),
-                                );
-                                if let Some(err) = &self.unlock_error {
-                                    ui.add_space(8.0);
-                                    ui.label(RichText::new(err).color(theme::DANGER).size(12.5));
+                let area = ui.max_rect();
+                let card_w = 380.0;
+                let card_h = if self.unlock_error.is_some() { 255.0 } else { 230.0 };
+                let card_rect = egui::Rect::from_center_size(area.center(), vec2(card_w, card_h));
+                let painter = ui.painter_at(area);
+
+                painter.rect_filled(
+                    card_rect.translate(vec2(0.0, 6.0)),
+                    CornerRadius::same(12),
+                    Color32::from_black_alpha(30),
+                );
+                painter.rect_filled(
+                    card_rect,
+                    CornerRadius::same(12),
+                    Color32::from_rgba_unmultiplied(0xF4, 0xF7, 0xF8, 235),
+                );
+                painter.rect_stroke(
+                    card_rect,
+                    CornerRadius::same(12),
+                    Stroke::new(1.0_f32, theme::shade(22)),
+                    egui::StrokeKind::Inside,
+                );
+
+                let mut card_ui = ui.new_child(egui::UiBuilder::new().max_rect(card_rect.shrink(28.0)));
+                card_ui.vertical_centered(|ui| {
+                    ui.label(
+                        RichText::new(s.unlock_title)
+                            .font(theme::semibold(17.0))
+                            .color(theme::TEXT_PRIMARY),
+                    );
+                    ui.add_space(6.0);
+                    ui.label(
+                        RichText::new(s.unlock_desc)
+                            .font(theme::regular(12.5))
+                            .color(theme::TEXT_MUTED),
+                    );
+                    ui.add_space(18.0);
+
+                    let field_w = ui.available_width();
+                    let (field_rect, _) = ui.allocate_exact_size(vec2(field_w, 36.0), egui::Sense::hover());
+                    ui.painter().rect_filled(
+                        field_rect,
+                        CornerRadius::same(8),
+                        Color32::from_rgba_unmultiplied(0xFF, 0xFF, 0xFF, 220),
+                    );
+                    let edit_rect = egui::Rect::from_min_max(
+                        egui::pos2(field_rect.left() + 12.0, field_rect.top()),
+                        egui::pos2(field_rect.right() - 34.0, field_rect.bottom()),
+                    );
+                    let pw_resp = ui.put(
+                        edit_rect,
+                        egui::TextEdit::singleline(&mut self.unlock_password)
+                            .password(!self.unlock_show_password)
+                            .frame(false)
+                            .font(theme::regular(13.0))
+                            .text_color(theme::TEXT_PRIMARY)
+                            .vertical_align(egui::Align::Center)
+                            .hint_text(
+                                RichText::new(s.panel_password)
+                                    .color(theme::TEXT_PLACEHOLDER)
+                                    .font(theme::regular(13.0)),
+                            )
+                            .desired_width(edit_rect.width()),
+                    );
+                    let eye_r = egui::Rect::from_center_size(
+                        egui::pos2(field_rect.right() - 18.0, field_rect.center().y),
+                        vec2(26.0, 26.0),
+                    );
+                    let eye_resp = ui
+                        .interact(eye_r, ui.id().with("unlock_pw_eye"), egui::Sense::click())
+                        .on_hover_cursor(CursorIcon::PointingHand);
+                    if eye_resp.hovered() {
+                        ui.painter()
+                            .rect_filled(eye_r, CornerRadius::same(6), theme::shade(12));
+                    }
+                    let eye_glyph = if self.unlock_show_password {
+                        crate::ui::icons::regular::EYE_SLASH
+                    } else {
+                        crate::ui::icons::regular::EYE
+                    };
+                    crate::ui::icons::paint(
+                        ui.painter(),
+                        eye_r.center(),
+                        eye_glyph,
+                        14.5,
+                        theme::TEXT_MUTED,
+                        crate::ui::icons::IconStyle::Regular,
+                    );
+                    if eye_resp.clicked() {
+                        self.unlock_show_password = !self.unlock_show_password;
+                    }
+                    let ring = if pw_resp.has_focus() {
+                        Stroke::new(1.5_f32, theme::FOCUS_RING)
+                    } else {
+                        Stroke::new(1.0_f32, theme::shade(24))
+                    };
+                    ui.painter()
+                        .rect_stroke(field_rect, CornerRadius::same(8), ring, egui::StrokeKind::Inside);
+
+                    if let Some(err) = &self.unlock_error {
+                        ui.add_space(8.0);
+                        ui.label(RichText::new(err).color(theme::DANGER).size(12.5));
+                    }
+
+                    ui.add_space(16.0);
+                    let btn = egui::Button::new(
+                        RichText::new(s.unlock_btn)
+                            .color(Color32::WHITE)
+                            .font(theme::semibold(13.0)),
+                    )
+                    .fill(theme::ACCENT_BLUE)
+                    .corner_radius(CornerRadius::same(8))
+                    .min_size(vec2(field_w, 38.0));
+                    let submitted = ui
+                        .add(btn)
+                        .on_hover_cursor(CursorIcon::PointingHand)
+                        .clicked()
+                        || (pw_resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
+                    if submitted {
+                        match load_sync_config(&self.sync_path, &self.unlock_password) {
+                            Ok(cfg) => {
+                                let auto = cfg.auto_sync;
+                                let pw = std::mem::take(&mut self.unlock_password);
+                                self.sync_cfg = Some(cfg);
+                                self.master_password = Some(pw);
+                                self.unlock_error = None;
+                                self.sync_locked = false;
+                                if auto {
+                                    self.spawn_pull(ctx.clone());
                                 }
-                                ui.add_space(14.0);
-                                let btn = egui::Button::new(
-                                    RichText::new("Déverrouiller")
-                                        .color(Color32::WHITE)
-                                        .font(theme::semibold(13.0)),
-                                )
-                                .fill(theme::ACCENT_BLUE)
-                                .corner_radius(CornerRadius::same(7))
-                                .min_size(vec2(f32::INFINITY, 36.0));
-                                let submitted = ui
-                                    .add(btn)
-                                    .on_hover_cursor(CursorIcon::PointingHand)
-                                    .clicked()
-                                    || (pw_resp.lost_focus()
-                                        && ui.input(|i| i.key_pressed(egui::Key::Enter)));
-                                if submitted {
-                                    match load_sync_config(&self.sync_path, &self.unlock_password) {
-                                        Ok(cfg) => {
-                                            let auto = cfg.auto_sync;
-                                            let pw = std::mem::take(&mut self.unlock_password);
-                                            self.sync_cfg = Some(cfg);
-                                            self.master_password = Some(pw);
-                                            self.unlock_error = None;
-                                            self.sync_locked = false;
-                                            if auto {
-                                                self.spawn_pull(ctx.clone());
-                                            }
-                                        }
-                                        Err(e) => {
-                                            self.unlock_error = Some(format!("{e}"));
-                                        }
-                                    }
-                                }
-                            });
-                        });
+                            }
+                            Err(e) => {
+                                self.unlock_error = Some(format!("{e}"));
+                            }
+                        }
+                    }
                 });
             });
             handle_window_resize(ctx);
@@ -658,7 +761,7 @@ impl eframe::App for RustmiusApp {
                 .resizable(false)
                 .show_separator_line(false)
                 .frame(egui::Frame::NONE)
-                .show(ctx, |ui| render_sidebar(ui, &mut self.nav));
+                .show(ctx, |ui| render_sidebar(ui, &mut self.nav, self.app_settings.language));
         }
 
         // ---- Host editor right panel (smooth slide-in/out)
@@ -673,7 +776,7 @@ impl eframe::App for RustmiusApp {
                     .show_separator_line(false)
                     .frame(egui::Frame::NONE)
                     .show(ctx, |ui| {
-                        panel_action = render_host_panel(ui, m);
+                        panel_action = render_host_panel(ui, m, self.app_settings.language);
                     });
 
                 match panel_action {
@@ -719,7 +822,7 @@ impl eframe::App for RustmiusApp {
                             ui,
                             &mut tab.terminal,
                             &tab.ssh.cmd_tx,
-                            self.term_settings.text_size,
+                            self.app_settings.text_size,
                         );
                     } else {
                         match render_connecting_screen(
@@ -731,6 +834,7 @@ impl eframe::App for RustmiusApp {
                             &tab.source,
                             tab.show_logs,
                             &tab.logs,
+                            self.app_settings.language,
                         ) {
                             ConnectingAction::Close => close_tab_id = Some(tab.id),
                             ConnectingAction::ToggleLogs => tab.show_logs = !tab.show_logs,
@@ -739,8 +843,8 @@ impl eframe::App for RustmiusApp {
                     }
                 }
             }
-            ActiveTab::Sftp => placeholder(ui, "SFTP — coming soon"),
-            ActiveTab::Settings => placeholder(ui, "Paramètres & Gist Sync — bientôt disponible"),
+            ActiveTab::Sftp => placeholder(ui, &format!("{} — {}", s.tab_sftp, s.coming_soon)),
+            ActiveTab::Settings => placeholder(ui, &format!("{} — {}", s.menu_settings, s.coming_soon)),
             ActiveTab::Vaults => match self.nav {
                 NavSection::Hosts => {
                     host_action = render_host_grid(
@@ -753,13 +857,14 @@ impl eframe::App for RustmiusApp {
                         &mut self.view_menu_open,
                         &mut self.sort_mode,
                         &mut self.sort_menu_open,
+                        self.app_settings.language,
                     );
                 }
-                NavSection::Keychain => placeholder(ui, "Keychain — coming soon"),
-                NavSection::PortForwarding => placeholder(ui, "Port Forwarding — coming soon"),
-                NavSection::Snippets => placeholder(ui, "Snippets — coming soon"),
-                NavSection::KnownHosts => placeholder(ui, "Known Hosts — coming soon"),
-                NavSection::Logs => placeholder(ui, "Logs — coming soon"),
+                NavSection::Keychain => placeholder(ui, &format!("{} — {}", s.nav_keychain, s.coming_soon)),
+                NavSection::PortForwarding => placeholder(ui, &format!("{} — {}", s.nav_port_forwarding, s.coming_soon)),
+                NavSection::Snippets => placeholder(ui, &format!("{} — {}", s.nav_snippets, s.coming_soon)),
+                NavSection::KnownHosts => placeholder(ui, &format!("{} — {}", s.nav_known_hosts, s.coming_soon)),
+                NavSection::Logs => placeholder(ui, &format!("{} — {}", s.nav_logs, s.coming_soon)),
             },
         });
         self.handle_host_action(host_action, ctx);
@@ -767,12 +872,15 @@ impl eframe::App for RustmiusApp {
             self.close_session(cid);
         }
 
-        let sync_action = render_settings_modal(
+        let (sync_action, settings_changed) = render_settings_modal(
             ctx,
             &mut self.settings_modal,
-            &mut self.term_settings,
+            &mut self.app_settings,
             self.sync_cfg.as_ref(),
         );
+        if settings_changed {
+            let _ = save_app_settings(&self.settings_path, &self.app_settings);
+        }
         match sync_action {
             SyncUiAction::CreateNew { token, password } => {
                 self.spawn_create_sync(token, password, ctx.clone());
@@ -789,10 +897,20 @@ impl eframe::App for RustmiusApp {
                     let _ = save_sync_config(&self.sync_path, cfg, pw);
                 }
             }
+            SyncUiAction::ToggleAutoUnlock(enabled) => {
+                self.app_settings.auto_unlock_password = if enabled {
+                    self.master_password.clone()
+                } else {
+                    None
+                };
+                let _ = save_app_settings(&self.settings_path, &self.app_settings);
+            }
             SyncUiAction::Disconnect => {
                 let _ = std::fs::remove_file(&self.sync_path);
                 self.sync_cfg = None;
                 self.master_password = None;
+                self.app_settings.auto_unlock_password = None;
+                let _ = save_app_settings(&self.settings_path, &self.app_settings);
                 self.settings_modal.sync_step = SyncOnboardingStep::ChooseMode;
                 self.settings_modal.sync_status = None;
                 self.settings_modal.sync_error = None;
