@@ -1,31 +1,18 @@
-//! Termius-style Settings modal (Terminal + Sync Vault).
+//! Termius-style Settings modal (General + Terminal + Sync Vault).
 
+use crate::i18n::{Language, Strings, tr};
 use crate::storage::gist_sync::SyncConfig;
-use crate::ui::icons::{self, IconStyle, fill, regular};
+use crate::storage::store::AppSettings;
+use crate::ui::icons::{self, IconStyle, bold, fill, regular};
+use crate::ui::popover_menu::{MenuEntry, MenuIcon, render_popover_menu};
 use crate::ui::theme;
 use egui::{Align2, Color32, CornerRadius, Margin, Rect, RichText, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsTab {
+    General,
     Terminal,
     SyncVault,
-}
-
-#[derive(Debug, Clone)]
-pub struct TerminalSettings {
-    pub text_size: f32,
-    pub copy_on_select: bool,
-    pub bright_bold: bool,
-}
-
-impl Default for TerminalSettings {
-    fn default() -> Self {
-        Self {
-            text_size: 14.0,
-            copy_on_select: false,
-            bright_bold: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +24,7 @@ pub enum SyncOnboardingStep {
 pub struct SettingsModalState {
     pub open: bool,
     pub tab: SettingsTab,
+    pub lang_menu_open: bool,
     pub sync_step: SyncOnboardingStep,
     pub token_input: String,
     pub show_token: bool,
@@ -52,7 +40,8 @@ impl Default for SettingsModalState {
     fn default() -> Self {
         Self {
             open: false,
-            tab: SettingsTab::Terminal,
+            tab: SettingsTab::General,
+            lang_menu_open: false,
             sync_step: SyncOnboardingStep::ChooseMode,
             token_input: String::new(),
             show_token: false,
@@ -72,6 +61,7 @@ pub enum SyncUiAction {
     ConnectExisting { token: String, password: String },
     SyncNow,
     ToggleAutoSync(bool),
+    ToggleAutoUnlock(bool),
     Disconnect,
 }
 
@@ -107,13 +97,15 @@ fn settings_card(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui)) {
 pub fn render_settings_modal(
     ctx: &egui::Context,
     state: &mut SettingsModalState,
-    settings: &mut TerminalSettings,
+    settings: &mut AppSettings,
     sync_cfg: Option<&SyncConfig>,
-) -> SyncUiAction {
+) -> (SyncUiAction, bool) {
     let mut action = SyncUiAction::None;
+    let mut settings_changed = false;
     if !state.open {
-        return action;
+        return (action, false);
     }
+    let s = tr(settings.language);
 
     let screen = ctx.screen_rect();
     egui::Area::new(egui::Id::new("settings_backdrop"))
@@ -162,7 +154,7 @@ pub fn render_settings_modal(
             painter.text(
                 pos2(header.left() + 20.0, header.center().y),
                 Align2::LEFT_CENTER,
-                "Settings",
+                s.settings_title,
                 theme::semibold(14.5),
                 theme::TEXT_PRIMARY,
             );
@@ -193,8 +185,9 @@ pub fn render_settings_modal(
             painter.vline(side_rect.right(), side_rect.y_range(), Stroke::new(1.0_f32, theme::SEPARATOR));
 
             let tabs = [
-                (SettingsTab::Terminal, "Terminal", fill::TERMINAL_WINDOW, IconStyle::Fill),
-                (SettingsTab::SyncVault, "Sync Vault", regular::CLOUD, IconStyle::Regular),
+                (SettingsTab::General, s.settings_general, regular::GEAR, IconStyle::Regular),
+                (SettingsTab::Terminal, s.settings_terminal, fill::TERMINAL_WINDOW, IconStyle::Fill),
+                (SettingsTab::SyncVault, s.settings_sync_vault, regular::CLOUD, IconStyle::Regular),
             ];
             for (i, (t, label, glyph, style)) in tabs.iter().enumerate() {
                 let item = Rect::from_min_size(
@@ -235,7 +228,7 @@ pub fn render_settings_modal(
             painter.text(
                 pos2(side_rect.left() + 22.0, side_rect.bottom() - 22.0),
                 Align2::LEFT_CENTER,
-                "Version",
+                s.settings_version,
                 theme::regular(12.0),
                 theme::TEXT_MUTED,
             );
@@ -252,11 +245,100 @@ pub fn render_settings_modal(
             let mut content_ui = ui.new_child(egui::UiBuilder::new().max_rect(content_rect));
 
             match state.tab {
+                SettingsTab::General => {
+                    let mut lang_anchor: Option<Rect> = None;
+                    egui::ScrollArea::vertical().show(&mut content_ui, |ui| {
+                        settings_card(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.vertical(|ui| {
+                                    ui.spacing_mut().item_spacing.y = 2.0;
+                                    ui.label(
+                                        RichText::new(s.general_language_title)
+                                            .font(theme::semibold(13.5))
+                                            .color(theme::TEXT_PRIMARY),
+                                    );
+                                    ui.label(
+                                        RichText::new(s.general_language_desc)
+                                            .font(theme::regular(12.0))
+                                            .color(theme::TEXT_MUTED),
+                                    );
+                                });
+
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    let (sel_rect, sel_resp) =
+                                        ui.allocate_exact_size(vec2(126.0, 32.0), Sense::click());
+                                    let sel_resp = sel_resp.on_hover_cursor(egui::CursorIcon::PointingHand);
+                                    let bg = if state.lang_menu_open || sel_resp.hovered() {
+                                        theme::shade(22)
+                                    } else {
+                                        theme::shade(14)
+                                    };
+                                    ui.painter().rect_filled(sel_rect, CornerRadius::same(7), bg);
+                                    ui.painter().rect_stroke(
+                                        sel_rect,
+                                        CornerRadius::same(7),
+                                        Stroke::new(1.0_f32, theme::shade(18)),
+                                        StrokeKind::Inside,
+                                    );
+                                    ui.painter().text(
+                                        pos2(sel_rect.left() + 12.0, sel_rect.center().y),
+                                        Align2::LEFT_CENTER,
+                                        settings.language.label(),
+                                        theme::medium(13.0),
+                                        theme::TEXT_PRIMARY,
+                                    );
+                                    icons::paint(
+                                        ui.painter(),
+                                        pos2(sel_rect.right() - 14.0, sel_rect.center().y + 0.5),
+                                        bold::CARET_DOWN,
+                                        11.0,
+                                        theme::TEXT_MUTED,
+                                        IconStyle::Bold,
+                                    );
+                                    if sel_resp.clicked() {
+                                        state.lang_menu_open = !state.lang_menu_open;
+                                    }
+                                    lang_anchor = Some(sel_rect);
+                                });
+                            });
+                        });
+                    });
+
+                    if let Some(anchor) = lang_anchor {
+                        if let Some(id) = render_popover_menu(
+                            ctx,
+                            "settings_lang_popover",
+                            anchor,
+                            148.0,
+                            &mut state.lang_menu_open,
+                            &[
+                                MenuEntry::Item {
+                                    id: 0,
+                                    icon: MenuIcon::Badge("EN"),
+                                    label: "English",
+                                    selected: settings.language == Language::En,
+                                },
+                                MenuEntry::Item {
+                                    id: 1,
+                                    icon: MenuIcon::Badge("FR"),
+                                    label: "Français",
+                                    selected: settings.language == Language::Fr,
+                                },
+                            ],
+                        ) {
+                            let next = if id == 0 { Language::En } else { Language::Fr };
+                            if settings.language != next {
+                                settings.language = next;
+                                settings_changed = true;
+                            }
+                        }
+                    }
+                }
                 SettingsTab::Terminal => {
                     egui::ScrollArea::vertical().show(&mut content_ui, |ui| {
                         settings_card(ui, |ui| {
                             ui.label(
-                                RichText::new("Terminal settings")
+                                RichText::new(s.term_settings_title)
                                     .font(theme::semibold(14.0))
                                     .color(theme::TEXT_PRIMARY),
                             );
@@ -264,24 +346,28 @@ pub fn render_settings_modal(
 
                             ui.horizontal(|ui| {
                                 ui.label(
-                                    RichText::new("Select text to copy & Right click to paste")
+                                    RichText::new(s.term_copy_on_select)
                                         .font(theme::regular(13.0))
                                         .color(theme::TEXT_PRIMARY),
                                 );
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    toggle_switch(ui, "set_copy_on_select", &mut settings.copy_on_select);
+                                    if toggle_switch(ui, "set_copy_on_select", &mut settings.copy_on_select) {
+                                        settings_changed = true;
+                                    }
                                 });
                             });
                             ui.add_space(10.0);
 
                             ui.horizontal(|ui| {
                                 ui.label(
-                                    RichText::new("Use bright colours for bold text")
+                                    RichText::new(s.term_bright_bold)
                                         .font(theme::regular(13.0))
                                         .color(theme::TEXT_PRIMARY),
                                 );
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    toggle_switch(ui, "set_bright_bold", &mut settings.bright_bold);
+                                    if toggle_switch(ui, "set_bright_bold", &mut settings.bright_bold) {
+                                        settings_changed = true;
+                                    }
                                 });
                             });
                         });
@@ -291,7 +377,7 @@ pub fn render_settings_modal(
                         settings_card(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.label(
-                                    RichText::new("Text Size")
+                                    RichText::new(s.term_text_size)
                                         .font(theme::regular(13.0))
                                         .color(theme::TEXT_PRIMARY),
                                 );
@@ -299,6 +385,7 @@ pub fn render_settings_modal(
                                     let plus_btn = egui::Button::new("+").min_size(vec2(28.0, 28.0));
                                     if ui.add(plus_btn).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                                         settings.text_size = (settings.text_size + 1.0).min(28.0);
+                                        settings_changed = true;
                                     }
                                     ui.label(
                                         RichText::new(format!("{}", settings.text_size as i32))
@@ -308,6 +395,7 @@ pub fn render_settings_modal(
                                     let minus_btn = egui::Button::new("-").min_size(vec2(28.0, 28.0));
                                     if ui.add(minus_btn).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                                         settings.text_size = (settings.text_size - 1.0).max(9.0);
+                                        settings_changed = true;
                                     }
                                 });
                             });
@@ -316,13 +404,19 @@ pub fn render_settings_modal(
                 }
                 SettingsTab::SyncVault => {
                     egui::ScrollArea::vertical().show(&mut content_ui, |ui| {
-                        action = render_sync_vault_tab(ui, state, sync_cfg);
+                        action = render_sync_vault_tab(
+                            ui,
+                            state,
+                            sync_cfg,
+                            settings.auto_unlock_password.is_some(),
+                            s,
+                        );
                     });
                 }
             }
         });
 
-    action
+    (action, settings_changed)
 }
 
 const GITHUB_NEW_TOKEN_URL: &str =
@@ -405,7 +499,6 @@ fn styled_secret_field(
 
 fn choice_card(
     ui: &mut Ui,
-    id: &str,
     accent: Color32,
     glyph: &str,
     title: &str,
@@ -456,7 +549,6 @@ fn choice_card(
         theme::TEXT_MUTED,
     );
 
-    let _ = id;
     resp.clicked()
 }
 
@@ -464,11 +556,12 @@ fn render_sync_vault_tab(
     ui: &mut Ui,
     state: &mut SettingsModalState,
     sync_cfg: Option<&SyncConfig>,
+    auto_unlock: bool,
+    s: &Strings,
 ) -> SyncUiAction {
     let mut action = SyncUiAction::None;
 
     if let Some(cfg) = sync_cfg {
-        // Connected dashboard
         settings_card(ui, |ui| {
             ui.horizontal(|ui| {
                 let (badge, _) = ui.allocate_exact_size(vec2(38.0, 38.0), Sense::hover());
@@ -478,12 +571,12 @@ fn render_sync_vault_tab(
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 2.0;
                     ui.label(
-                        RichText::new("GitHub Gist Sync actif")
+                        RichText::new(s.sync_active_title)
                             .font(theme::semibold(14.5))
                             .color(theme::TEXT_PRIMARY),
                     );
                     ui.label(
-                        RichText::new("Chiffrement de bout en bout AES-256-GCM + Argon2id")
+                        RichText::new(s.sync_active_desc)
                             .font(theme::regular(12.0))
                             .color(theme::TEXT_MUTED),
                     );
@@ -499,7 +592,7 @@ fn render_sync_vault_tab(
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let open_btn = egui::Button::new(
-                        RichText::new("Ouvrir sur GitHub ↗")
+                        RichText::new(s.sync_open_github)
                             .font(theme::medium(12.0))
                             .color(theme::ACCENT_BLUE),
                     )
@@ -521,9 +614,9 @@ fn render_sync_vault_tab(
             let last = cfg
                 .last_sync
                 .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string())
-                .unwrap_or_else(|| "Jamais".to_string());
+                .unwrap_or_else(|| s.sync_never.to_string());
             ui.label(
-                RichText::new(format!("Dernière synchronisation : {last}"))
+                RichText::new(format!("{} : {last}", s.sync_last_sync))
                     .font(theme::regular(12.0))
                     .color(theme::TEXT_MUTED),
             );
@@ -531,7 +624,7 @@ fn render_sync_vault_tab(
             ui.add_space(14.0);
             ui.horizontal(|ui| {
                 ui.label(
-                    RichText::new("Synchronisation automatique")
+                    RichText::new(s.sync_auto)
                         .font(theme::regular(13.0))
                         .color(theme::TEXT_PRIMARY),
                 );
@@ -539,6 +632,21 @@ fn render_sync_vault_tab(
                     let mut auto = cfg.auto_sync;
                     if toggle_switch(ui, "set_auto_sync", &mut auto) {
                         action = SyncUiAction::ToggleAutoSync(auto);
+                    }
+                });
+            });
+
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(s.sync_auto_unlock)
+                        .font(theme::regular(13.0))
+                        .color(theme::TEXT_PRIMARY),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let mut unlock = auto_unlock;
+                    if toggle_switch(ui, "set_auto_unlock", &mut unlock) {
+                        action = SyncUiAction::ToggleAutoUnlock(unlock);
                     }
                 });
             });
@@ -555,7 +663,7 @@ fn render_sync_vault_tab(
             ui.add_space(16.0);
             ui.horizontal(|ui| {
                 let sync_btn = egui::Button::new(
-                    RichText::new(if state.sync_busy { "Synchronisation..." } else { "Sync now" })
+                    RichText::new(if state.sync_busy { s.sync_in_progress } else { s.sync_now })
                         .color(Color32::WHITE)
                         .font(theme::semibold(13.0)),
                 )
@@ -572,7 +680,7 @@ fn render_sync_vault_tab(
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let disc_btn = egui::Button::new(
-                        RichText::new("Déconnecter").color(theme::DANGER).font(theme::medium(13.0)),
+                        RichText::new(s.sync_disconnect).color(theme::DANGER).font(theme::medium(13.0)),
                     )
                     .fill(theme::shade(16))
                     .corner_radius(CornerRadius::same(7))
@@ -590,10 +698,8 @@ fn render_sync_vault_tab(
         return action;
     }
 
-    // Onboarding when not connected
     match state.sync_step {
         SyncOnboardingStep::ChooseMode => {
-            // Hero banner
             ui.horizontal(|ui| {
                 let (badge, _) = ui.allocate_exact_size(vec2(44.0, 44.0), Sense::hover());
                 ui.painter().rect_filled(badge, CornerRadius::same(11), theme::ACCENT_BLUE);
@@ -602,12 +708,12 @@ fn render_sync_vault_tab(
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 2.0;
                     ui.label(
-                        RichText::new("Sync Vault via GitHub Gist")
+                        RichText::new(s.sync_hero_title)
                             .font(theme::semibold(16.0))
                             .color(theme::TEXT_PRIMARY),
                     );
                     ui.label(
-                        RichText::new("Vos hôtes sont chiffrés localement (AES-256-GCM) avant de quitter votre machine.")
+                        RichText::new(s.sync_hero_desc)
                             .font(theme::regular(12.5))
                             .color(theme::TEXT_MUTED),
                     );
@@ -616,7 +722,7 @@ fn render_sync_vault_tab(
 
             ui.add_space(18.0);
             ui.label(
-                RichText::new("As-tu déjà un coffre synchronisé ?")
+                RichText::new(s.sync_question)
                     .font(theme::semibold(13.5))
                     .color(theme::TEXT_PRIMARY),
             );
@@ -624,11 +730,10 @@ fn render_sync_vault_tab(
 
             if choice_card(
                 ui,
-                "sync_choice_new",
                 theme::ACCENT_BLUE,
                 fill::PLUS,
-                "Créer un nouveau coffre",
-                "Crée un Gist privé rustmius-vault.enc chiffré avec votre mot de passe maître.",
+                s.sync_new_title,
+                s.sync_new_desc,
             ) {
                 state.sync_error = None;
                 state.sync_status = None;
@@ -639,11 +744,10 @@ fn render_sync_vault_tab(
 
             if choice_card(
                 ui,
-                "sync_choice_existing",
                 theme::ACCENT_GREEN,
                 fill::VAULT,
-                "J'ai déjà un coffre synchronisé",
-                "Retrouve automatiquement rustmius-vault.enc dans vos Gists et fusionne vos hôtes.",
+                s.sync_existing_title,
+                s.sync_existing_desc,
             ) {
                 state.sync_error = None;
                 state.sync_status = None;
@@ -671,9 +775,9 @@ fn render_sync_vault_tab(
                     ui.vertical(|ui| {
                         ui.spacing_mut().item_spacing.y = 1.0;
                         let heading = if is_existing {
-                            "Connecter un coffre existant"
+                            s.sync_existing_title
                         } else {
-                            "Créer un nouveau coffre Gist"
+                            s.sync_new_title
                         };
                         ui.label(
                             RichText::new(heading)
@@ -681,7 +785,7 @@ fn render_sync_vault_tab(
                                 .color(theme::TEXT_PRIMARY),
                         );
                         ui.label(
-                            RichText::new("Étape 2 / 2 — Authentification GitHub & clé de chiffrement")
+                            RichText::new(s.sync_step_2)
                                 .font(theme::regular(11.5))
                                 .color(theme::TEXT_MUTED),
                         );
@@ -690,16 +794,15 @@ fn render_sync_vault_tab(
 
                 ui.add_space(16.0);
 
-                // Token label + 1-click pre-filled GitHub link
                 ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new("Token GitHub (scope gist)")
+                        RichText::new(s.sync_token_label)
                             .font(theme::medium(12.5))
                             .color(theme::TEXT_PRIMARY),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let gen_btn = egui::Button::new(
-                            RichText::new("Générer sur GitHub ↗")
+                            RichText::new(s.sync_generate_token)
                                 .font(theme::semibold(11.5))
                                 .color(theme::ACCENT_BLUE),
                         )
@@ -728,7 +831,7 @@ fn render_sync_vault_tab(
 
                 ui.add_space(12.0);
                 ui.label(
-                    RichText::new("Mot de passe maître (chiffrement E2E)")
+                    RichText::new(s.sync_master_pass)
                         .font(theme::medium(12.5))
                         .color(theme::TEXT_PRIMARY),
                 );
@@ -737,7 +840,7 @@ fn render_sync_vault_tab(
                     ui,
                     "sync_pass_input",
                     &mut state.password_input,
-                    "Mot de passe maître",
+                    s.panel_password,
                     regular::LOCK,
                     &mut state.show_password,
                     true,
@@ -749,7 +852,7 @@ fn render_sync_vault_tab(
                         ui,
                         "sync_pass_confirm",
                         &mut state.confirm_password_input,
-                        "Confirmer le mot de passe maître",
+                        s.sync_master_pass_confirm,
                         regular::LOCK,
                         &mut state.show_password,
                         false,
@@ -768,7 +871,7 @@ fn render_sync_vault_tab(
                 ui.add_space(16.0);
                 ui.horizontal(|ui| {
                     let back_btn = egui::Button::new(
-                        RichText::new("← Retour")
+                        RichText::new(s.sync_back)
                             .font(theme::medium(13.0))
                             .color(theme::TEXT_PRIMARY),
                     )
@@ -786,11 +889,11 @@ fn render_sync_vault_tab(
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let cta_text = if state.sync_busy {
-                            "Connexion en cours..."
+                            s.sync_connecting
                         } else if is_existing {
-                            "Retrouver et connecter"
+                            s.sync_find_connect
                         } else {
-                            "Créer et synchroniser"
+                            s.sync_create_sync
                         };
                         let cta = egui::Button::new(
                             RichText::new(cta_text)
@@ -807,11 +910,11 @@ fn render_sync_vault_tab(
                             .clicked()
                         {
                             if state.token_input.trim().is_empty() {
-                                state.sync_error = Some("Veuillez saisir un token GitHub.".to_string());
+                                state.sync_error = Some(s.sync_err_token.to_string());
                             } else if state.password_input.is_empty() {
-                                state.sync_error = Some("Veuillez saisir un mot de passe maître.".to_string());
+                                state.sync_error = Some(s.sync_err_pass.to_string());
                             } else if !is_existing && state.password_input != state.confirm_password_input {
-                                state.sync_error = Some("Les mots de passe ne correspondent pas.".to_string());
+                                state.sync_error = Some(s.sync_err_pass_mismatch.to_string());
                             } else {
                                 state.sync_error = None;
                                 if is_existing {

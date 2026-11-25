@@ -1,5 +1,6 @@
 //! Custom Termius title bar: hamburger, Vaults/SFTP/session tabs, window controls.
 
+use crate::i18n::{Language, tr};
 use crate::storage::OsKind;
 use crate::ui::icons::{self, IconStyle, bold, fill, regular};
 use crate::ui::os_icons::paint_os_mini_badge;
@@ -69,7 +70,9 @@ pub fn render_titlebar(
     active: ActiveTab,
     sessions: &[SessionTabView<'_>],
     menu_open: &mut bool,
+    lang: Language,
 ) -> TitlebarAction {
+    let s = tr(lang);
     let mut action = TitlebarAction::None;
     let rect = ui.max_rect();
     let painter = ui.painter_at(rect);
@@ -106,7 +109,7 @@ pub fn render_titlebar(
         &[MenuEntry::Item {
             id: 0,
             icon: MenuIcon::Phosphor(regular::GEAR, IconStyle::Regular),
-            label: "Paramètres",
+            label: s.menu_settings,
             selected: active == ActiveTab::Settings,
         }],
     ) {
@@ -127,7 +130,7 @@ pub fn render_titlebar(
     painter.rect_filled(vaults, CornerRadius::same(6), vfill);
     let vtext = if vactive { theme::TOPBAR_TEXT } else { theme::TOPBAR_MUTED };
     icons::paint(&painter, pos2(left + 55.5, cy), fill::VAULT, 15.0, vtext, IconStyle::Fill);
-    painter.text(pos2(left + 72.0, cy), Align2::LEFT_CENTER, "Vaults", theme::medium(13.0), vtext);
+    painter.text(pos2(left + 72.0, cy), Align2::LEFT_CENTER, s.tab_vaults, theme::medium(13.0), vtext);
     icons::paint(&painter, pos2(left + 134.0, cy), regular::CLOUD, 14.0, theme::TOPBAR_MUTED, IconStyle::Regular);
     icons::paint(&painter, pos2(left + 168.5, cy + 0.5), bold::CARET_DOWN, 12.0, Color32::from_rgb(0xC7, 0xC9, 0xD6), IconStyle::Bold);
     if vresp.clicked() {
@@ -190,7 +193,7 @@ pub fn render_titlebar(
         ui.id().with("tab_sftp"),
         fill::FOLDER_SIMPLE,
         None,
-        "SFTP",
+        s.tab_sftp,
         active == ActiveTab::Sftp,
         false,
     );

@@ -1,5 +1,6 @@
 //! Termius left navigation rail.
 
+use crate::i18n::{Language, tr};
 use crate::ui::icons::{self, IconStyle, bold, fill};
 use crate::ui::theme;
 use egui::{Align2, CornerRadius, Rect, Sense, Stroke, Ui, pos2, vec2};
@@ -23,12 +24,21 @@ const ITEMS: [(NavSection, &str, &str, IconStyle); 6] = [
     (NavSection::Logs, "Logs", fill::CLOCK, IconStyle::Fill),
 ];
 
-pub fn render_sidebar(ui: &mut Ui, active: &mut NavSection) {
+pub fn render_sidebar(ui: &mut Ui, active: &mut NavSection, lang: Language) {
+    let s = tr(lang);
     let rect = ui.max_rect();
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, theme::light(22));
 
-    for (i, (section, label, glyph, style)) in ITEMS.iter().enumerate() {
+    for (i, (section, _, glyph, style)) in ITEMS.iter().enumerate() {
+        let label = match section {
+            NavSection::Hosts => s.nav_hosts,
+            NavSection::Keychain => s.nav_keychain,
+            NavSection::PortForwarding => s.nav_port_forwarding,
+            NavSection::Snippets => s.nav_snippets,
+            NavSection::KnownHosts => s.nav_known_hosts,
+            NavSection::Logs => s.nav_logs,
+        };
         let item = Rect::from_min_size(
             pos2(rect.left() + 6.0, rect.top() + 12.0 + 45.0 * i as f32),
             vec2(rect.width() - 12.0, 34.0),
@@ -45,7 +55,7 @@ pub fn render_sidebar(ui: &mut Ui, active: &mut NavSection) {
         painter.text(
             pos2(rect.left() + 45.0, cy),
             Align2::LEFT_CENTER,
-            *label,
+            label,
             theme::medium(13.0),
             theme::TEXT_SIDEBAR,
         );

@@ -1,5 +1,6 @@
 //! Termius-style SSH connecting screen with animated spinner arc.
 
+use crate::i18n::{Language, tr};
 use crate::storage::{HostSource, OsKind};
 use crate::ui::icons::{self, IconStyle, fill};
 use crate::ui::os_icons::paint_os_tile;
@@ -21,7 +22,9 @@ pub fn render_connecting_screen(
     source: &HostSource,
     show_logs: bool,
     logs: &[String],
+    lang: Language,
 ) -> ConnectingAction {
+    let s = tr(lang);
     let mut action = ConnectingAction::None;
     let area = ui.max_rect();
     let painter = ui.painter_at(area);
@@ -61,7 +64,7 @@ pub fn render_connecting_screen(
     painter.text(
         logs_btn.center(),
         Align2::CENTER_CENTER,
-        if show_logs { "Hide logs" } else { "Show logs" },
+        if show_logs { s.hide_logs } else { s.show_logs },
         theme::semibold(13.0),
         theme::TEXT_PRIMARY,
     );
@@ -118,7 +121,7 @@ pub fn render_connecting_screen(
     painter.text(
         close_btn.center(),
         Align2::CENTER_CENTER,
-        "Close",
+        s.close,
         theme::semibold(13.0),
         theme::TEXT_PRIMARY,
     );

@@ -1,3 +1,4 @@
+use crate::i18n::{Language, tr};
 use crate::storage::{AuthMethod, Host, HostSource, OsKind};
 use crate::ui::icons::{self, IconStyle, fill, regular};
 use crate::ui::theme;
@@ -167,7 +168,8 @@ fn section_card(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui)) {
         });
 }
 
-pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState) -> HostModalAction {
+pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState, lang: Language) -> HostModalAction {
+    let s = tr(lang);
     let mut action = HostModalAction::None;
     let rect = ui.max_rect();
     let painter = ui.painter_at(rect);
@@ -183,9 +185,9 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState) -> HostModalAc
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = 2.0;
                 let title = if state.editing_id.is_some() {
-                    "Edit Host"
+                    s.panel_edit_host
                 } else {
-                    "New Host"
+                    s.panel_new_host
                 };
                 ui.label(
                     RichText::new(title)
@@ -193,7 +195,7 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState) -> HostModalAc
                         .color(theme::TEXT_PRIMARY),
                 );
                 ui.label(
-                    RichText::new("Personal vault")
+                    RichText::new(s.panel_vault)
                         .font(theme::regular(12.0))
                         .color(theme::TEXT_MUTED),
                 );
@@ -232,7 +234,7 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState) -> HostModalAc
                 // Card 1: Address
                 section_card(ui, |ui| {
                     ui.label(
-                        RichText::new("Address")
+                        RichText::new(s.panel_address)
                             .font(theme::semibold(13.0))
                             .color(theme::TEXT_PRIMARY),
                     );
@@ -257,7 +259,7 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState) -> HostModalAc
                             ui,
                             "panel_hostname",
                             &mut state.hostname,
-                            "IP or Hostname",
+                            s.panel_ip_hint,
                             false,
                             None,
                         );
@@ -269,12 +271,12 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState) -> HostModalAc
                 // Card 2: General (Label only)
                 section_card(ui, |ui| {
                     ui.label(
-                        RichText::new("General")
+                        RichText::new(s.panel_general)
                             .font(theme::semibold(13.0))
                             .color(theme::TEXT_PRIMARY),
                     );
                     ui.add_space(8.0);
-                    styled_field(ui, "panel_label", &mut state.label, "Label", false, None);
+                    styled_field(ui, "panel_label", &mut state.label, s.panel_label_hint, false, None);
                 });
 
                 ui.add_space(10.0);
@@ -283,7 +285,7 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState) -> HostModalAc
                 section_card(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.label(
-                            RichText::new("SSH on")
+                            RichText::new(s.panel_ssh_on)
                                 .font(theme::semibold(13.0))
                                 .color(theme::TEXT_PRIMARY),
                         );
@@ -306,16 +308,18 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState) -> HostModalAc
                         };
                         ui.painter()
                             .rect_stroke(port_rect, CornerRadius::same(6), p_stroke, StrokeKind::Inside);
-                        ui.label(
-                            RichText::new("port")
-                                .font(theme::regular(13.0))
-                                .color(theme::TEXT_MUTED),
-                        );
+                        if !s.panel_port.is_empty() {
+                            ui.label(
+                                RichText::new(s.panel_port)
+                                    .font(theme::regular(13.0))
+                                    .color(theme::TEXT_MUTED),
+                            );
+                        }
                     });
 
                     ui.add_space(12.0);
                     ui.label(
-                        RichText::new("Credentials")
+                        RichText::new(s.panel_credentials)
                             .font(theme::semibold(13.0))
                             .color(theme::TEXT_PRIMARY),
                     );
@@ -325,7 +329,7 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState) -> HostModalAc
                         ui,
                         "panel_user",
                         &mut state.username,
-                        "Username",
+                        s.panel_username,
                         false,
                         Some(regular::USER),
                     );
@@ -340,7 +344,7 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState) -> HostModalAc
                                 ui,
                                 "panel_pass",
                                 &mut state.password,
-                                "Password",
+                                s.panel_password,
                                 !state.show_password,
                                 Some(regular::LOCK),
                             );
@@ -371,9 +375,9 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState) -> HostModalAc
 
                     ui.add_space(10.0);
                     ui.horizontal(|ui| {
-                        ui.radio_value(&mut state.auth_mode, 0, "Auto / Agent");
-                        ui.radio_value(&mut state.auth_mode, 1, "Password");
-                        ui.radio_value(&mut state.auth_mode, 2, "Key");
+                        ui.radio_value(&mut state.auth_mode, 0, s.panel_auth_auto);
+                        ui.radio_value(&mut state.auth_mode, 1, s.panel_auth_password);
+                        ui.radio_value(&mut state.auth_mode, 2, s.panel_auth_key);
                     });
 
                     if state.auth_mode == 2 {
@@ -396,7 +400,7 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState) -> HostModalAc
         ui.horizontal(|ui| {
             let half = (ui.available_width() - 8.0) / 2.0;
             let save_btn = egui::Button::new(
-                RichText::new("Save")
+                RichText::new(s.panel_save)
                     .font(theme::semibold(13.0))
                     .color(theme::TEXT_PRIMARY),
             )
@@ -408,7 +412,7 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState) -> HostModalAc
             }
 
             let conn_btn = egui::Button::new(
-                RichText::new("Connect")
+                RichText::new(s.connect)
                     .font(theme::semibold(13.0))
                     .color(Color32::WHITE),
             )

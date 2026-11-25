@@ -1,5 +1,6 @@
 //! Termius "Hosts" view: quick-connect bar, toolbar, empty state and host cards.
 
+use crate::i18n::{Language, tr};
 use crate::storage::{Host, Vault};
 use crate::ui::icons::{self, IconStyle, bold, fill, regular};
 use crate::ui::os_icons::paint_os_tile;
@@ -94,8 +95,10 @@ fn render_header(
     view_mode: HostViewMode,
     view_menu_open: &mut bool,
     sort_menu_open: &mut bool,
+    lang: Language,
     action: &mut HostGridAction,
 ) -> (Rect, Rect, Rect) {
+    let s = tr(lang);
     let painter = ui.painter_at(area);
     let header = Rect::from_min_size(area.min, vec2(area.width(), theme::HEADER_H));
     painter.rect_filled(header, 0.0, theme::light(46));
@@ -120,12 +123,12 @@ fn render_header(
     painter.text(
         connect.center(),
         Align2::CENTER_CENTER,
-        "Connect",
+        s.connect,
         theme::medium(12.5),
         if enabled { Color32::WHITE } else { theme::TEXT_DISABLED },
     );
     let input_rect = Rect::from_min_max(pos2(qc.left() + 13.0, qc.top()), pos2(connect.left() - 8.0, qc.bottom()));
-    let qresp = single_line_input(ui, input_rect, quick_connect, "Type \"ssh user@hostname -p port\" to connect...", "quick_connect");
+    let qresp = single_line_input(ui, input_rect, quick_connect, s.quick_connect_hint, "quick_connect");
     let submitted = qresp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
     if enabled && (cresp.clicked() || submitted) {
         *action = HostGridAction::QuickConnect(quick_connect.trim().to_string());
@@ -146,7 +149,7 @@ fn render_header(
     let plus_stroke = Stroke::new(1.7_f32, theme::TEXT_PRIMARY);
     painter.line_segment([pos2(plus_c.x - 5.5, plus_c.y), pos2(plus_c.x + 5.5, plus_c.y)], plus_stroke);
     painter.line_segment([pos2(plus_c.x, plus_c.y - 5.5), pos2(plus_c.x, plus_c.y + 5.5)], plus_stroke);
-    painter.text(pos2(l + 43.0, cy), Align2::LEFT_CENTER, "New host", theme::medium(13.0), theme::TEXT_PRIMARY);
+    painter.text(pos2(l + 43.0, cy), Align2::LEFT_CENTER, s.new_host, theme::medium(13.0), theme::TEXT_PRIMARY);
     if nresp.clicked() {
         *action = HostGridAction::NewHost;
     }
@@ -172,10 +175,10 @@ fn render_header(
     }
     egui::popup::popup_below_widget(ui, popup_id, &chresp, egui::PopupCloseBehavior::CloseOnClick, |ui| {
         ui.set_min_width(200.0);
-        if ui.button("New host").clicked() {
+        if ui.button(s.new_host).clicked() {
             *action = HostGridAction::NewHost;
         }
-        if ui.button("Import from ~/.ssh/config").clicked() {
+        if ui.button(s.import_ssh_config).clicked() {
             *action = HostGridAction::ImportSshConfig;
         }
     });
@@ -221,7 +224,8 @@ fn render_header(
     (Rect::from_min_max(pos2(l, header.bottom()), area.max), view_btn_rect, sort_btn_rect)
 }
 
-fn render_empty_state(ui: &mut Ui, area: Rect, input: &mut String, action: &mut HostGridAction) {
+fn render_empty_state(ui: &mut Ui, area: Rect, input: &mut String, lang: Language, action: &mut HostGridAction) {
+    let s = tr(lang);
     let painter = ui.painter_at(area);
     let cx = area.center().x;
     let top = area.center().y - 125.0;
@@ -231,11 +235,11 @@ fn render_empty_state(ui: &mut Ui, area: Rect, input: &mut String, action: &mut 
     painter.rect_filled(tile, CornerRadius::same(10), theme::shade(14));
     icons::paint(&painter, tile.center(), fill::HARD_DRIVES, 24.0, theme::ICON_DARK, IconStyle::Fill);
 
-    painter.text(pos2(cx, top + 100.0), Align2::CENTER_CENTER, "Create host", theme::semibold(16.0), theme::TEXT_PRIMARY);
+    painter.text(pos2(cx, top + 100.0), Align2::CENTER_CENTER, s.empty_title, theme::semibold(16.0), theme::TEXT_PRIMARY);
     painter.text(
         pos2(cx, top + 133.0),
         Align2::CENTER_CENTER,
-        "Save your connection details as hosts to connect in one click.",
+        s.empty_subtitle,
         theme::regular(13.0),
         theme::TEXT_MUTED,
     );
@@ -243,7 +247,7 @@ fn render_empty_state(ui: &mut Ui, area: Rect, input: &mut String, action: &mut 
     // Address input
     let field = Rect::from_min_size(pos2(cx - 196.0, top + 166.0), vec2(392.0, 34.0));
     painter.rect_filled(field, CornerRadius::same(6), theme::light(40));
-    let resp = single_line_input(ui, field.shrink2(vec2(11.0, 0.0)), input, "Type IP or Hostname", "empty_host_input");
+    let resp = single_line_input(ui, field.shrink2(vec2(11.0, 0.0)), input, s.empty_hint, "empty_host_input");
     let init_id = resp.id.with("initial_focus");
     let did_focus = ui.data_mut(|d| {
         let already = d.get_temp::<bool>(init_id).unwrap_or(false);
@@ -271,7 +275,7 @@ fn render_empty_state(ui: &mut Ui, area: Rect, input: &mut String, action: &mut 
         (theme::ACCENT_BLUE_TOP, theme::ACCENT_BLUE_BOTTOM)
     };
     vertical_gradient(&painter, button, 6.0, t, b);
-    painter.text(button.center(), Align2::CENTER_CENTER, "Continue", theme::semibold(13.0), Color32::WHITE);
+    painter.text(button.center(), Align2::CENTER_CENTER, s.continue_btn, theme::semibold(13.0), Color32::WHITE);
 
     let submitted = bresp.clicked() || (resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
     if submitted && !input.trim().is_empty() {
@@ -287,8 +291,10 @@ fn render_cards(
     ghost_hosts: &[Host],
     view_mode: HostViewMode,
     sort_mode: HostSortMode,
+    lang: Language,
     action: &mut HostGridAction,
 ) {
+    let s = tr(lang);
     let mut hosts: Vec<&Host> = vault.hosts.iter().collect();
     match sort_mode {
         HostSortMode::Az => hosts.sort_by(|a, b| a.label.to_ascii_lowercase().cmp(&b.label.to_ascii_lowercase())),
@@ -301,7 +307,7 @@ fn render_cards(
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(inner));
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(&mut child, |ui| {
         ui.add_space(18.0);
-        ui.label(RichText::new("Hosts").font(theme::semibold(14.0)).color(theme::TEXT_PRIMARY));
+        ui.label(RichText::new(s.hosts_heading).font(theme::semibold(14.0)).color(theme::TEXT_PRIMARY));
         ui.add_space(6.0);
 
         let gap = if view_mode == HostViewMode::List { 8.0 } else { 12.0 };
@@ -377,15 +383,15 @@ fn render_cards(
                 *action = HostGridAction::Connect((*host).clone());
             }
             resp.context_menu(|ui| {
-                if ui.button("Connect").clicked() {
+                if ui.button(s.ctx_connect).clicked() {
                     *action = HostGridAction::Connect((*host).clone());
                     ui.close_menu();
                 }
-                if ui.button("Edit").clicked() {
+                if ui.button(s.ctx_edit).clicked() {
                     *action = HostGridAction::EditHost((*host).clone());
                     ui.close_menu();
                 }
-                if ui.button(RichText::new("Delete").color(theme::DANGER)).clicked() {
+                if ui.button(RichText::new(s.ctx_delete).color(theme::DANGER)).clicked() {
                     *action = HostGridAction::DeleteHost(host.id);
                     ui.close_menu();
                 }
@@ -396,11 +402,11 @@ fn render_cards(
             ui.add_space(16.0);
             ui.horizontal(|ui| {
                 ui.label(
-                    RichText::new("Detected in ~/.ssh/config")
+                    RichText::new(s.detected_ssh_heading)
                         .font(theme::semibold(13.0))
                         .color(theme::TEXT_MUTED),
                 );
-                if ui.small_button("Import all").clicked() {
+                if ui.small_button(s.import_all).clicked() {
                     *action = HostGridAction::ImportSshConfig;
                 }
             });
@@ -464,7 +470,7 @@ fn render_cards(
                 painter.text(
                     import_rect.center(),
                     Align2::CENTER_CENTER,
-                    "Import",
+                    s.import_btn,
                     theme::medium(12.0),
                     if imp_resp.hovered() {
                         Color32::WHITE
@@ -502,7 +508,9 @@ pub fn render_host_grid(
     view_menu_open: &mut bool,
     sort_mode: &mut HostSortMode,
     sort_menu_open: &mut bool,
+    lang: Language,
 ) -> HostGridAction {
+    let s = tr(lang);
     let mut action = HostGridAction::None;
     let area = ui.max_rect();
     let (content, view_btn_rect, sort_btn_rect) = render_header(
@@ -512,12 +520,13 @@ pub fn render_host_grid(
         *view_mode,
         view_menu_open,
         sort_menu_open,
+        lang,
         &mut action,
     );
     if vault.hosts.is_empty() && ghost_hosts.is_empty() {
-        render_empty_state(ui, content, empty_host_input, &mut action);
+        render_empty_state(ui, content, empty_host_input, lang, &mut action);
     } else {
-        render_cards(ui, content, vault, ghost_hosts, *view_mode, *sort_mode, &mut action);
+        render_cards(ui, content, vault, ghost_hosts, *view_mode, *sort_mode, lang, &mut action);
     }
 
     if let Some(id) = render_popover_menu(
@@ -530,13 +539,13 @@ pub fn render_host_grid(
             MenuEntry::Item {
                 id: 0,
                 icon: MenuIcon::Phosphor(fill::SQUARES_FOUR, IconStyle::Fill),
-                label: "Grid",
+                label: s.view_grid,
                 selected: *view_mode == HostViewMode::Grid,
             },
             MenuEntry::Item {
                 id: 1,
                 icon: MenuIcon::Phosphor(regular::LIST_BULLETS, IconStyle::Regular),
-                label: "List",
+                label: s.view_list,
                 selected: *view_mode == HostViewMode::List,
             },
         ],
@@ -548,32 +557,32 @@ pub fn render_host_grid(
         ui.ctx(),
         "sort_mode_popover",
         sort_btn_rect,
-        186.0,
+        204.0,
         sort_menu_open,
         &[
             MenuEntry::Item {
                 id: 0,
                 icon: MenuIcon::Badge("Az"),
-                label: "A-z",
+                label: s.sort_az,
                 selected: *sort_mode == HostSortMode::Az,
             },
             MenuEntry::Item {
                 id: 1,
                 icon: MenuIcon::Badge("Za"),
-                label: "Z-a",
+                label: s.sort_za,
                 selected: *sort_mode == HostSortMode::Za,
             },
             MenuEntry::Separator,
             MenuEntry::Item {
                 id: 2,
                 icon: MenuIcon::Phosphor(regular::CALENDAR, IconStyle::Regular),
-                label: "Newest to oldest",
+                label: s.sort_newest,
                 selected: *sort_mode == HostSortMode::NewestFirst,
             },
             MenuEntry::Item {
                 id: 3,
                 icon: MenuIcon::Phosphor(regular::CALENDAR, IconStyle::Regular),
-                label: "Oldest to newest",
+                label: s.sort_oldest,
                 selected: *sort_mode == HostSortMode::OldestFirst,
             },
         ],
