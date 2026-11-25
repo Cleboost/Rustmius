@@ -73,6 +73,31 @@ fn expand_tilde(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
+async fn try_agent_auth<S>(
+    session: &mut Handle<ClientHandler>,
+    username: &str,
+    agent: &mut russh::keys::agent::client::AgentClient<S>,
+) -> Result<bool>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
+    let Ok(identities) = agent.request_identities().await else {
+        return Ok(false);
+    };
+    let hash_alg = session.best_supported_rsa_hash().await?.flatten();
+    for pubkey in identities {
+        if let Ok(res) = session
+            .authenticate_publickey_with(username, pubkey, hash_alg, agent)
+            .await
+        {
+            if res.success() {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
 async fn authenticate(session: &mut Handle<ClientHandler>, host: &Host) -> Result<bool> {
     match &host.auth {
         AuthMethod::Password => {
@@ -98,7 +123,22 @@ async fn authenticate(session: &mut Handle<ClientHandler>, host: &Host) -> Resul
             Ok(res.success())
         }
         AuthMethod::Agent => {
-            // Tente les clés par défaut dans ~/.ssh/ si aucun agent n'est utilisé
+            // 1. Essayer l'agent SSH système (SSH_AUTH_SOCK) puis le socket Bitwarden
+            if let Ok(mut agent) = russh::keys::agent::client::AgentClient::connect_env().await {
+                if try_agent_auth(session, &host.username, &mut agent).await? {
+                    return Ok(true);
+                }
+            }
+            let bw_sock = expand_tilde("~/.bitwarden-ssh-agent.sock");
+            if bw_sock.exists() {
+                if let Ok(mut agent) = russh::keys::agent::client::AgentClient::connect_uds(&bw_sock).await {
+                    if try_agent_auth(session, &host.username, &mut agent).await? {
+                        return Ok(true);
+                    }
+                }
+            }
+
+            // 2. Fallback sur les clés locales ~/.ssh/
             let candidates = ["~/.ssh/id_ed25519", "~/.ssh/id_rsa", "~/.ssh/id_ecdsa"];
             for candidate in candidates {
                 let key_path = expand_tilde(candidate);
