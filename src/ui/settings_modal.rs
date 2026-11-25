@@ -1,6 +1,6 @@
 //! Termius-style Settings modal (Terminal + Sync Vault).
 
-use crate::ui::icons::{self, IconStyle, regular};
+use crate::ui::icons::{self, IconStyle, fill, regular};
 use crate::ui::theme;
 use egui::{Align2, Color32, CornerRadius, Margin, Rect, RichText, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 
@@ -155,10 +155,10 @@ pub fn render_settings_modal(
             painter.vline(side_rect.right(), side_rect.y_range(), Stroke::new(1.0_f32, theme::SEPARATOR));
 
             let tabs = [
-                (SettingsTab::Terminal, "Terminal", None),
-                (SettingsTab::SyncVault, "Sync Vault", Some("Soon")),
+                (SettingsTab::Terminal, "Terminal", fill::TERMINAL_WINDOW, IconStyle::Fill, None),
+                (SettingsTab::SyncVault, "Sync Vault", regular::CLOUD, IconStyle::Regular, Some("Soon")),
             ];
-            for (i, (t, label, badge)) in tabs.iter().enumerate() {
+            for (i, (t, label, glyph, style, badge)) in tabs.iter().enumerate() {
                 let item = Rect::from_min_size(
                     pos2(side_rect.left() + 10.0, side_rect.top() + 14.0 + i as f32 * 40.0),
                     vec2(side_w - 20.0, 34.0),
@@ -171,8 +171,16 @@ pub fn render_settings_modal(
                 } else if resp.hovered() {
                     painter.rect_filled(item, CornerRadius::same(7), theme::shade(10));
                 }
+                icons::paint(
+                    painter,
+                    pos2(item.left() + 18.0, item.center().y),
+                    glyph,
+                    15.0,
+                    theme::ICON_DARK,
+                    *style,
+                );
                 painter.text(
-                    pos2(item.left() + 12.0, item.center().y),
+                    pos2(item.left() + 36.0, item.center().y),
                     Align2::LEFT_CENTER,
                     *label,
                     theme::medium(13.5),
