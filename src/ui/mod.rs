@@ -5,6 +5,7 @@ pub mod host_modal;
 pub mod icons;
 pub mod os_icons;
 pub mod popover_menu;
+pub mod settings_modal;
 pub mod sidebar;
 pub mod terminal_view;
 pub mod theme;

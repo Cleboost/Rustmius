@@ -7,6 +7,7 @@ use crate::ui::background::paint_backdrop;
 use crate::ui::connecting::{ConnectingAction, render_connecting_screen};
 use crate::ui::host_grid::{HostGridAction, HostSortMode, HostViewMode, render_host_grid};
 use crate::ui::host_modal::{HostModalAction, HostModalState, render_host_panel};
+use crate::ui::settings_modal::{SettingsModalState, TerminalSettings, render_settings_modal};
 use crate::ui::sidebar::{NavSection, render_sidebar};
 use crate::ui::terminal_view::render_terminal;
 use crate::ui::theme;
@@ -47,6 +48,9 @@ pub struct RustmiusApp {
     view_menu_open: bool,
     sort_mode: HostSortMode,
     sort_menu_open: bool,
+    titlebar_menu_open: bool,
+    settings_modal: SettingsModalState,
+    term_settings: TerminalSettings,
 }
 
 impl RustmiusApp {
@@ -79,6 +83,9 @@ impl RustmiusApp {
             view_menu_open: false,
             sort_mode: HostSortMode::NewestFirst,
             sort_menu_open: false,
+            titlebar_menu_open: false,
+            settings_modal: SettingsModalState::default(),
+            term_settings: TerminalSettings::default(),
         }
     }
 
@@ -321,9 +328,10 @@ impl eframe::App for RustmiusApp {
                         title: t,
                     })
                     .collect();
-                tb_action = render_titlebar(ui, self.active, &views);
+                tb_action = render_titlebar(ui, self.active, &views, &mut self.titlebar_menu_open);
             });
         match tb_action {
+            TitlebarAction::Select(ActiveTab::Settings) => self.settings_modal.open = true,
             TitlebarAction::Select(tab) => self.active = tab,
             TitlebarAction::CloseSession(id) => self.close_session(id),
             TitlebarAction::None => {}
@@ -393,7 +401,12 @@ impl eframe::App for RustmiusApp {
             ActiveTab::Session(id) => {
                 if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
                     if tab.connected {
-                        render_terminal(ui, &mut tab.terminal, &tab.ssh.cmd_tx);
+                        render_terminal(
+                            ui,
+                            &mut tab.terminal,
+                            &tab.ssh.cmd_tx,
+                            self.term_settings.text_size,
+                        );
                     } else {
                         match render_connecting_screen(
                             ui,
@@ -413,6 +426,7 @@ impl eframe::App for RustmiusApp {
                 }
             }
             ActiveTab::Sftp => placeholder(ui, "SFTP — coming soon"),
+            ActiveTab::Settings => placeholder(ui, "Paramètres & Gist Sync — bientôt disponible"),
             ActiveTab::Vaults => match self.nav {
                 NavSection::Hosts => {
                     host_action = render_host_grid(
@@ -439,6 +453,7 @@ impl eframe::App for RustmiusApp {
             self.close_session(cid);
         }
 
+        render_settings_modal(ctx, &mut self.settings_modal, &mut self.term_settings);
         handle_window_resize(ctx);
     }
 }

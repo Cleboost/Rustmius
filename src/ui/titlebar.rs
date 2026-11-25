@@ -3,6 +3,7 @@
 use crate::storage::OsKind;
 use crate::ui::icons::{self, IconStyle, bold, fill, regular};
 use crate::ui::os_icons::paint_os_mini_badge;
+use crate::ui::popover_menu::{MenuEntry, MenuIcon, render_popover_menu};
 use crate::ui::theme;
 use egui::epaint::{Mesh, Shape};
 use egui::{
@@ -14,6 +15,7 @@ use uuid::Uuid;
 pub enum ActiveTab {
     Vaults,
     Sftp,
+    Settings,
     Session(Uuid),
 }
 
@@ -53,6 +55,7 @@ fn icon_button(ui: &mut Ui, painter: &Painter, rect: Rect, id: &str, glyph: &str
     let resp = ui.interact(rect, ui.id().with(id), Sense::click());
     let mut color = theme::TOPBAR_ICON;
     if resp.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         let bg = if close { theme::WINDOW_CLOSE_HOVER } else { theme::TOPBAR_TAB_HOVER };
         painter.rect_filled(rect, CornerRadius::same(6), bg);
         color = Color32::WHITE;
@@ -61,7 +64,12 @@ fn icon_button(ui: &mut Ui, painter: &Painter, rect: Rect, id: &str, glyph: &str
     resp.clicked()
 }
 
-pub fn render_titlebar(ui: &mut Ui, active: ActiveTab, sessions: &[SessionTabView<'_>]) -> TitlebarAction {
+pub fn render_titlebar(
+    ui: &mut Ui,
+    active: ActiveTab,
+    sessions: &[SessionTabView<'_>],
+    menu_open: &mut bool,
+) -> TitlebarAction {
     let mut action = TitlebarAction::None;
     let rect = ui.max_rect();
     let painter = ui.painter_at(rect);
@@ -84,13 +92,30 @@ pub fn render_titlebar(ui: &mut Ui, active: ActiveTab, sessions: &[SessionTabVie
     let tab_top = rect.top() + 9.0;
     let tab_bot = rect.top() + 39.0;
 
-    // Hamburger
-    let ham = Rect::from_center_size(pos2(left + 19.0, cy), vec2(30.0, 30.0));
-    icon_button(ui, &painter, ham, "tb_menu", regular::LIST, 16.0, false);
+    // Hamburger (7px left, 9px top/bottom, 4px gap to Vaults)
+    let ham = Rect::from_center_size(pos2(left + 22.0, cy), vec2(30.0, 30.0));
+    if icon_button(ui, &painter, ham, "tb_menu", regular::LIST, 16.0, false) {
+        *menu_open = !*menu_open;
+    }
+    if let Some(0) = render_popover_menu(
+        ui.ctx(),
+        "titlebar_menu_popover",
+        ham,
+        170.0,
+        menu_open,
+        &[MenuEntry::Item {
+            id: 0,
+            icon: MenuIcon::Phosphor(regular::GEAR, IconStyle::Regular),
+            label: "Paramètres",
+            selected: active == ActiveTab::Settings,
+        }],
+    ) {
+        action = TitlebarAction::Select(ActiveTab::Settings);
+    }
 
     // Vaults tab
     let vaults = Rect::from_min_max(pos2(left + 41.0, tab_top), pos2(left + 183.0, tab_bot));
-    let vresp = ui.interact(vaults, ui.id().with("tab_vaults"), Sense::click());
+    let vresp = ui.interact(vaults, ui.id().with("tab_vaults"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
     let vactive = active == ActiveTab::Vaults;
     let vfill = if vactive {
         theme::TOPBAR_TAB_ACTIVE
@@ -116,7 +141,7 @@ pub fn render_titlebar(ui: &mut Ui, active: ActiveTab, sessions: &[SessionTabVie
         let tw = painter.layout_no_wrap(title.to_owned(), font.clone(), Color32::WHITE).size().x;
         let width = if closable { 32.0 + tw + 34.0 } else { 32.0 + tw + 15.0 };
         let r = Rect::from_min_max(pos2(x, tab_top), pos2(x + width, tab_bot));
-        let resp = ui.interact(r, id, Sense::click());
+        let resp = ui.interact(r, id, Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
         let bg = if is_active {
             theme::TOPBAR_TAB_ACTIVE
         } else if resp.hovered() {
@@ -146,7 +171,7 @@ pub fn render_titlebar(ui: &mut Ui, active: ActiveTab, sessions: &[SessionTabVie
         let mut close_clicked = false;
         if closable {
             let cr = Rect::from_center_size(pos2(r.right() - 16.0, cy), vec2(20.0, 20.0));
-            let cresp = ui.interact(cr, id.with("close"), Sense::click());
+            let cresp = ui.interact(cr, id.with("close"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
             if cresp.hovered() {
                 painter.rect_filled(cr, CornerRadius::same(4), theme::TOPBAR_TAB_HOVER);
             }
@@ -194,7 +219,7 @@ pub fn render_titlebar(ui: &mut Ui, active: ActiveTab, sessions: &[SessionTabVie
 
     // "+" new tab
     let plus = Rect::from_center_size(pos2(end_x - 4.0 + 23.0, cy), vec2(26.0, 26.0));
-    let presp = ui.interact(plus, ui.id().with("tb_plus"), Sense::click());
+    let presp = ui.interact(plus, ui.id().with("tb_plus"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
     let pcol = if presp.hovered() { theme::TOPBAR_TEXT } else { Color32::from_rgb(0x67, 0x6A, 0x79) };
     if presp.hovered() {
         painter.rect_filled(plus, CornerRadius::same(6), theme::TOPBAR_TAB_HOVER);
