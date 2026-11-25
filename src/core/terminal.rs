@@ -1,5 +1,7 @@
 use alacritty_terminal::event::VoidListener;
 use alacritty_terminal::grid::Scroll;
+use alacritty_terminal::index::{Column, Line, Point, Side};
+use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::term::{Config, Term, test::TermSize};
 use alacritty_terminal::vte::ansi::Processor;
 
@@ -54,6 +56,31 @@ impl TerminalState {
 
     pub fn term(&self) -> &Term<VoidListener> {
         &self.term
+    }
+
+    fn screen_to_point(&self, col: usize, row: usize) -> Point {
+        let display_offset = self.term.grid().display_offset() as i32;
+        Point::new(Line(row as i32 - display_offset), Column(col.min(self.cols.saturating_sub(1))))
+    }
+
+    pub fn start_selection(&mut self, col: usize, row: usize) {
+        let point = self.screen_to_point(col, row);
+        self.term.selection = Some(Selection::new(SelectionType::Simple, point, Side::Left));
+    }
+
+    pub fn update_selection(&mut self, col: usize, row: usize) {
+        let point = self.screen_to_point(col, row);
+        if let Some(ref mut sel) = self.term.selection {
+            sel.update(point, Side::Right);
+        }
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.term.selection = None;
+    }
+
+    pub fn selection_text(&self) -> Option<String> {
+        self.term.selection_to_string().filter(|s| !s.is_empty())
     }
 }
 

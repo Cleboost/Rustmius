@@ -3,7 +3,7 @@ use crate::core::terminal::TerminalState;
 use crate::ui::theme;
 use alacritty_terminal::term::cell::Flags;
 use alacritty_terminal::vte::ansi::{Color as AnsiColor, NamedColor};
-use egui::{Color32, Event, FontId, Key, Pos2, Rect, Sense, Ui, Vec2};
+use egui::{Color32, Event, FontId, Key, PointerButton, Pos2, Rect, Sense, Ui, Vec2};
 use tokio::sync::mpsc::UnboundedSender;
 
 fn ansi_to_color32(color: AnsiColor, is_fg: bool) -> Color32 {
@@ -98,6 +98,9 @@ pub fn render_terminal(
     }
 
     let (rect, response) = ui.allocate_exact_size(avail, Sense::click_and_drag());
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
+    }
     let init_id = response.id.with("terminal_initial_focus");
     let did_focus = ui.data_mut(|d| {
         let already = d.get_temp::<bool>(init_id).unwrap_or(false);
@@ -115,10 +118,31 @@ pub fn render_terminal(
 
     let origin = Pos2::new(rect.min.x + PAD, rect.min.y + PAD);
 
+    // Sélection souris
+    let pos_to_cell = |pos: Pos2| -> (usize, usize) {
+        let col = (((pos.x - origin.x) / cell_w).floor().max(0.0) as usize).min(cols.saturating_sub(1));
+        let row = (((pos.y - origin.y) / cell_h).floor().max(0.0) as usize).min(rows.saturating_sub(1));
+        (col, row)
+    };
+    if response.drag_started_by(PointerButton::Primary) {
+        if let Some(pos) = response.interact_pointer_pos() {
+            let (col, row) = pos_to_cell(pos);
+            terminal.start_selection(col, row);
+        }
+    } else if response.dragged_by(PointerButton::Primary) {
+        if let Some(pos) = response.interact_pointer_pos() {
+            let (col, row) = pos_to_cell(pos);
+            terminal.update_selection(col, row);
+        }
+    } else if response.clicked() {
+        terminal.clear_selection();
+    }
+
     // Rendu des cellules
     let content = terminal.term().renderable_content();
     let display_offset = content.display_offset as i32;
     let cursor_point = content.cursor.point;
+    let selection = content.selection;
 
     for indexed in content.display_iter {
         let row_idx = indexed.point.line.0 + display_offset;
@@ -140,7 +164,12 @@ pub fn render_terminal(
             std::mem::swap(&mut fg, &mut bg);
         }
 
-        if bg != theme::TERM_BG {
+        let is_selected = selection
+            .map(|s| s.contains_cell(&indexed, cursor_point, content.cursor.shape))
+            .unwrap_or(false);
+        if is_selected {
+            painter.rect_filled(cell_rect, 0.0, theme::ACCENT_BLUE.linear_multiply(0.4));
+        } else if bg != theme::TERM_BG {
             painter.rect_filled(cell_rect, 0.0, bg);
         }
 
@@ -172,7 +201,12 @@ pub fn render_terminal(
         for ev in events {
             match ev {
                 Event::Copy => {
-                    let _ = cmd_tx.send(SshCommand::Data(vec![0x03]));
+                    if let Some(selected) = terminal.selection_text() {
+                        ui.ctx().copy_text(selected);
+                        terminal.clear_selection();
+                    } else {
+                        let _ = cmd_tx.send(SshCommand::Data(vec![0x03]));
+                    }
                 }
                 Event::Paste(text) => {
                     let _ = cmd_tx.send(SshCommand::Data(text.into_bytes()));
