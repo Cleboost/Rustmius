@@ -1,5 +1,6 @@
 //! Termius-style Settings modal (Terminal + Sync Vault).
 
+use crate::storage::gist_sync::SyncConfig;
 use crate::ui::icons::{self, IconStyle, fill, regular};
 use crate::ui::theme;
 use egui::{Align2, Color32, CornerRadius, Margin, Rect, RichText, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
@@ -27,9 +28,24 @@ impl Default for TerminalSettings {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncOnboardingStep {
+    ChooseMode,
+    Configure { is_existing: bool },
+}
+
 pub struct SettingsModalState {
     pub open: bool,
     pub tab: SettingsTab,
+    pub sync_step: SyncOnboardingStep,
+    pub token_input: String,
+    pub show_token: bool,
+    pub password_input: String,
+    pub confirm_password_input: String,
+    pub show_password: bool,
+    pub sync_busy: bool,
+    pub sync_status: Option<String>,
+    pub sync_error: Option<String>,
 }
 
 impl Default for SettingsModalState {
@@ -37,15 +53,35 @@ impl Default for SettingsModalState {
         Self {
             open: false,
             tab: SettingsTab::Terminal,
+            sync_step: SyncOnboardingStep::ChooseMode,
+            token_input: String::new(),
+            show_token: false,
+            password_input: String::new(),
+            confirm_password_input: String::new(),
+            show_password: false,
+            sync_busy: false,
+            sync_status: None,
+            sync_error: None,
         }
     }
 }
 
-fn toggle_switch(ui: &mut Ui, id: &str, value: &mut bool) {
+pub enum SyncUiAction {
+    None,
+    CreateNew { token: String, password: String },
+    ConnectExisting { token: String, password: String },
+    SyncNow,
+    ToggleAutoSync(bool),
+    Disconnect,
+}
+
+fn toggle_switch(ui: &mut Ui, id: &str, value: &mut bool) -> bool {
     let (rect, resp) = ui.allocate_exact_size(vec2(38.0, 22.0), Sense::click());
     let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
+    let mut changed = false;
     if resp.clicked() {
         *value = !*value;
+        changed = true;
     }
     let anim = ui.ctx().animate_bool_with_time(ui.id().with(id), *value, 0.12);
     let bg = theme::shade(36).lerp_to_gamma(theme::ACCENT_BLUE, anim);
@@ -53,6 +89,7 @@ fn toggle_switch(ui: &mut Ui, id: &str, value: &mut bool) {
     let knob_x = rect.left() + 11.0 + anim * 16.0;
     ui.painter()
         .circle_filled(pos2(knob_x, rect.center().y), 8.5, Color32::WHITE);
+    changed
 }
 
 fn settings_card(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui)) {
@@ -71,13 +108,15 @@ pub fn render_settings_modal(
     ctx: &egui::Context,
     state: &mut SettingsModalState,
     settings: &mut TerminalSettings,
-) {
+    sync_cfg: Option<&SyncConfig>,
+) -> SyncUiAction {
+    let mut action = SyncUiAction::None;
     if !state.open {
-        return;
+        return action;
     }
 
     let screen = ctx.screen_rect();
-    let backdrop = egui::Area::new(egui::Id::new("settings_backdrop"))
+    egui::Area::new(egui::Id::new("settings_backdrop"))
         .order(egui::Order::Middle)
         .fixed_pos(screen.min)
         .show(ctx, |ui| {
@@ -88,7 +127,6 @@ pub fn render_settings_modal(
                 state.open = false;
             }
         });
-    let _ = backdrop;
 
     let modal_w = (screen.width() - 80.0).min(820.0);
     let modal_h = (screen.height() - 80.0).min(540.0);
@@ -155,10 +193,10 @@ pub fn render_settings_modal(
             painter.vline(side_rect.right(), side_rect.y_range(), Stroke::new(1.0_f32, theme::SEPARATOR));
 
             let tabs = [
-                (SettingsTab::Terminal, "Terminal", fill::TERMINAL_WINDOW, IconStyle::Fill, None),
-                (SettingsTab::SyncVault, "Sync Vault", regular::CLOUD, IconStyle::Regular, Some("Soon")),
+                (SettingsTab::Terminal, "Terminal", fill::TERMINAL_WINDOW, IconStyle::Fill),
+                (SettingsTab::SyncVault, "Sync Vault", regular::CLOUD, IconStyle::Regular),
             ];
-            for (i, (t, label, glyph, style, badge)) in tabs.iter().enumerate() {
+            for (i, (t, label, glyph, style)) in tabs.iter().enumerate() {
                 let item = Rect::from_min_size(
                     pos2(side_rect.left() + 10.0, side_rect.top() + 14.0 + i as f32 * 40.0),
                     vec2(side_w - 20.0, 34.0),
@@ -186,10 +224,8 @@ pub fn render_settings_modal(
                     theme::medium(13.5),
                     theme::TEXT_PRIMARY,
                 );
-                if let Some(b) = badge {
-                    let br = Rect::from_center_size(pos2(item.right() - 24.0, item.center().y), vec2(36.0, 18.0));
-                    painter.rect_filled(br, CornerRadius::same(4), theme::shade(18));
-                    painter.text(br.center(), Align2::CENTER_CENTER, *b, theme::medium(10.5), theme::TEXT_MUTED);
+                if *t == SettingsTab::SyncVault && sync_cfg.is_some() {
+                    painter.circle_filled(pos2(item.right() - 14.0, item.center().y), 4.0, theme::ACCENT_GREEN);
                 }
                 if resp.clicked() {
                     state.tab = *t;
@@ -279,14 +315,523 @@ pub fn render_settings_modal(
                     });
                 }
                 SettingsTab::SyncVault => {
-                    content_ui.centered_and_justified(|ui| {
-                        ui.label(
-                            RichText::new("Sync Vault (GitHub Gist chiffré) — Bientôt disponible")
-                                .font(theme::medium(14.0))
-                                .color(theme::TEXT_MUTED),
-                        );
+                    egui::ScrollArea::vertical().show(&mut content_ui, |ui| {
+                        action = render_sync_vault_tab(ui, state, sync_cfg);
                     });
                 }
             }
         });
+
+    action
+}
+
+const GITHUB_NEW_TOKEN_URL: &str =
+    "https://github.com/settings/tokens/new?scopes=gist&description=Rustmius+Sync+Vault";
+
+fn styled_secret_field(
+    ui: &mut Ui,
+    id: &str,
+    text: &mut String,
+    hint: &str,
+    leading_icon: &str,
+    show: &mut bool,
+    allow_toggle: bool,
+) {
+    let h = 36.0;
+    let w = ui.available_width();
+    let (rect, _) = ui.allocate_exact_size(vec2(w, h), Sense::hover());
+
+    ui.painter().rect_filled(
+        rect,
+        CornerRadius::same(8),
+        Color32::from_rgba_unmultiplied(0xFF, 0xFF, 0xFF, 200),
+    );
+
+    icons::paint(
+        ui.painter(),
+        pos2(rect.left() + 15.0, rect.center().y),
+        leading_icon,
+        14.5,
+        theme::TEXT_MUTED,
+        IconStyle::Regular,
+    );
+
+    let right_pad = if allow_toggle { 34.0 } else { 10.0 };
+    let edit_rect = Rect::from_min_max(
+        pos2(rect.left() + 32.0, rect.top()),
+        pos2(rect.right() - right_pad, rect.bottom()),
+    );
+    let resp = ui.put(
+        edit_rect,
+        egui::TextEdit::singleline(text)
+            .id_salt(id)
+            .password(!*show)
+            .frame(false)
+            .margin(Margin::ZERO)
+            .font(theme::regular(13.0))
+            .text_color(theme::TEXT_PRIMARY)
+            .vertical_align(egui::Align::Center)
+            .desired_width(edit_rect.width())
+            .hint_text(
+                RichText::new(hint)
+                    .color(theme::TEXT_PLACEHOLDER)
+                    .font(theme::regular(13.0)),
+            ),
+    );
+
+    if allow_toggle {
+        let eye_r = Rect::from_center_size(pos2(rect.right() - 18.0, rect.center().y), vec2(26.0, 26.0));
+        let eye_resp = ui
+            .interact(eye_r, ui.id().with((id, "eye")), Sense::click())
+            .on_hover_cursor(egui::CursorIcon::PointingHand);
+        if eye_resp.hovered() {
+            ui.painter().rect_filled(eye_r, CornerRadius::same(6), theme::shade(12));
+        }
+        let glyph = if *show { regular::EYE_SLASH } else { regular::EYE };
+        icons::paint(ui.painter(), eye_r.center(), glyph, 14.5, theme::TEXT_MUTED, IconStyle::Regular);
+        if eye_resp.clicked() {
+            *show = !*show;
+        }
+    }
+
+    let stroke = if resp.has_focus() {
+        Stroke::new(1.5_f32, theme::FOCUS_RING)
+    } else {
+        Stroke::new(1.0_f32, theme::shade(24))
+    };
+    ui.painter()
+        .rect_stroke(rect, CornerRadius::same(8), stroke, StrokeKind::Inside);
+}
+
+fn choice_card(
+    ui: &mut Ui,
+    id: &str,
+    accent: Color32,
+    glyph: &str,
+    title: &str,
+    subtitle: &str,
+) -> bool {
+    let w = ui.available_width();
+    let h = 68.0;
+    let (rect, resp) = ui.allocate_exact_size(vec2(w, h), Sense::click());
+    let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
+    let painter = ui.painter();
+
+    let shadow_a = if resp.hovered() { 26 } else { 14 };
+    painter.rect_filled(
+        rect.translate(vec2(0.0, 3.0)),
+        CornerRadius::same(10),
+        Color32::from_black_alpha(shadow_a),
+    );
+    let bg = if resp.hovered() {
+        Color32::from_rgba_unmultiplied(0xFF, 0xFF, 0xFF, 235)
+    } else {
+        Color32::from_rgba_unmultiplied(0xF8, 0xFA, 0xFB, 210)
+    };
+    painter.rect_filled(rect, CornerRadius::same(10), bg);
+    let border = if resp.hovered() {
+        Stroke::new(1.2_f32, theme::ACCENT_BLUE)
+    } else {
+        Stroke::new(1.0_f32, theme::shade(16))
+    };
+    painter.rect_stroke(rect, CornerRadius::same(10), border, StrokeKind::Inside);
+
+    let badge = Rect::from_min_size(pos2(rect.left() + 14.0, rect.center().y - 20.0), vec2(40.0, 40.0));
+    painter.rect_filled(badge, CornerRadius::same(9), accent);
+    icons::paint(painter, badge.center(), glyph, 20.0, Color32::WHITE, IconStyle::Fill);
+
+    let tx = badge.right() + 14.0;
+    painter.text(
+        pos2(tx, rect.center().y - 10.0),
+        Align2::LEFT_CENTER,
+        title,
+        theme::semibold(14.0),
+        theme::TEXT_PRIMARY,
+    );
+    painter.text(
+        pos2(tx, rect.center().y + 10.0),
+        Align2::LEFT_CENTER,
+        subtitle,
+        theme::regular(12.0),
+        theme::TEXT_MUTED,
+    );
+
+    let _ = id;
+    resp.clicked()
+}
+
+fn render_sync_vault_tab(
+    ui: &mut Ui,
+    state: &mut SettingsModalState,
+    sync_cfg: Option<&SyncConfig>,
+) -> SyncUiAction {
+    let mut action = SyncUiAction::None;
+
+    if let Some(cfg) = sync_cfg {
+        // Connected dashboard
+        settings_card(ui, |ui| {
+            ui.horizontal(|ui| {
+                let (badge, _) = ui.allocate_exact_size(vec2(38.0, 38.0), Sense::hover());
+                ui.painter().rect_filled(badge, CornerRadius::same(9), theme::ACCENT_GREEN);
+                icons::paint(ui.painter(), badge.center(), fill::CLOUD, 20.0, Color32::WHITE, IconStyle::Fill);
+                ui.add_space(6.0);
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    ui.label(
+                        RichText::new("GitHub Gist Sync actif")
+                            .font(theme::semibold(14.5))
+                            .color(theme::TEXT_PRIMARY),
+                    );
+                    ui.label(
+                        RichText::new("Chiffrement de bout en bout AES-256-GCM + Argon2id")
+                            .font(theme::regular(12.0))
+                            .color(theme::TEXT_MUTED),
+                    );
+                });
+            });
+
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(format!("Gist ID : {}", cfg.gist_id))
+                        .font(theme::regular(12.0))
+                        .color(theme::TEXT_MUTED),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let open_btn = egui::Button::new(
+                        RichText::new("Ouvrir sur GitHub ↗")
+                            .font(theme::medium(12.0))
+                            .color(theme::ACCENT_BLUE),
+                    )
+                    .fill(Color32::TRANSPARENT)
+                    .stroke(Stroke::NONE);
+                    if ui
+                        .add(open_btn)
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .clicked()
+                    {
+                        ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
+                            "https://gist.github.com/{}",
+                            cfg.gist_id
+                        )));
+                    }
+                });
+            });
+
+            let last = cfg
+                .last_sync
+                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+                .unwrap_or_else(|| "Jamais".to_string());
+            ui.label(
+                RichText::new(format!("Dernière synchronisation : {last}"))
+                    .font(theme::regular(12.0))
+                    .color(theme::TEXT_MUTED),
+            );
+
+            ui.add_space(14.0);
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new("Synchronisation automatique")
+                        .font(theme::regular(13.0))
+                        .color(theme::TEXT_PRIMARY),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let mut auto = cfg.auto_sync;
+                    if toggle_switch(ui, "set_auto_sync", &mut auto) {
+                        action = SyncUiAction::ToggleAutoSync(auto);
+                    }
+                });
+            });
+
+            if let Some(status) = &state.sync_status {
+                ui.add_space(8.0);
+                ui.label(RichText::new(status).color(theme::ACCENT_BLUE).size(12.5));
+            }
+            if let Some(err) = &state.sync_error {
+                ui.add_space(8.0);
+                ui.label(RichText::new(err).color(theme::DANGER).size(12.5));
+            }
+
+            ui.add_space(16.0);
+            ui.horizontal(|ui| {
+                let sync_btn = egui::Button::new(
+                    RichText::new(if state.sync_busy { "Synchronisation..." } else { "Sync now" })
+                        .color(Color32::WHITE)
+                        .font(theme::semibold(13.0)),
+                )
+                .fill(theme::ACCENT_BLUE)
+                .corner_radius(CornerRadius::same(7))
+                .min_size(vec2(124.0, 34.0));
+                if ui
+                    .add_enabled(!state.sync_busy, sync_btn)
+                    .on_hover_cursor(egui::CursorIcon::PointingHand)
+                    .clicked()
+                {
+                    action = SyncUiAction::SyncNow;
+                }
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let disc_btn = egui::Button::new(
+                        RichText::new("Déconnecter").color(theme::DANGER).font(theme::medium(13.0)),
+                    )
+                    .fill(theme::shade(16))
+                    .corner_radius(CornerRadius::same(7))
+                    .min_size(vec2(110.0, 34.0));
+                    if ui
+                        .add_enabled(!state.sync_busy, disc_btn)
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .clicked()
+                    {
+                        action = SyncUiAction::Disconnect;
+                    }
+                });
+            });
+        });
+        return action;
+    }
+
+    // Onboarding when not connected
+    match state.sync_step {
+        SyncOnboardingStep::ChooseMode => {
+            // Hero banner
+            ui.horizontal(|ui| {
+                let (badge, _) = ui.allocate_exact_size(vec2(44.0, 44.0), Sense::hover());
+                ui.painter().rect_filled(badge, CornerRadius::same(11), theme::ACCENT_BLUE);
+                icons::paint(ui.painter(), badge.center(), fill::CLOUD, 22.0, Color32::WHITE, IconStyle::Fill);
+                ui.add_space(8.0);
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    ui.label(
+                        RichText::new("Sync Vault via GitHub Gist")
+                            .font(theme::semibold(16.0))
+                            .color(theme::TEXT_PRIMARY),
+                    );
+                    ui.label(
+                        RichText::new("Vos hôtes sont chiffrés localement (AES-256-GCM) avant de quitter votre machine.")
+                            .font(theme::regular(12.5))
+                            .color(theme::TEXT_MUTED),
+                    );
+                });
+            });
+
+            ui.add_space(18.0);
+            ui.label(
+                RichText::new("As-tu déjà un coffre synchronisé ?")
+                    .font(theme::semibold(13.5))
+                    .color(theme::TEXT_PRIMARY),
+            );
+            ui.add_space(10.0);
+
+            if choice_card(
+                ui,
+                "sync_choice_new",
+                theme::ACCENT_BLUE,
+                fill::PLUS,
+                "Créer un nouveau coffre",
+                "Crée un Gist privé rustmius-vault.enc chiffré avec votre mot de passe maître.",
+            ) {
+                state.sync_error = None;
+                state.sync_status = None;
+                state.sync_step = SyncOnboardingStep::Configure { is_existing: false };
+            }
+
+            ui.add_space(10.0);
+
+            if choice_card(
+                ui,
+                "sync_choice_existing",
+                theme::ACCENT_GREEN,
+                fill::VAULT,
+                "J'ai déjà un coffre synchronisé",
+                "Retrouve automatiquement rustmius-vault.enc dans vos Gists et fusionne vos hôtes.",
+            ) {
+                state.sync_error = None;
+                state.sync_status = None;
+                state.sync_step = SyncOnboardingStep::Configure { is_existing: true };
+            }
+        }
+        SyncOnboardingStep::Configure { is_existing } => {
+            settings_card(ui, |ui| {
+                ui.horizontal(|ui| {
+                    let (badge, _) = ui.allocate_exact_size(vec2(34.0, 34.0), Sense::hover());
+                    ui.painter().rect_filled(
+                        badge,
+                        CornerRadius::same(8),
+                        if is_existing { theme::ACCENT_GREEN } else { theme::ACCENT_BLUE },
+                    );
+                    icons::paint(
+                        ui.painter(),
+                        badge.center(),
+                        if is_existing { fill::VAULT } else { fill::CLOUD },
+                        17.0,
+                        Color32::WHITE,
+                        IconStyle::Fill,
+                    );
+                    ui.add_space(6.0);
+                    ui.vertical(|ui| {
+                        ui.spacing_mut().item_spacing.y = 1.0;
+                        let heading = if is_existing {
+                            "Connecter un coffre existant"
+                        } else {
+                            "Créer un nouveau coffre Gist"
+                        };
+                        ui.label(
+                            RichText::new(heading)
+                                .font(theme::semibold(14.5))
+                                .color(theme::TEXT_PRIMARY),
+                        );
+                        ui.label(
+                            RichText::new("Étape 2 / 2 — Authentification GitHub & clé de chiffrement")
+                                .font(theme::regular(11.5))
+                                .color(theme::TEXT_MUTED),
+                        );
+                    });
+                });
+
+                ui.add_space(16.0);
+
+                // Token label + 1-click pre-filled GitHub link
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new("Token GitHub (scope gist)")
+                            .font(theme::medium(12.5))
+                            .color(theme::TEXT_PRIMARY),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let gen_btn = egui::Button::new(
+                            RichText::new("Générer sur GitHub ↗")
+                                .font(theme::semibold(11.5))
+                                .color(theme::ACCENT_BLUE),
+                        )
+                        .fill(theme::ACCENT_BLUE.linear_multiply(0.12))
+                        .stroke(Stroke::new(1.0_f32, theme::ACCENT_BLUE.linear_multiply(0.3)))
+                        .corner_radius(CornerRadius::same(6));
+                        if ui
+                            .add(gen_btn)
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .clicked()
+                        {
+                            ui.ctx().open_url(egui::OpenUrl::new_tab(GITHUB_NEW_TOKEN_URL));
+                        }
+                    });
+                });
+                ui.add_space(6.0);
+                styled_secret_field(
+                    ui,
+                    "sync_token_input",
+                    &mut state.token_input,
+                    "ghp_xxxxxxxxxxxxxxxxxxxx",
+                    regular::KEY,
+                    &mut state.show_token,
+                    true,
+                );
+
+                ui.add_space(12.0);
+                ui.label(
+                    RichText::new("Mot de passe maître (chiffrement E2E)")
+                        .font(theme::medium(12.5))
+                        .color(theme::TEXT_PRIMARY),
+                );
+                ui.add_space(6.0);
+                styled_secret_field(
+                    ui,
+                    "sync_pass_input",
+                    &mut state.password_input,
+                    "Mot de passe maître",
+                    regular::LOCK,
+                    &mut state.show_password,
+                    true,
+                );
+
+                if !is_existing {
+                    ui.add_space(10.0);
+                    styled_secret_field(
+                        ui,
+                        "sync_pass_confirm",
+                        &mut state.confirm_password_input,
+                        "Confirmer le mot de passe maître",
+                        regular::LOCK,
+                        &mut state.show_password,
+                        false,
+                    );
+                }
+
+                if let Some(status) = &state.sync_status {
+                    ui.add_space(10.0);
+                    ui.label(RichText::new(status).color(theme::ACCENT_BLUE).size(12.5));
+                }
+                if let Some(err) = &state.sync_error {
+                    ui.add_space(10.0);
+                    ui.label(RichText::new(err).color(theme::DANGER).size(12.5));
+                }
+
+                ui.add_space(16.0);
+                ui.horizontal(|ui| {
+                    let back_btn = egui::Button::new(
+                        RichText::new("← Retour")
+                            .font(theme::medium(13.0))
+                            .color(theme::TEXT_PRIMARY),
+                    )
+                    .fill(theme::shade(16))
+                    .corner_radius(CornerRadius::same(7))
+                    .min_size(vec2(92.0, 36.0));
+                    if ui
+                        .add_enabled(!state.sync_busy, back_btn)
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .clicked()
+                    {
+                        state.sync_error = None;
+                        state.sync_step = SyncOnboardingStep::ChooseMode;
+                    }
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let cta_text = if state.sync_busy {
+                            "Connexion en cours..."
+                        } else if is_existing {
+                            "Retrouver et connecter"
+                        } else {
+                            "Créer et synchroniser"
+                        };
+                        let cta = egui::Button::new(
+                            RichText::new(cta_text)
+                                .color(Color32::WHITE)
+                                .font(theme::semibold(13.0)),
+                        )
+                        .fill(theme::ACCENT_BLUE)
+                        .corner_radius(CornerRadius::same(7))
+                        .min_size(vec2(180.0, 36.0));
+
+                        if ui
+                            .add_enabled(!state.sync_busy, cta)
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .clicked()
+                        {
+                            if state.token_input.trim().is_empty() {
+                                state.sync_error = Some("Veuillez saisir un token GitHub.".to_string());
+                            } else if state.password_input.is_empty() {
+                                state.sync_error = Some("Veuillez saisir un mot de passe maître.".to_string());
+                            } else if !is_existing && state.password_input != state.confirm_password_input {
+                                state.sync_error = Some("Les mots de passe ne correspondent pas.".to_string());
+                            } else {
+                                state.sync_error = None;
+                                if is_existing {
+                                    action = SyncUiAction::ConnectExisting {
+                                        token: state.token_input.trim().to_string(),
+                                        password: state.password_input.clone(),
+                                    };
+                                } else {
+                                    action = SyncUiAction::CreateNew {
+                                        token: state.token_input.trim().to_string(),
+                                        password: state.password_input.clone(),
+                                    };
+                                }
+                            }
+                        }
+                    });
+                });
+            });
+        }
+    }
+
+    action
 }
