@@ -101,7 +101,10 @@ pub fn install_fonts(ctx: &egui::Context) {
     fonts.families.insert(FontFamily::Name(INTER_MEDIUM.into()), family(INTER_MEDIUM));
     fonts.families.insert(FontFamily::Name(INTER_SEMIBOLD.into()), family(INTER_SEMIBOLD));
     for ph in [PH_REGULAR, PH_FILL, PH_BOLD] {
-        fonts.families.insert(FontFamily::Name(ph.into()), vec![ph.to_owned()]);
+        fonts.families.insert(
+            FontFamily::Name(ph.into()),
+            vec![ph.to_owned(), INTER_REGULAR.to_owned()],
+        );
     }
 
     ctx.set_fonts(fonts);
@@ -146,6 +149,7 @@ pub fn apply_termius_theme(ctx: &egui::Context) {
     visuals.selection.stroke = Stroke::new(1.0_f32, FOCUS_RING);
 
     style.visuals = visuals;
+    style.visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);
     style.spacing.item_spacing = egui::vec2(8.0, 8.0);
     style.spacing.button_padding = egui::vec2(12.0, 6.0);
     style.text_styles.insert(egui::TextStyle::Body, regular(13.0));
