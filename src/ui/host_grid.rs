@@ -34,6 +34,7 @@ pub enum HostGridAction {
     EditHost(Host),
     DeleteHost(Uuid),
     ImportSshConfig,
+    ImportGhost(Host),
     QuickConnect(String),
 }
 
@@ -283,6 +284,7 @@ fn render_cards(
     ui: &mut Ui,
     area: Rect,
     vault: &Vault,
+    ghost_hosts: &[Host],
     view_mode: HostViewMode,
     sort_mode: HostSortMode,
     action: &mut HostGridAction,
@@ -383,12 +385,111 @@ fn render_cards(
                 }
             });
         }
+
+        if !ghost_hosts.is_empty() {
+            ui.add_space(16.0);
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new("Detected in ~/.ssh/config")
+                        .font(theme::semibold(13.0))
+                        .color(theme::TEXT_MUTED),
+                );
+                if ui.small_button("Import all").clicked() {
+                    *action = HostGridAction::ImportSshConfig;
+                }
+            });
+            ui.add_space(6.0);
+
+            let ghost_rows = ghost_hosts.len().div_ceil(cols);
+            let (ghost_grid, _) =
+                ui.allocate_exact_size(vec2(width, ghost_rows as f32 * (card_h + gap)), Sense::hover());
+            let painter = ui.painter();
+
+            for (idx, host) in ghost_hosts.iter().enumerate() {
+                let (row, col) = (idx / cols, idx % cols);
+                let rect = Rect::from_min_size(
+                    pos2(
+                        ghost_grid.left() + col as f32 * (card_w + gap),
+                        ghost_grid.top() + row as f32 * (card_h + gap),
+                    ),
+                    vec2(card_w, card_h),
+                );
+                let resp = ui.interact(rect, ui.id().with(("ghost_card", &host.label, idx)), Sense::hover());
+                let bg = if resp.hovered() {
+                    theme::light(80)
+                } else {
+                    theme::light(42)
+                };
+                painter.rect_filled(rect, CornerRadius::same(8), bg);
+                painter.rect_stroke(
+                    rect,
+                    CornerRadius::same(8),
+                    Stroke::new(1.0_f32, theme::shade(24)),
+                    StrokeKind::Inside,
+                );
+
+                let tile = Rect::from_min_size(pos2(rect.left() + 12.0, rect.center().y - 20.0), vec2(40.0, 40.0));
+                painter.rect_filled(tile, CornerRadius::same(8), theme::shade(28));
+                icons::paint(
+                    painter,
+                    tile.center(),
+                    fill::HARD_DRIVES,
+                    18.0,
+                    theme::TEXT_MUTED,
+                    IconStyle::Fill,
+                );
+
+                let import_rect =
+                    Rect::from_center_size(pos2(rect.right() - 40.0, rect.center().y), vec2(60.0, 26.0));
+                let imp_resp = ui.interact(
+                    import_rect,
+                    ui.id().with(("ghost_import", &host.label, idx)),
+                    Sense::click(),
+                );
+                painter.rect_filled(
+                    import_rect,
+                    CornerRadius::same(6),
+                    if imp_resp.hovered() {
+                        theme::ACCENT_BLUE
+                    } else {
+                        theme::shade(22)
+                    },
+                );
+                painter.text(
+                    import_rect.center(),
+                    Align2::CENTER_CENTER,
+                    "Import",
+                    theme::medium(12.0),
+                    if imp_resp.hovered() {
+                        Color32::WHITE
+                    } else {
+                        theme::TEXT_PRIMARY
+                    },
+                );
+                if imp_resp.clicked() {
+                    *action = HostGridAction::ImportGhost(host.clone());
+                }
+
+                let tx = tile.right() + 12.0;
+                let max_w = (import_rect.left() - tx - 8.0).max(40.0);
+                let label = painter.layout(host.label.clone(), theme::semibold(14.0), theme::TEXT_MUTED, max_w);
+                painter.galley(pos2(tx, rect.center().y - 18.0), label, theme::TEXT_MUTED);
+                painter.text(
+                    pos2(tx, rect.center().y + 10.0),
+                    Align2::LEFT_CENTER,
+                    format!("ssh, {}@{}", host.username, host.hostname),
+                    theme::regular(11.5),
+                    theme::TEXT_PLACEHOLDER,
+                );
+            }
+        }
     });
 }
 
 pub fn render_host_grid(
     ui: &mut Ui,
     vault: &Vault,
+    ghost_hosts: &[Host],
     quick_connect: &mut String,
     empty_host_input: &mut String,
     view_mode: &mut HostViewMode,
@@ -407,10 +508,10 @@ pub fn render_host_grid(
         sort_menu_open,
         &mut action,
     );
-    if vault.hosts.is_empty() {
+    if vault.hosts.is_empty() && ghost_hosts.is_empty() {
         render_empty_state(ui, content, empty_host_input, &mut action);
     } else {
-        render_cards(ui, content, vault, *view_mode, *sort_mode, &mut action);
+        render_cards(ui, content, vault, ghost_hosts, *view_mode, *sort_mode, &mut action);
     }
 
     if let Some(id) = render_popover_menu(

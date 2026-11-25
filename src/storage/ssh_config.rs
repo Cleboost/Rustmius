@@ -69,32 +69,34 @@ fn whoami_fallback() -> String {
         .unwrap_or_else(|_| "root".to_string())
 }
 
+/// Retourne les hôtes de `~/.ssh/config` qui ne sont pas encore dans le `Vault`.
+pub fn find_unimported_ssh_hosts(vault: &Vault) -> Vec<Host> {
+    let Some(path) = default_ssh_config_path() else {
+        return Vec::new();
+    };
+    let Ok(content) = fs::read_to_string(path) else {
+        return Vec::new();
+    };
+
+    parse_ssh_config(&content)
+        .into_iter()
+        .filter(|host| {
+            !vault.hosts.iter().any(|existing| {
+                existing.label == host.label
+                    || (existing.hostname == host.hostname
+                        && existing.username == host.username
+                        && existing.port == host.port)
+            })
+        })
+        .collect()
+}
+
 /// Importe les hôtes de `~/.ssh/config` qui ne sont pas encore dans le `Vault`.
 /// Retourne le nombre d'hôtes ajoutés.
 pub fn import_ssh_config_into_vault(vault: &mut Vault) -> usize {
-    let Some(path) = default_ssh_config_path() else {
-        return 0;
-    };
-    let Ok(content) = fs::read_to_string(path) else {
-        return 0;
-    };
-
-    let parsed = parse_ssh_config(&content);
-    let mut added = 0;
-
-    for host in parsed {
-        let already_exists = vault.hosts.iter().any(|existing| {
-            existing.label == host.label
-                || (existing.hostname == host.hostname
-                    && existing.username == host.username
-                    && existing.port == host.port)
-        });
-        if !already_exists {
-            vault.hosts.push(host);
-            added += 1;
-        }
-    }
-
+    let to_add = find_unimported_ssh_hosts(vault);
+    let added = to_add.len();
+    vault.hosts.extend(to_add);
     added
 }
 
