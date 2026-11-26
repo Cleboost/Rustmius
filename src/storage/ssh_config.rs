@@ -96,7 +96,12 @@ fn whoami_fallback() -> String {
 pub fn filter_unimported_hosts(parsed: Vec<Host>, vault: &Vault) -> Vec<Host> {
     parsed
         .into_iter()
-        .filter(|host| !vault.hosts.iter().any(|existing| existing.label == host.label))
+        .filter(|host| {
+            !vault
+                .hosts
+                .iter()
+                .any(|existing| existing.label == host.label)
+        })
         .collect()
 }
 
