@@ -271,13 +271,19 @@ fn render_header(
             20
         }),
     );
-    icons::paint(
+    let chevron_t = ui.ctx().animate_bool_with_time(
+        ui.id().with("tb_new_menu_anim"),
+        *new_host_menu_open,
+        0.14,
+    );
+    icons::paint_rotated(
         &painter,
         chevron.center() + vec2(0.0, 0.5),
         bold::CARET_DOWN,
         12.0,
         theme::TEXT_PRIMARY,
         IconStyle::Bold,
+        chevron_t * std::f32::consts::PI,
     );
     if chresp.clicked() {
         *new_host_menu_open = !*new_host_menu_open;

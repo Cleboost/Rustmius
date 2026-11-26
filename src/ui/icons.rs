@@ -36,6 +36,28 @@ pub fn paint(
     );
 }
 
+/// Paints a Tabler icon glyph centered on `center`, rotated by `angle` radians clockwise.
+pub fn paint_rotated(
+    painter: &Painter,
+    center: Pos2,
+    glyph: &str,
+    size: f32,
+    color: Color32,
+    style: IconStyle,
+    angle: f32,
+) {
+    if angle.abs() < 1e-4 {
+        paint(painter, center, glyph, size, color, style);
+        return;
+    }
+    let galley = painter.layout_no_wrap(glyph.to_owned(), font(size, style), color);
+    let rot = egui::emath::Rot2::from_angle(angle);
+    let pos = center + rot * (-galley.size() / 2.0);
+    let mut shape = egui::epaint::TextShape::new(pos, galley, color);
+    shape.angle = angle;
+    painter.add(shape);
+}
+
 /// Tabler Icons (outline, 2px stroke).
 #[allow(dead_code)]
 pub mod regular {
