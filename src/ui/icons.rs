@@ -69,6 +69,7 @@ pub mod regular {
     pub const SQUARES_FOUR: &str = "\u{edba}"; // layout-grid
     pub const TAG: &str = "\u{10096}"; // tag
     pub const TERMINAL_WINDOW: &str = "\u{ebef}"; // terminal-2
+    pub const TRASH: &str = "\u{eb41}"; // trash
     pub const USER: &str = "\u{eb4d}"; // user
     pub const VAULT: &str = "\u{ed58}"; // shield-lock
     pub const X: &str = "\u{eb55}"; // x
