@@ -261,12 +261,14 @@ mod tests {
             hosts: vec![h1],
             groups: vec![],
             deleted_hosts: HashMap::new(),
+            known_hosts: vec![],
         };
         let remote = Vault {
             version: 1,
             hosts: vec![h1_newer, h2.clone()],
             groups: vec![],
             deleted_hosts: HashMap::new(),
+            known_hosts: vec![],
         };
 
         let merged = merge_vaults(&local, &remote);
