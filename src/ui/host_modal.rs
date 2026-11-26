@@ -107,7 +107,7 @@ fn styled_field(
 ) {
     let h = 34.0;
     let w = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(vec2(w, h), Sense::hover());
+    let (rect, box_resp) = ui.allocate_exact_size(vec2(w, h), Sense::click());
 
     ui.painter()
         .rect_filled(rect, CornerRadius::same(7), theme::light(110));
@@ -130,29 +130,32 @@ fn styled_field(
     let is_password = show_secret.as_ref().map(|s| !**s).unwrap_or(false);
     let right_pad = if has_eye { 32.0 } else { 10.0 };
 
-    let edit_rect = egui::Rect::from_min_max(
-        pos2(text_left, rect.top()),
-        pos2(rect.right() - right_pad, rect.bottom()),
-    );
     let font = theme::regular(13.0);
     let row_h = ui.fonts_mut(|f| f.row_height(&font));
-    let v_pad = ((edit_rect.height() - row_h) * 0.5).max(0.0) as i8;
+    let edit_w = (rect.right() - right_pad - text_left).max(1.0);
+    let edit_rect = egui::Rect::from_center_size(
+        pos2(text_left + edit_w * 0.5, rect.center().y),
+        vec2(edit_w, row_h),
+    );
     let resp = ui.put(
         edit_rect,
         egui::TextEdit::singleline(text)
             .id_salt(id)
             .password(is_password)
             .frame(egui::Frame::NONE)
-            .margin(Margin::symmetric(0, v_pad))
+            .margin(Margin::ZERO)
             .font(font.clone())
             .text_color(theme::TEXT_PRIMARY)
-            .desired_width(edit_rect.width())
+            .desired_width(edit_w)
             .hint_text(
                 RichText::new(hint)
                     .color(theme::TEXT_PLACEHOLDER)
                     .font(font),
             ),
     );
+    if box_resp.clicked() {
+        resp.request_focus();
+    }
 
     if let Some(show) = show_secret {
         let eye_r = egui::Rect::from_center_size(
@@ -343,8 +346,8 @@ pub fn render_host_panel(
                                 .font(theme::semibold(13.0))
                                 .color(theme::TEXT_PRIMARY),
                         );
-                        let (port_rect, _) =
-                            ui.allocate_exact_size(vec2(64.0, 28.0), Sense::hover());
+                        let (port_rect, port_box_resp) =
+                            ui.allocate_exact_size(vec2(64.0, 28.0), Sense::click());
                         ui.painter().rect_filled(
                             port_rect,
                             CornerRadius::same(6),
@@ -352,16 +355,22 @@ pub fn render_host_panel(
                         );
                         let p_font = theme::regular(13.0);
                         let p_row_h = ui.fonts_mut(|f| f.row_height(&p_font));
-                        let p_vpad = ((port_rect.height() - p_row_h) * 0.5).max(0.0) as i8;
+                        let p_edit_rect = egui::Rect::from_center_size(
+                            port_rect.center(),
+                            vec2((port_rect.width() - 16.0).max(1.0), p_row_h),
+                        );
                         let p_resp = ui.put(
-                            port_rect.shrink2(vec2(8.0, 0.0)),
+                            p_edit_rect,
                             egui::TextEdit::singleline(&mut state.port)
                                 .id_salt("panel_port")
                                 .frame(egui::Frame::NONE)
-                                .margin(Margin::symmetric(0, p_vpad))
+                                .margin(Margin::ZERO)
                                 .font(p_font)
                                 .text_color(theme::TEXT_PRIMARY),
                         );
+                        if port_box_resp.clicked() {
+                            p_resp.request_focus();
+                        }
                         let p_stroke = if p_resp.has_focus() {
                             Stroke::new(1.2_f32, theme::FOCUS_RING)
                         } else {
