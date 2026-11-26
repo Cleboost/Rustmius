@@ -135,6 +135,9 @@ pub struct Strings {
     // Terminal / SSH
     pub term_ssh_error: &'static str,
     pub term_session_closed: &'static str,
+    pub term_link_click_open: &'static str,
+    pub term_link_copied: &'static str,
+    pub term_link_copy_tooltip: &'static str,
 
     // Unlock screen
     pub unlock_title: &'static str,
@@ -250,6 +253,9 @@ pub const EN: Strings = Strings {
 
     term_ssh_error: "SSH Error",
     term_session_closed: "Session closed",
+    term_link_click_open: "Click to open",
+    term_link_copied: "Link copied!",
+    term_link_copy_tooltip: "Copy link",
 
     unlock_title: "Unlock Sync Vault",
     unlock_desc: "Enter your master password to unlock and sync your vault.",
@@ -364,6 +370,9 @@ pub const FR: Strings = Strings {
 
     term_ssh_error: "Erreur SSH",
     term_session_closed: "Session fermée",
+    term_link_click_open: "Clic pour ouvrir",
+    term_link_copied: "Lien copié !",
+    term_link_copy_tooltip: "Copier le lien",
 
     unlock_title: "Déverrouiller Sync Vault",
     unlock_desc: "Entrez votre mot de passe maître pour déverrouiller et synchroniser votre coffre.",

@@ -891,6 +891,7 @@ impl eframe::App for RustmiusApp {
                                 self.app_settings.text_size,
                                 self.app_settings.copy_on_select,
                                 self.app_settings.bright_bold,
+                                self.app_settings.language,
                             );
                         } else {
                             match render_connecting_screen(
