@@ -8,7 +8,15 @@ pub fn default_ssh_config_path() -> Option<PathBuf> {
 
 pub fn parse_ssh_config(content: &str) -> Vec<Host> {
     let mut hosts = Vec::new();
-    let mut current: Option<Host> = None;
+    let mut current: Vec<Host> = Vec::new();
+
+    let flush = |current: &mut Vec<Host>, hosts: &mut Vec<Host>| {
+        for h in current.drain(..) {
+            if !h.hostname.is_empty() {
+                hosts.push(h);
+            }
+        }
+    };
 
     for raw_line in content.lines() {
         let line = raw_line.split('#').next().unwrap_or("").trim();
@@ -18,47 +26,62 @@ pub fn parse_ssh_config(content: &str) -> Vec<Host> {
 
         let mut parts = line.splitn(2, |c: char| c.is_whitespace() || c == '=');
         let key = parts.next().unwrap_or("").trim().to_ascii_lowercase();
-        let val = parts.next().unwrap_or("").trim().trim_matches('"');
+        let raw_val = parts.next().unwrap_or("").trim();
+        let val = raw_val.trim_matches('"');
 
         if key == "host" {
-            if let Some(h) = current.take()
-                && !h.hostname.is_empty()
-            {
-                hosts.push(h);
-            }
-            // Ignore wildcards like `Host *` or `Host *.example.com`
-            let alias = val.split_whitespace().next().unwrap_or("");
-            if alias.is_empty() || alias.contains('*') || alias.contains('?') {
-                current = None;
-            } else {
-                let mut h = Host::new(alias, alias, whoami_fallback());
+            flush(&mut current, &mut hosts);
+            let default_user = whoami_fallback();
+            for token in raw_val.split_whitespace() {
+                let alias = token.trim_matches('"');
+                // Ignore wildcards (`*`, `?`) and negated patterns (`!pattern`)
+                if alias.is_empty()
+                    || alias.contains('*')
+                    || alias.contains('?')
+                    || alias.starts_with('!')
+                {
+                    continue;
+                }
+                let mut h = Host::new(alias, alias, default_user.clone());
                 h.source = HostSource::SshConfig;
-                current = Some(h);
+                current.push(h);
             }
-        } else if let Some(ref mut h) = current {
+        } else if key == "match" {
+            // Conditional Match blocks are not evaluated; flush previous Host so
+            // Match directives don't leak into it.
+            flush(&mut current, &mut hosts);
+        } else if !current.is_empty() {
             match key.as_str() {
-                "hostname" => h.hostname = val.to_string(),
-                "user" => h.username = val.to_string(),
+                "hostname" => {
+                    for h in &mut current {
+                        h.hostname = val.to_string();
+                    }
+                }
+                "user" => {
+                    for h in &mut current {
+                        h.username = val.to_string();
+                    }
+                }
                 "port" => {
                     if let Ok(p) = val.parse::<u16>() {
-                        h.port = p;
+                        for h in &mut current {
+                            h.port = p;
+                        }
                     }
                 }
                 "identityfile" => {
-                    h.auth = AuthMethod::PrivateKey {
-                        path: val.to_string(),
-                    };
+                    for h in &mut current {
+                        h.auth = AuthMethod::PrivateKey {
+                            path: val.to_string(),
+                        };
+                    }
                 }
                 _ => {}
             }
         }
     }
 
-    if let Some(h) = current.take()
-        && !h.hostname.is_empty()
-    {
-        hosts.push(h);
-    }
+    flush(&mut current, &mut hosts);
 
     hosts
 }
@@ -67,6 +90,19 @@ fn whoami_fallback() -> String {
     std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
         .unwrap_or_else(|_| "root".to_string())
+}
+
+/// Filters parsed SSH config hosts to those whose alias (`label`) is not yet in `vault`.
+pub fn filter_unimported_hosts(parsed: Vec<Host>, vault: &Vault) -> Vec<Host> {
+    parsed
+        .into_iter()
+        .filter(|host| {
+            !vault
+                .hosts
+                .iter()
+                .any(|existing| existing.label == host.label)
+        })
+        .collect()
 }
 
 /// Returns hosts from `~/.ssh/config` that are not yet in the `Vault`.
@@ -78,17 +114,7 @@ pub fn find_unimported_ssh_hosts(vault: &Vault) -> Vec<Host> {
         return Vec::new();
     };
 
-    parse_ssh_config(&content)
-        .into_iter()
-        .filter(|host| {
-            !vault.hosts.iter().any(|existing| {
-                existing.label == host.label
-                    || (existing.hostname == host.hostname
-                        && existing.username == host.username
-                        && existing.port == host.port)
-            })
-        })
-        .collect()
+    filter_unimported_hosts(parse_ssh_config(&content), vault)
 }
 
 /// Imports hosts from `~/.ssh/config` that are not yet in the `Vault`.
@@ -140,5 +166,59 @@ Host staging
         assert_eq!(hosts[1].hostname, "staging.example.com");
         assert_eq!(hosts[1].username, "ubuntu");
         assert_eq!(hosts[1].port, 22);
+    }
+
+    #[test]
+    fn parses_multi_alias_and_ignores_match_block() {
+        let cfg = r#"
+Host a b *.ignored !excluded
+    HostName 10.0.0.5
+    User admin
+    Port 2200
+
+Match host 10.0.0.5 exec "true"
+    User match_user
+    Port 9999
+"#;
+
+        let hosts = parse_ssh_config(cfg);
+        assert_eq!(hosts.len(), 2);
+
+        assert_eq!(hosts[0].label, "a");
+        assert_eq!(hosts[0].hostname, "10.0.0.5");
+        assert_eq!(hosts[0].username, "admin");
+        assert_eq!(hosts[0].port, 2200);
+
+        assert_eq!(hosts[1].label, "b");
+        assert_eq!(hosts[1].hostname, "10.0.0.5");
+        assert_eq!(hosts[1].username, "admin");
+        assert_eq!(hosts[1].port, 2200);
+    }
+
+    #[test]
+    fn keeps_distinct_aliases_for_same_hostname_and_port() {
+        let cfg = r#"
+Host rm-alpine
+    HostName 127.0.0.1
+    User root
+    Port 2222
+
+Host "rm-quoted" rm-multi
+    HostName 127.0.0.1
+    User root
+    Port 2222
+"#;
+
+        let parsed = parse_ssh_config(cfg);
+        assert_eq!(parsed.len(), 3);
+
+        let mut vault = Vault::default();
+        let mut imported = Host::new("rm-alpine", "127.0.0.1", "root");
+        imported.port = 2222;
+        vault.hosts.push(imported);
+
+        let unimported = filter_unimported_hosts(parsed, &vault);
+        let labels: Vec<&str> = unimported.iter().map(|h| h.label.as_str()).collect();
+        assert_eq!(labels, vec!["rm-quoted", "rm-multi"]);
     }
 }
