@@ -190,8 +190,33 @@ pub fn render_titlebar(
         action = TitlebarAction::Select(ActiveTab::Vaults);
     }
 
-    // Generic tab painter (SFTP + sessions)
-    let mut x = left + 187.0;
+    // Generic tab painter (SFTP + sessions) with clipping & horizontal scroll
+    let tabs_left = left + 187.0;
+    // tb_bell is centered at right - 127.0 with width 32.0 (left edge = right - 143.0).
+    let tabs_right_limit = (right - 151.0).max(tabs_left);
+    let plus_reserve = 36.0;
+    let max_tabs_right = (tabs_right_limit - plus_reserve).max(tabs_left);
+    let tabs_clip_rect = Rect::from_min_max(
+        pos2(tabs_left, rect.top()),
+        pos2(max_tabs_right, rect.bottom()),
+    );
+    let scroll_id = ui.id().with("titlebar_tabs_scroll_x");
+    let mut scroll_x = ctx.data_mut(|d| d.get_temp::<f32>(scroll_id).unwrap_or(0.0));
+    if ui.rect_contains_pointer(tabs_clip_rect) {
+        let delta = ctx.input(|i| i.smooth_scroll_delta);
+        let wheel = if delta.x.abs() > delta.y.abs() {
+            delta.x
+        } else {
+            delta.y
+        };
+        if wheel != 0.0 {
+            scroll_x = (scroll_x - wheel).max(0.0);
+        }
+    }
+
+    let tab_painter = painter.with_clip_rect(tabs_clip_rect);
+    let mut x = tabs_left - scroll_x;
+    let mut total_tabs_width = 0.0_f32;
     let mut tab = |ui: &mut Ui,
                    id: egui::Id,
                    glyph: &str,
@@ -201,7 +226,7 @@ pub fn render_titlebar(
                    closable: bool|
      -> (bool, bool, f32) {
         let font = theme::medium(13.0);
-        let tw = painter
+        let tw = tab_painter
             .layout_no_wrap(title.to_owned(), font.clone(), Color32::WHITE)
             .size()
             .x;
@@ -211,55 +236,69 @@ pub fn render_titlebar(
             32.0 + tw + 15.0
         };
         let r = Rect::from_min_max(pos2(x, tab_top), pos2(x + width, tab_bot));
-        let resp = ui
-            .interact(r, id, Sense::click())
-            .on_hover_cursor(egui::CursorIcon::PointingHand);
+        let hit_r = r.intersect(tabs_clip_rect);
+        let (resp_hovered, resp_clicked) = if hit_r.width() > 0.0 {
+            let resp = ui
+                .interact(hit_r, id, Sense::click())
+                .on_hover_cursor(egui::CursorIcon::PointingHand);
+            (resp.hovered(), resp.clicked())
+        } else {
+            (false, false)
+        };
         let bg = if is_active {
             theme::TOPBAR_TAB_ACTIVE
-        } else if resp.hovered() {
+        } else if resp_hovered {
             theme::TOPBAR_TAB_HOVER
         } else {
             theme::TOPBAR_TAB_INACTIVE
         };
-        painter.rect_filled(r, CornerRadius::same(6), bg);
-        let fg = if is_active {
-            theme::TOPBAR_TEXT
-        } else {
-            theme::TOPBAR_MUTED
-        };
-        match os {
-            Some(kind) if kind != OsKind::Unknown => {
-                paint_os_mini_badge(&painter, pos2(x + 16.0, cy), kind);
+        if hit_r.width() > 0.0 {
+            tab_painter.rect_filled(r, CornerRadius::same(6), bg);
+            let fg = if is_active {
+                theme::TOPBAR_TEXT
+            } else {
+                theme::TOPBAR_MUTED
+            };
+            match os {
+                Some(kind) if kind != OsKind::Unknown => {
+                    paint_os_mini_badge(&tab_painter, pos2(x + 16.0, cy), kind);
+                }
+                _ => {
+                    icons::paint(
+                        &tab_painter,
+                        pos2(x + 16.0, cy),
+                        glyph,
+                        14.0,
+                        if is_active {
+                            Color32::WHITE
+                        } else {
+                            Color32::from_rgb(0xDD, 0xE0, 0xE7)
+                        },
+                        IconStyle::Fill,
+                    );
+                }
             }
-            _ => {
-                icons::paint(
-                    &painter,
-                    pos2(x + 16.0, cy),
-                    glyph,
-                    14.0,
-                    if is_active {
-                        Color32::WHITE
-                    } else {
-                        Color32::from_rgb(0xDD, 0xE0, 0xE7)
-                    },
-                    IconStyle::Fill,
-                );
-            }
+            tab_painter.text(pos2(x + 32.0, cy), Align2::LEFT_CENTER, title, font, fg);
         }
-        painter.text(pos2(x + 32.0, cy), Align2::LEFT_CENTER, title, font, fg);
 
         let mut close_clicked = false;
-        if closable {
+        if closable && hit_r.width() > 0.0 {
             let cr = Rect::from_center_size(pos2(r.right() - 16.0, cy), vec2(20.0, 20.0));
-            let cresp = ui
-                .interact(cr, id.with("close"), Sense::click())
-                .on_hover_cursor(egui::CursorIcon::PointingHand);
-            if cresp.hovered() {
-                painter.rect_filled(cr, CornerRadius::same(4), theme::TOPBAR_TAB_HOVER);
+            let hit_cr = cr.intersect(tabs_clip_rect);
+            let (cresp_hovered, cresp_clicked) = if hit_cr.width() > 0.0 {
+                let cresp = ui
+                    .interact(hit_cr, id.with("close"), Sense::click())
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                (cresp.hovered(), cresp.clicked())
+            } else {
+                (false, false)
+            };
+            if cresp_hovered {
+                tab_painter.rect_filled(cr, CornerRadius::same(4), theme::TOPBAR_TAB_HOVER);
             }
-            if resp.hovered() || is_active || cresp.hovered() {
+            if resp_hovered || is_active || cresp_hovered {
                 icons::paint(
-                    &painter,
+                    &tab_painter,
                     cr.center(),
                     regular::X,
                     12.0,
@@ -267,10 +306,11 @@ pub fn render_titlebar(
                     IconStyle::Regular,
                 );
             }
-            close_clicked = cresp.clicked();
+            close_clicked = cresp_clicked;
         }
-        let clicked = resp.clicked() && !close_clicked;
+        let clicked = resp_clicked && !close_clicked;
         x += width + 4.0;
+        total_tabs_width += width + 4.0;
         (clicked, close_clicked, x)
     };
 
@@ -306,8 +346,13 @@ pub fn render_titlebar(
         end_x = nx;
     }
 
-    // "+" new tab
-    let plus = Rect::from_center_size(pos2(end_x - 4.0 + 23.0, cy), vec2(26.0, 26.0));
+    let max_scroll = (total_tabs_width - 4.0 - tabs_clip_rect.width()).max(0.0);
+    let clamped_scroll = scroll_x.clamp(0.0, max_scroll);
+    ctx.data_mut(|d| d.insert_temp(scroll_id, clamped_scroll));
+
+    // "+" new tab (pinned at tabs_right_limit when tabs overflow)
+    let plus_cx = (end_x - 4.0 + 23.0).min(tabs_right_limit - 13.0);
+    let plus = Rect::from_center_size(pos2(plus_cx, cy), vec2(26.0, 26.0));
     let presp = ui
         .interact(plus, ui.id().with("tb_plus"), Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
