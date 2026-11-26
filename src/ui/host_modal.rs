@@ -3,7 +3,7 @@ use crate::storage::{AuthMethod, Host, HostSource, OsKind};
 use crate::ui::icons::{self, IconStyle, fill, regular};
 use crate::ui::theme;
 use chrono::Utc;
-use egui::{Align, Color32, CornerRadius, Margin, RichText, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
+use egui::{Color32, CornerRadius, Margin, RichText, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use uuid::Uuid;
 
 pub struct HostModalState {
@@ -133,21 +133,23 @@ fn styled_field(
         pos2(text_left, rect.top()),
         pos2(rect.right() - right_pad, rect.bottom()),
     );
+    let font = theme::regular(13.0);
+    let row_h = ui.fonts(|f| f.row_height(&font));
+    let v_pad = ((edit_rect.height() - row_h) * 0.5).max(0.0) as i8;
     let resp = ui.put(
         edit_rect,
         egui::TextEdit::singleline(text)
             .id_salt(id)
             .password(is_password)
             .frame(false)
-            .margin(Margin::ZERO)
-            .font(theme::regular(13.0))
+            .margin(Margin::symmetric(0, v_pad))
+            .font(font.clone())
             .text_color(theme::TEXT_PRIMARY)
-            .vertical_align(Align::Center)
             .desired_width(edit_rect.width())
             .hint_text(
                 RichText::new(hint)
                     .color(theme::TEXT_PLACEHOLDER)
-                    .font(theme::regular(13.0)),
+                    .font(font),
             ),
     );
 
@@ -310,15 +312,17 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState, lang: Language
                         );
                         let (port_rect, _) = ui.allocate_exact_size(vec2(64.0, 28.0), Sense::hover());
                         ui.painter().rect_filled(port_rect, CornerRadius::same(6), theme::light(110));
+                        let p_font = theme::regular(13.0);
+                        let p_row_h = ui.fonts(|f| f.row_height(&p_font));
+                        let p_vpad = ((port_rect.height() - p_row_h) * 0.5).max(0.0) as i8;
                         let p_resp = ui.put(
                             port_rect.shrink2(vec2(8.0, 0.0)),
                             egui::TextEdit::singleline(&mut state.port)
                                 .id_salt("panel_port")
                                 .frame(false)
-                                .margin(Margin::ZERO)
-                                .font(theme::regular(13.0))
-                                .text_color(theme::TEXT_PRIMARY)
-                                .vertical_align(Align::Center),
+                                .margin(Margin::symmetric(0, p_vpad))
+                                .font(p_font)
+                                .text_color(theme::TEXT_PRIMARY),
                         );
                         let p_stroke = if p_resp.has_focus() {
                             Stroke::new(1.2_f32, theme::FOCUS_RING)

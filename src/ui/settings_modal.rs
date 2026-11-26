@@ -454,21 +454,23 @@ fn styled_secret_field(
         pos2(rect.left() + 32.0, rect.top()),
         pos2(rect.right() - right_pad, rect.bottom()),
     );
+    let font = theme::regular(13.0);
+    let row_h = ui.fonts(|f| f.row_height(&font));
+    let v_pad = ((edit_rect.height() - row_h) * 0.5).max(0.0) as i8;
     let resp = ui.put(
         edit_rect,
         egui::TextEdit::singleline(text)
             .id_salt(id)
             .password(!*show)
             .frame(false)
-            .margin(Margin::ZERO)
-            .font(theme::regular(13.0))
+            .margin(Margin::symmetric(0, v_pad))
+            .font(font.clone())
             .text_color(theme::TEXT_PRIMARY)
-            .vertical_align(egui::Align::Center)
             .desired_width(edit_rect.width())
             .hint_text(
                 RichText::new(hint)
                     .color(theme::TEXT_PLACEHOLDER)
-                    .font(theme::regular(13.0)),
+                    .font(font),
             ),
     );
 

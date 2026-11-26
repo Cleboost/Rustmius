@@ -8,7 +8,7 @@ use crate::ui::popover_menu::{MenuEntry, MenuIcon, render_popover_menu};
 use crate::ui::theme;
 use egui::epaint::{Mesh, Shape};
 use egui::{
-    Align, Align2, Color32, CornerRadius, Margin, Painter, Rect, RichText, Sense, Stroke, StrokeKind, Ui, pos2,
+    Align2, Color32, CornerRadius, Margin, Painter, Rect, RichText, Sense, Stroke, StrokeKind, Ui, pos2,
     vec2,
 };
 use uuid::Uuid;
@@ -73,17 +73,19 @@ fn vertical_gradient(painter: &Painter, rect: Rect, radius: f32, top: Color32, b
 }
 
 fn single_line_input(ui: &mut Ui, rect: Rect, text: &mut String, hint: &str, id: &str) -> egui::Response {
+    let font = theme::regular(13.0);
+    let row_h = ui.fonts(|f| f.row_height(&font));
+    let v_pad = ((rect.height() - row_h) * 0.5).max(0.0) as i8;
     ui.put(
         rect,
         egui::TextEdit::singleline(text)
             .id_salt(id)
             .frame(false)
-            .margin(Margin::ZERO)
-            .font(theme::regular(13.0))
+            .margin(Margin::symmetric(0, v_pad))
+            .font(font.clone())
             .text_color(theme::TEXT_PRIMARY)
-            .vertical_align(Align::Center)
             .desired_width(rect.width())
-            .hint_text(RichText::new(hint).color(theme::TEXT_PLACEHOLDER).font(theme::regular(13.0))),
+            .hint_text(RichText::new(hint).color(theme::TEXT_PLACEHOLDER).font(font)),
     )
 }
 

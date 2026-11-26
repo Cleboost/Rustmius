@@ -665,19 +665,22 @@ impl eframe::App for RustmiusApp {
                         egui::pos2(field_rect.left() + 12.0, field_rect.top()),
                         egui::pos2(field_rect.right() - 34.0, field_rect.bottom()),
                     );
+                    let pw_font = theme::regular(13.0);
+                    let pw_row_h = ui.fonts(|f| f.row_height(&pw_font));
+                    let pw_vpad = ((edit_rect.height() - pw_row_h) * 0.5).max(0.0) as i8;
                     let pw_resp = ui.put(
                         edit_rect,
                         egui::TextEdit::singleline(&mut self.unlock_password)
                             .id_salt("unlock_pw_input")
                             .password(!self.unlock_show_password)
                             .frame(false)
-                            .font(theme::regular(13.0))
+                            .margin(egui::Margin::symmetric(0, pw_vpad))
+                            .font(pw_font.clone())
                             .text_color(theme::TEXT_PRIMARY)
-                            .vertical_align(egui::Align::Center)
                             .hint_text(
                                 RichText::new(s.panel_password)
                                     .color(theme::TEXT_PLACEHOLDER)
-                                    .font(theme::regular(13.0)),
+                                    .font(pw_font),
                             )
                             .desired_width(edit_rect.width()),
                     );
