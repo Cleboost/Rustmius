@@ -1,3 +1,6 @@
+use crate::storage::known_hosts::{
+    HostKeyCheckResult, KnownHostEntry, extract_key_info, upsert_os_known_host, verify_host_key,
+};
 use crate::storage::{AuthMethod, Host, OsKind};
 use anyhow::{Context, Result};
 use russh::client::{self, Handle};
@@ -14,6 +17,23 @@ pub enum SshCommand {
     Close,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostKeyDecision {
+    TrustAndSave,
+    AllowOnce,
+    Cancel,
+}
+
+#[derive(Debug, Clone)]
+pub struct HostKeyPrompt {
+    pub host: String,
+    pub port: u16,
+    pub algorithm: String,
+    pub public_key_b64: String,
+    pub fingerprint_sha256: String,
+    pub status: HostKeyCheckResult,
+}
+
 #[derive(Debug)]
 pub enum SshEvent {
     Connected,
@@ -21,6 +41,10 @@ pub enum SshEvent {
     Output(Vec<u8>),
     Error(String),
     Closed,
+    HostKeyVerification(
+        HostKeyPrompt,
+        Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<HostKeyDecision>>>>,
+    ),
 }
 
 pub struct SshSession {
@@ -35,17 +59,64 @@ impl SshSession {
     }
 }
 
-struct ClientHandler;
+struct ClientHandler {
+    host: String,
+    port: u16,
+    vault_known_hosts: Vec<KnownHostEntry>,
+    evt_tx: mpsc::UnboundedSender<SshEvent>,
+    ctx: egui::Context,
+}
 
 impl client::Handler for ClientHandler {
     type Error = russh::Error;
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &russh::keys::PublicKeyOrCertificate,
+        server_public_key: &russh::keys::PublicKeyOrCertificate,
     ) -> Result<bool, Self::Error> {
-        // TODO: verify ~/.ssh/known_hosts and prompt for TOFU confirmation
-        Ok(true)
+        let status = verify_host_key(
+            &self.host,
+            self.port,
+            server_public_key,
+            &self.vault_known_hosts,
+        );
+        if matches!(status, HostKeyCheckResult::Trusted) {
+            return Ok(true);
+        }
+
+        let (algorithm, public_key_b64, fingerprint_sha256) = extract_key_info(server_public_key);
+        let prompt = HostKeyPrompt {
+            host: self.host.clone(),
+            port: self.port,
+            algorithm: algorithm.clone(),
+            public_key_b64: public_key_b64.clone(),
+            fingerprint_sha256,
+            status,
+        };
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let reply = Arc::new(std::sync::Mutex::new(Some(tx)));
+        if self
+            .evt_tx
+            .send(SshEvent::HostKeyVerification(prompt, reply))
+            .is_err()
+        {
+            return Ok(false);
+        }
+        self.ctx.request_repaint();
+
+        match rx.await {
+            Ok(HostKeyDecision::TrustAndSave) => {
+                if let Err(err) =
+                    upsert_os_known_host(&self.host, self.port, &algorithm, &public_key_b64)
+                {
+                    tracing::warn!("Failed to update ~/.ssh/known_hosts: {err:#}");
+                }
+                Ok(true)
+            }
+            Ok(HostKeyDecision::AllowOnce) => Ok(true),
+            Ok(HostKeyDecision::Cancel) | Err(_) => Ok(false),
+        }
     }
 }
 
@@ -54,13 +125,24 @@ pub fn spawn_ssh_session(
     host: Host,
     cols: u32,
     rows: u32,
+    vault_known_hosts: Vec<KnownHostEntry>,
     ctx: egui::Context,
 ) -> SshSession {
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
     let (evt_tx, evt_rx) = mpsc::unbounded_channel();
 
     let join_handle = rt.spawn(async move {
-        if let Err(err) = run_ssh(host, cols, rows, cmd_rx, evt_tx.clone(), ctx.clone()).await {
+        if let Err(err) = run_ssh(
+            host,
+            cols,
+            rows,
+            vault_known_hosts,
+            cmd_rx,
+            evt_tx.clone(),
+            ctx.clone(),
+        )
+        .await
+        {
             let _ = evt_tx.send(SshEvent::Error(format!("{err:#}")));
             ctx.request_repaint();
         }
@@ -191,15 +273,23 @@ async fn run_ssh(
     host: Host,
     cols: u32,
     rows: u32,
+    vault_known_hosts: Vec<KnownHostEntry>,
     mut cmd_rx: mpsc::UnboundedReceiver<SshCommand>,
     evt_tx: mpsc::UnboundedSender<SshEvent>,
     ctx: egui::Context,
 ) -> Result<()> {
     let config = Arc::new(client::Config::default());
     let addr = format!("{}:{}", host.hostname, host.port);
+    let handler = ClientHandler {
+        host: host.hostname.clone(),
+        port: host.port,
+        vault_known_hosts,
+        evt_tx: evt_tx.clone(),
+        ctx: ctx.clone(),
+    };
     let mut session = tokio::time::timeout(
         CONNECT_TIMEOUT,
-        client::connect(config, &addr, ClientHandler),
+        client::connect(config, &addr, handler),
     )
     .await
     .map_err(|_| {

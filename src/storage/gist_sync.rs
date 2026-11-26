@@ -102,11 +102,26 @@ pub fn merge_vaults(local: &Vault, remote: &Vault) -> Vault {
             .or_insert_with(|| g.clone());
     }
 
+    let mut known_hosts_map: HashMap<(String, u16), crate::storage::known_hosts::KnownHostEntry> =
+        HashMap::new();
+    for kh in local.known_hosts.iter().chain(remote.known_hosts.iter()) {
+        let key = (kh.host.to_lowercase(), kh.port);
+        known_hosts_map
+            .entry(key)
+            .and_modify(|existing| {
+                if kh.added_at > existing.added_at {
+                    *existing = kh.clone();
+                }
+            })
+            .or_insert_with(|| kh.clone());
+    }
+
     Vault {
         version: local.version.max(remote.version).max(1),
         hosts: hosts_map.into_values().collect(),
         groups: groups_map.into_values().collect(),
         deleted_hosts,
+        known_hosts: known_hosts_map.into_values().collect(),
     }
 }
 
