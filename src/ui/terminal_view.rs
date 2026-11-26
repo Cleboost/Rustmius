@@ -141,7 +141,7 @@ pub fn render_terminal(
     lang: Language,
 ) {
     let font_id = FontId::monospace(font_size);
-    let (cell_w, cell_h) = ui.fonts(|f| {
+    let (cell_w, cell_h) = ui.fonts_mut(|f| {
         let w = f.glyph_width(&font_id, 'W');
         let h = f.row_height(&font_id);
         (w.max(6.0), h.max(12.0))

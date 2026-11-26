@@ -551,7 +551,7 @@ fn handle_window_resize(ctx: &egui::Context) {
     if ctx.input(|i| i.viewport().maximized.unwrap_or(false)) {
         return;
     }
-    let rect = ctx.screen_rect();
+    let rect = ctx.content_rect();
     let Some(pos) = ctx.input(|i| i.pointer.hover_pos()) else {
         return;
     };
@@ -593,10 +593,11 @@ impl eframe::App for RustmiusApp {
         theme::BG_BASE.to_normalized_gamma_f32()
     }
 
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = &ui.ctx().clone();
         self.drain_ssh_events(ctx);
         self.drain_sync_events(ctx);
-        paint_backdrop(ctx, ctx.screen_rect());
+        paint_backdrop(ctx, ctx.content_rect());
 
         // ---- Title bar
         let sessions: Vec<(Uuid, OsKind, String)> = self
@@ -605,11 +606,11 @@ impl eframe::App for RustmiusApp {
             .map(|t| (t.id, t.os, t.title.clone()))
             .collect();
         let mut tb_action = TitlebarAction::None;
-        egui::TopBottomPanel::top("titlebar")
-            .exact_height(theme::TITLEBAR_H)
+        egui::Panel::top("titlebar")
+            .exact_size(theme::TITLEBAR_H)
             .show_separator_line(false)
             .frame(egui::Frame::NONE)
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 let views: Vec<SessionTabView> = sessions
                     .iter()
                     .map(|(id, os, t)| SessionTabView {
@@ -632,7 +633,7 @@ impl eframe::App for RustmiusApp {
             self.titlebar_menu_open = false;
             egui::CentralPanel::default()
                 .frame(egui::Frame::NONE)
-                .show(ctx, |ui| {
+                .show(ui, |ui| {
                     let area = ui.max_rect();
                     let card_w = 380.0;
                     let card_h = if self.unlock_error.is_some() {
@@ -690,14 +691,14 @@ impl eframe::App for RustmiusApp {
                             egui::pos2(field_rect.right() - 34.0, field_rect.bottom()),
                         );
                         let pw_font = theme::regular(13.0);
-                        let pw_row_h = ui.fonts(|f| f.row_height(&pw_font));
+                        let pw_row_h = ui.fonts_mut(|f| f.row_height(&pw_font));
                         let pw_vpad = ((edit_rect.height() - pw_row_h) * 0.5).max(0.0) as i8;
                         let pw_resp = ui.put(
                             edit_rect,
                             egui::TextEdit::singleline(&mut self.unlock_password)
                                 .id_salt("unlock_pw_input")
                                 .password(!self.unlock_show_password)
-                                .frame(false)
+                                .frame(egui::Frame::NONE)
                                 .margin(egui::Margin::symmetric(0, pw_vpad))
                                 .font(pw_font.clone())
                                 .text_color(theme::TEXT_PRIMARY)
@@ -813,12 +814,12 @@ impl eframe::App for RustmiusApp {
 
         // ---- Sidebar (Vaults view only)
         if self.active == ActiveTab::Vaults {
-            egui::SidePanel::left("sidebar")
-                .exact_width(theme::SIDEBAR_W)
+            egui::Panel::left("sidebar")
+                .exact_size(theme::SIDEBAR_W)
                 .resizable(false)
                 .show_separator_line(false)
                 .frame(egui::Frame::NONE)
-                .show(ctx, |ui| {
+                .show(ui, |ui| {
                     render_sidebar(ui, &mut self.nav, self.app_settings.language)
                 });
         }
@@ -830,12 +831,12 @@ impl eframe::App for RustmiusApp {
             if let Some(m) = &mut self.modal {
                 let mut panel_action = HostModalAction::None;
                 let width = (324.0 * anim_t).max(1.0);
-                egui::SidePanel::right("host_editor_panel")
-                    .exact_width(width)
+                egui::Panel::right("host_editor_panel")
+                    .exact_size(width)
                     .resizable(false)
                     .show_separator_line(false)
                     .frame(egui::Frame::NONE)
-                    .show(ctx, |ui| {
+                    .show(ui, |ui| {
                         panel_action = render_host_panel(ui, m, self.app_settings.language);
                     });
 
@@ -880,7 +881,7 @@ impl eframe::App for RustmiusApp {
         let mut close_tab_id: Option<Uuid> = None;
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
-            .show(ctx, |ui| match self.active {
+            .show(ui, |ui| match self.active {
                 ActiveTab::Session(id) => {
                     if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
                         if tab.connected {

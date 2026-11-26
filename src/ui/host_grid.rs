@@ -96,14 +96,17 @@ fn single_line_input(
     id: &str,
 ) -> egui::Response {
     let font = theme::regular(13.0);
-    let row_h = ui.fonts(|f| f.row_height(&font));
-    let v_pad = ((rect.height() - row_h) * 0.5).max(0.0) as i8;
+    let row_h = ui.fonts_mut(|f| f.row_height(&font));
+    let centered_rect = egui::Rect::from_min_size(
+        egui::pos2(rect.min.x, (rect.center().y - row_h * 0.5).max(rect.min.y)),
+        egui::vec2(rect.width(), row_h.min(rect.height())),
+    );
     ui.put(
-        rect,
+        centered_rect,
         egui::TextEdit::singleline(text)
             .id_salt(id)
-            .frame(false)
-            .margin(Margin::symmetric(0, v_pad))
+            .frame(egui::Frame::NONE)
+            .margin(Margin::ZERO)
             .font(font.clone())
             .text_color(theme::TEXT_PRIMARY)
             .desired_width(rect.width())
@@ -599,18 +602,18 @@ fn render_cards(
                 resp.context_menu(|ui| {
                     if ui.button(s.ctx_connect).clicked() {
                         *action = HostGridAction::Connect((*host).clone());
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button(s.ctx_edit).clicked() {
                         *action = HostGridAction::EditHost((*host).clone());
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui
                         .button(RichText::new(s.ctx_delete).color(theme::DANGER))
                         .clicked()
                     {
                         *action = HostGridAction::DeleteHost(host.id);
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
             }

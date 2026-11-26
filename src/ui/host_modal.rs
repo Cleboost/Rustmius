@@ -135,14 +135,14 @@ fn styled_field(
         pos2(rect.right() - right_pad, rect.bottom()),
     );
     let font = theme::regular(13.0);
-    let row_h = ui.fonts(|f| f.row_height(&font));
+    let row_h = ui.fonts_mut(|f| f.row_height(&font));
     let v_pad = ((edit_rect.height() - row_h) * 0.5).max(0.0) as i8;
     let resp = ui.put(
         edit_rect,
         egui::TextEdit::singleline(text)
             .id_salt(id)
             .password(is_password)
-            .frame(false)
+            .frame(egui::Frame::NONE)
             .margin(Margin::symmetric(0, v_pad))
             .font(font.clone())
             .text_color(theme::TEXT_PRIMARY)
@@ -351,13 +351,13 @@ pub fn render_host_panel(
                             theme::light(110),
                         );
                         let p_font = theme::regular(13.0);
-                        let p_row_h = ui.fonts(|f| f.row_height(&p_font));
+                        let p_row_h = ui.fonts_mut(|f| f.row_height(&p_font));
                         let p_vpad = ((port_rect.height() - p_row_h) * 0.5).max(0.0) as i8;
                         let p_resp = ui.put(
                             port_rect.shrink2(vec2(8.0, 0.0)),
                             egui::TextEdit::singleline(&mut state.port)
                                 .id_salt("panel_port")
-                                .frame(false)
+                                .frame(egui::Frame::NONE)
                                 .margin(Margin::symmetric(0, p_vpad))
                                 .font(p_font)
                                 .text_color(theme::TEXT_PRIMARY),

@@ -35,7 +35,7 @@ impl client::Handler for ClientHandler {
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &russh::keys::PublicKey,
+        _server_public_key: &russh::keys::PublicKeyOrCertificate,
     ) -> Result<bool, Self::Error> {
         // TODO: verify ~/.ssh/known_hosts and prompt for TOFU confirmation
         Ok(true)
@@ -87,7 +87,12 @@ where
     let hash_alg = session.best_supported_rsa_hash().await?.flatten();
     for pubkey in identities {
         if let Ok(res) = session
-            .authenticate_publickey_with(username, pubkey, hash_alg, agent)
+            .authenticate_publickey_with(
+                username,
+                pubkey.public_key().into_owned(),
+                hash_alg,
+                agent,
+            )
             .await
             && res.success()
         {

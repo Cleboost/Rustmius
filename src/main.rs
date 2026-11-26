@@ -14,7 +14,8 @@ fn main() -> eframe::Result<()> {
         )
         .init();
 
-    let native_options = eframe::NativeOptions {
+    let make_options = |renderer| eframe::NativeOptions {
+        renderer,
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1280.0, 800.0])
             .with_min_inner_size([900.0, 560.0])
@@ -23,9 +24,18 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
 
-    eframe::run_native(
+    if let Err(err) = eframe::run_native(
         "Rustmius",
-        native_options,
+        make_options(eframe::Renderer::Wgpu),
         Box::new(|cc| Ok(Box::new(RustmiusApp::new(cc)))),
-    )
+    ) {
+        tracing::warn!("WGPU renderer failed ({err}), falling back to Glow (OpenGL)");
+        eframe::run_native(
+            "Rustmius",
+            make_options(eframe::Renderer::Glow),
+            Box::new(|cc| Ok(Box::new(RustmiusApp::new(cc)))),
+        )
+    } else {
+        Ok(())
+    }
 }
