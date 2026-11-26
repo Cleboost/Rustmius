@@ -49,21 +49,35 @@ jobs:
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build (${{ matrix.suffix }})
+    name: Build (${{ matrix.name }})
     needs: prepare
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            rustflags: ""
-            suffix: x86_64
-          - target: x86_64-unknown-linux-gnu
-            rustflags: "-C target-cpu=x86-64-v3"
-            suffix: x86_64-v3
+          - name: linux-x86_64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: rustmius-x86_64
+            bin_name: rustmius
+          - name: windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: rustmius-windows-x86_64.exe
+            bin_name: rustmius.exe
+          - name: macos-aarch64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: rustmius-macos-aarch64
+            bin_name: rustmius
+          - name: macos-x86_64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: rustmius-macos-x86_64
+            bin_name: rustmius
 
     steps:
       - name: Checkout
@@ -71,7 +85,8 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.sha }}
 
-      - name: Install system dependencies
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -92,21 +107,20 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build release binary
-        env:
-          RUSTFLAGS: ${{ matrix.rustflags }}
         run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Stage binary
+        shell: bash
         run: |
           cd target/${{ matrix.target }}/release
-          strip rustmius || true
-          mv rustmius rustmius-${{ matrix.suffix }}
+          if [ "${{ runner.os }}" != "Windows" ]; then strip "${{ matrix.bin_name }}" || true; fi
+          mv "${{ matrix.bin_name }}" "${{ matrix.artifact_name }}"
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: binary-${{ matrix.suffix }}
-          path: target/${{ matrix.target }}/release/rustmius-${{ matrix.suffix }}
+          name: binary-${{ matrix.name }}
+          path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
 
   deb:
     name: Build .deb (Debian/Ubuntu)
@@ -137,7 +151,7 @@ jobs:
       - name: Download generic binary
         uses: actions/download-artifact@v4
         with:
-          name: binary-x86_64
+          name: binary-linux-x86_64
           path: prebuilt
 
       - name: Stage binary
@@ -199,7 +213,7 @@ jobs:
         if: matrix.package == 'rustmius-bin'
         uses: actions/download-artifact@v4
         with:
-          name: binary-x86_64
+          name: binary-linux-x86_64
           path: .
 
       - name: Update PKGBUILD (rustmius-bin)
