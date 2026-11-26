@@ -126,7 +126,11 @@ pub fn install_fonts(ctx: &egui::Context) {
     for ti in [TI_REGULAR, TI_FILLED] {
         fonts.families.insert(
             FontFamily::Name(ti.into()),
-            vec![ti.to_owned(), TI_REGULAR.to_owned(), INTER_REGULAR.to_owned()],
+            vec![
+                ti.to_owned(),
+                TI_REGULAR.to_owned(),
+                INTER_REGULAR.to_owned(),
+            ],
         );
     }
 

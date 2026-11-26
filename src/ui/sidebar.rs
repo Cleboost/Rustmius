@@ -22,7 +22,12 @@ const ITEMS: [(NavSection, &str, &str, IconStyle); 6] = [
         fill::HARD_DRIVES,
         IconStyle::Fill,
     ),
-    (NavSection::Keychain, "Keychain", regular::KEY, IconStyle::Regular),
+    (
+        NavSection::Keychain,
+        "Keychain",
+        regular::KEY,
+        IconStyle::Regular,
+    ),
     (
         NavSection::PortForwarding,
         "Port Forwarding",
