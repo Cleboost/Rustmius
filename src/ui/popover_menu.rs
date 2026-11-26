@@ -46,7 +46,16 @@ pub fn render_popover_menu(
     let clamped_x = ideal_x.clamp(screen.left() + 8.0, (screen.right() - width - 8.0).max(8.0));
     let menu_pos = pos2(clamped_x, anchor.bottom() + 8.0 + y_offset);
 
-    render_menu_at(ctx, salt, menu_pos, Some(anchor), width, anim_t, open, entries)
+    render_menu_at(
+        ctx,
+        salt,
+        menu_pos,
+        Some(anchor),
+        width,
+        anim_t,
+        open,
+        entries,
+    )
 }
 
 /// Renders an animated Termius-style context menu at `pos` (clamped to screen bounds).
@@ -67,8 +76,13 @@ pub fn render_context_menu(
     let height = menu_height(entries);
     let screen = ctx.content_rect();
     let y_offset = (1.0 - anim_t) * -4.0;
-    let clamped_x = pos.x.clamp(screen.left() + 8.0, (screen.right() - width - 8.0).max(8.0));
-    let clamped_y = pos.y.clamp(screen.top() + 8.0, (screen.bottom() - height - 8.0).max(8.0));
+    let clamped_x = pos
+        .x
+        .clamp(screen.left() + 8.0, (screen.right() - width - 8.0).max(8.0));
+    let clamped_y = pos.y.clamp(
+        screen.top() + 8.0,
+        (screen.bottom() - height - 8.0).max(8.0),
+    );
     let menu_pos = pos2(clamped_x, clamped_y + y_offset);
 
     render_menu_at(ctx, salt, menu_pos, None, width, anim_t, open, entries)
@@ -141,10 +155,7 @@ fn render_menu_at(
                     }
                     | MenuEntry::DangerItem { id, icon, label } => {
                         let is_danger = matches!(entry, MenuEntry::DangerItem { .. });
-                        let is_selected = matches!(
-                            entry,
-                            MenuEntry::Item { selected: true, .. }
-                        );
+                        let is_selected = matches!(entry, MenuEntry::Item { selected: true, .. });
                         let row = Rect::from_min_size(
                             pos2(rect.left() + 6.0, y),
                             vec2(width - 12.0, 34.0),
@@ -224,8 +235,7 @@ fn render_menu_at(
         let clicked_outside = ctx
             .input(|i| i.pointer.primary_pressed() || i.pointer.secondary_pressed())
             && ctx.input(|i| i.pointer.interact_pos()).is_some_and(|pos| {
-                !area_resp.response.rect.contains(pos)
-                    && !anchor.is_some_and(|a| a.contains(pos))
+                !area_resp.response.rect.contains(pos) && !anchor.is_some_and(|a| a.contains(pos))
             });
         if escaped || clicked_outside {
             *open = false;
