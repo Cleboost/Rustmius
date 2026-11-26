@@ -4,7 +4,14 @@ use crate::i18n::{Language, tr};
 use crate::storage::{Host, Vault};
 use crate::ui::icons::{self, IconStyle, bold, fill, regular};
 use crate::ui::os_icons::paint_os_tile;
-use crate::ui::popover_menu::{MenuEntry, MenuIcon, render_popover_menu};
+use crate::ui::popover_menu::{MenuEntry, MenuIcon, render_context_menu, render_popover_menu};
+
+#[derive(Clone, Copy, Default)]
+struct HostContextMenuState {
+    open: bool,
+    host_id: Option<Uuid>,
+    pos: egui::Pos2,
+}
 use crate::ui::theme;
 use egui::epaint::{Mesh, Shape};
 use egui::{
@@ -599,23 +606,21 @@ fn render_cards(
                 } else if resp.double_clicked() {
                     *action = HostGridAction::Connect((*host).clone());
                 }
-                resp.context_menu(|ui| {
-                    if ui.button(s.ctx_connect).clicked() {
-                        *action = HostGridAction::Connect((*host).clone());
-                        ui.close();
-                    }
-                    if ui.button(s.ctx_edit).clicked() {
-                        *action = HostGridAction::EditHost((*host).clone());
-                        ui.close();
-                    }
-                    if ui
-                        .button(RichText::new(s.ctx_delete).color(theme::DANGER))
-                        .clicked()
-                    {
-                        *action = HostGridAction::DeleteHost(host.id);
-                        ui.close();
-                    }
-                });
+                if resp.secondary_clicked() {
+                    let pos = resp
+                        .interact_pointer_pos()
+                        .unwrap_or_else(|| resp.rect.center());
+                    ui.ctx().data_mut(|d| {
+                        d.insert_temp(
+                            egui::Id::new("host_ctx_menu_state"),
+                            HostContextMenuState {
+                                open: true,
+                                host_id: Some(host.id),
+                                pos,
+                            },
+                        );
+                    });
+                }
             }
 
             if !ghost_hosts.is_empty() {
@@ -876,6 +881,53 @@ pub fn render_host_grid(
             _ => HostSortMode::OldestFirst,
         };
     }
+
+    let ctx_menu_id = egui::Id::new("host_ctx_menu_state");
+    let mut ctx_state = ui
+        .ctx()
+        .data_mut(|d| d.get_temp::<HostContextMenuState>(ctx_menu_id))
+        .unwrap_or_default();
+    let target_host = ctx_state
+        .host_id
+        .and_then(|id| vault.hosts.iter().find(|h| h.id == id));
+    if target_host.is_none() {
+        ctx_state.open = false;
+    }
+    if let Some(id) = render_context_menu(
+        ui.ctx(),
+        "host_context_menu",
+        ctx_state.pos,
+        176.0,
+        &mut ctx_state.open,
+        &[
+            MenuEntry::Item {
+                id: 0,
+                icon: MenuIcon::Phosphor(regular::TERMINAL_WINDOW, IconStyle::Regular),
+                label: s.ctx_connect,
+                selected: false,
+            },
+            MenuEntry::Item {
+                id: 1,
+                icon: MenuIcon::Phosphor(regular::PENCIL_SIMPLE, IconStyle::Regular),
+                label: s.ctx_edit,
+                selected: false,
+            },
+            MenuEntry::Separator,
+            MenuEntry::DangerItem {
+                id: 2,
+                icon: MenuIcon::Phosphor(regular::TRASH, IconStyle::Regular),
+                label: s.ctx_delete,
+            },
+        ],
+    ) && let Some(host) = target_host
+    {
+        action = match id {
+            0 => HostGridAction::Connect(host.clone()),
+            1 => HostGridAction::EditHost(host.clone()),
+            _ => HostGridAction::DeleteHost(host.id),
+        };
+    }
+    ui.ctx().data_mut(|d| d.insert_temp(ctx_menu_id, ctx_state));
 
     action
 }
