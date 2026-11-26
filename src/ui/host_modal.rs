@@ -58,6 +58,10 @@ impl HostModalState {
         }
     }
 
+    pub fn parsed_port(&self) -> Option<u16> {
+        self.port.trim().parse::<u16>().ok().filter(|&p| p >= 1)
+    }
+
     pub fn to_host(&self) -> Host {
         let auth = match self.auth_mode {
             1 => AuthMethod::Password,
@@ -74,7 +78,7 @@ impl HostModalState {
                 self.label.trim().to_string()
             },
             hostname: self.hostname.trim().to_string(),
-            port: self.port.trim().parse().unwrap_or(22),
+            port: self.parsed_port().unwrap_or(22),
             username: self.username.trim().to_string(),
             auth,
             password: if self.password.is_empty() {
@@ -339,6 +343,7 @@ pub fn render_host_panel(
                 ui.add_space(10.0);
 
                 // Card 3: SSH port + Credentials
+                let port_valid = state.parsed_port().is_some();
                 section_card(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.label(
@@ -371,7 +376,9 @@ pub fn render_host_panel(
                         if port_box_resp.clicked() {
                             p_resp.request_focus();
                         }
-                        let p_stroke = if p_resp.has_focus() {
+                        let p_stroke = if !port_valid {
+                            Stroke::new(1.2_f32, theme::DANGER)
+                        } else if p_resp.has_focus() {
                             Stroke::new(1.2_f32, theme::FOCUS_RING)
                         } else {
                             Stroke::new(1.0_f32, theme::shade(22))
@@ -390,6 +397,14 @@ pub fn render_host_panel(
                             );
                         }
                     });
+                    if !port_valid {
+                        ui.add_space(4.0);
+                        ui.label(
+                            RichText::new(s.panel_port_invalid)
+                                .font(theme::regular(11.5))
+                                .color(theme::DANGER),
+                        );
+                    }
 
                     ui.add_space(12.0);
                     ui.label(
@@ -441,7 +456,7 @@ pub fn render_host_panel(
 
         // Footer CTA
         ui.add_space(8.0);
-        let can_submit = !state.hostname.trim().is_empty();
+        let can_submit = !state.hostname.trim().is_empty() && state.parsed_port().is_some();
         ui.horizontal(|ui| {
             let half = (ui.available_width() - 8.0) / 2.0;
             let save_btn = egui::Button::new(
