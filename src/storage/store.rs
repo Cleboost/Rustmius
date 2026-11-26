@@ -161,13 +161,11 @@ fn recover_json_array<T: serde::de::DeserializeOwned>(data: &str, key: &str) -> 
             '}' => {
                 if depth > 0 {
                     depth -= 1;
-                    if depth == 0 {
-                        if let Some(start) = obj_start.take() {
-                            if let Ok(item) = serde_json::from_str::<T>(&array_slice[start..=idx]) {
+                    if depth == 0
+                        && let Some(start) = obj_start.take()
+                            && let Ok(item) = serde_json::from_str::<T>(&array_slice[start..=idx]) {
                                 items.push(item);
                             }
-                        }
-                    }
                 }
             }
             ']' if depth == 0 => break,
@@ -194,11 +192,10 @@ fn recover_truncated_plain_vault(data: &str) -> Option<Vault> {
 }
 
 pub fn save_plain_vault(path: &Path, vault: &Vault) -> Result<()> {
-    if path.exists() {
-        if let Ok(existing) = fs::read(path) {
+    if path.exists()
+        && let Ok(existing) = fs::read(path) {
             let _ = write_secure(&backup_path(path), &existing);
         }
-    }
     let json = serde_json::to_string_pretty(vault)?;
     write_secure(path, json.as_bytes())
 }
@@ -206,13 +203,11 @@ pub fn save_plain_vault(path: &Path, vault: &Vault) -> Result<()> {
 pub fn load_plain_vault(path: &Path) -> Result<Vault> {
     let bak = backup_path(path);
     if !path.exists() {
-        if bak.exists() {
-            if let Ok(bak_data) = fs::read_to_string(&bak) {
-                if let Ok(vault) = serde_json::from_str::<Vault>(&bak_data) {
+        if bak.exists()
+            && let Ok(bak_data) = fs::read_to_string(&bak)
+                && let Ok(vault) = serde_json::from_str::<Vault>(&bak_data) {
                     return Ok(vault);
                 }
-            }
-        }
         return Ok(Vault::new());
     }
 
@@ -220,14 +215,12 @@ pub fn load_plain_vault(path: &Path) -> Result<Vault> {
     match serde_json::from_str::<Vault>(&data) {
         Ok(vault) => Ok(vault),
         Err(primary_err) => {
-            if bak.exists() {
-                if let Ok(bak_data) = fs::read_to_string(&bak) {
-                    if let Ok(vault) = serde_json::from_str::<Vault>(&bak_data) {
+            if bak.exists()
+                && let Ok(bak_data) = fs::read_to_string(&bak)
+                    && let Ok(vault) = serde_json::from_str::<Vault>(&bak_data) {
                         quarantine_corrupted_file(path);
                         return Ok(vault);
                     }
-                }
-            }
             if let Some(recovered) = recover_truncated_plain_vault(&data) {
                 quarantine_corrupted_file(path);
                 return Ok(recovered);
