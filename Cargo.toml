@@ -11,7 +11,7 @@ eframe = { version = "0.31", default-features = true }
 egui = "0.31"
 egui-phosphor = { version = "0.9", default-features = false, features = ["regular", "fill", "bold"] }
 alacritty_terminal = "0.25"
-russh = "0.52"
+russh = "0.60"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
