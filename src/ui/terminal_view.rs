@@ -395,6 +395,14 @@ pub fn render_terminal(
 
         if ('\u{2800}'..='\u{28FF}').contains(&indexed.c) {
             paint_braille(&painter, cell_rect, indexed.c, fg);
+        } else if ('\u{2500}'..='\u{257F}').contains(&indexed.c)
+            && paint_box_drawing(&painter, cell_rect, indexed.c, fg)
+        {
+            // Rendered as crisp cell-aligned vector primitives.
+        } else if ('\u{2580}'..='\u{259F}').contains(&indexed.c)
+            && paint_block_element(&painter, cell_rect, indexed.c, fg)
+        {
+            // Rendered as crisp cell-aligned block primitives.
         } else if indexed.c != ' ' && indexed.c != '\0' {
             let mut buf = [0u8; 4];
             let s = indexed.c.encode_utf8(&mut buf);
@@ -918,6 +926,280 @@ fn paint_braille(painter: &egui::Painter, cell: Rect, ch: char, fg: Color32) {
             painter.circle_filled(p, r, fg);
         }
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LineWeight {
+    None,
+    Light,
+    Heavy,
+    Double,
+}
+
+fn paint_box_drawing(painter: &egui::Painter, cell: Rect, ch: char, fg: Color32) -> bool {
+    use LineWeight::{Double, Heavy, Light, None};
+
+    let l = cell.min.x;
+    let r = cell.max.x;
+    let t = cell.min.y;
+    let b = cell.max.y;
+    let cx = cell.center().x;
+    let cy = cell.center().y;
+    let light_w = (cell.width() * 0.11).clamp(1.0, 2.0);
+    let heavy_w = light_w * 2.0;
+    let dbl_gap = (cell.width() * 0.16).clamp(1.5, 3.0);
+
+    // Rounded corners
+    match ch {
+        '╭' | '╮' | '╯' | '╰' => {
+            let rx = (r - cx).min(b - cy) * 0.65;
+            let pts: Vec<Pos2> = match ch {
+                '╭' => vec![pos2(cx, b), pos2(cx, cy + rx * 0.4), pos2(cx + rx * 0.4, cy), pos2(r, cy)],
+                '╮' => vec![pos2(l, cy), pos2(cx - rx * 0.4, cy), pos2(cx, cy + rx * 0.4), pos2(cx, b)],
+                '╯' => vec![pos2(l, cy), pos2(cx - rx * 0.4, cy), pos2(cx, cy - rx * 0.4), pos2(cx, t)],
+                '╰' => vec![pos2(cx, t), pos2(cx, cy - rx * 0.4), pos2(cx + rx * 0.4, cy), pos2(r, cy)],
+                _ => unreachable!(),
+            };
+            painter.add(egui::Shape::line(pts, Stroke::new(light_w, fg)));
+            return true;
+        }
+        '╱' => {
+            painter.line_segment([pos2(l, b), pos2(r, t)], Stroke::new(light_w, fg));
+            return true;
+        }
+        '╲' => {
+            painter.line_segment([pos2(l, t), pos2(r, b)], Stroke::new(light_w, fg));
+            return true;
+        }
+        '╳' => {
+            painter.line_segment([pos2(l, b), pos2(r, t)], Stroke::new(light_w, fg));
+            painter.line_segment([pos2(l, t), pos2(r, b)], Stroke::new(light_w, fg));
+            return true;
+        }
+        _ => {}
+    }
+
+    // (left, right, up, down)
+    let arms: (LineWeight, LineWeight, LineWeight, LineWeight) = match ch {
+        '─' | '┄' | '┈' | '╌' => (Light, Light, None, None),
+        '━' | '┅' | '┉' | '╍' => (Heavy, Heavy, None, None),
+        '│' | '┆' | '┊' | '╎' => (None, None, Light, Light),
+        '┃' | '┇' | '┋' | '╏' => (None, None, Heavy, Heavy),
+        '┌' => (None, Light, None, Light),
+        '┍' => (None, Heavy, None, Light),
+        '┎' => (None, Light, None, Heavy),
+        '┏' => (None, Heavy, None, Heavy),
+        '┐' => (Light, None, None, Light),
+        '┑' => (Heavy, None, None, Light),
+        '┒' => (Light, None, None, Heavy),
+        '┓' => (Heavy, None, None, Heavy),
+        '└' => (None, Light, Light, None),
+        '┕' => (None, Heavy, Light, None),
+        '┖' => (None, Light, Heavy, None),
+        '┗' => (None, Heavy, Heavy, None),
+        '┘' => (Light, None, Light, None),
+        '┙' => (Heavy, None, Light, None),
+        '┚' => (Light, None, Heavy, None),
+        '┛' => (Heavy, None, Heavy, None),
+        '├' => (None, Light, Light, Light),
+        '┝' => (None, Heavy, Light, Light),
+        '┞' => (None, Light, Heavy, Light),
+        '┟' => (None, Light, Light, Heavy),
+        '┠' => (None, Light, Heavy, Heavy),
+        '┡' => (None, Heavy, Heavy, Light),
+        '┢' => (None, Heavy, Light, Heavy),
+        '┣' => (None, Heavy, Heavy, Heavy),
+        '┤' => (Light, None, Light, Light),
+        '┥' => (Heavy, None, Light, Light),
+        '┦' => (Light, None, Heavy, Light),
+        '┧' => (Light, None, Light, Heavy),
+        '┨' => (Light, None, Heavy, Heavy),
+        '┩' => (Heavy, None, Heavy, Light),
+        '┪' => (Heavy, None, Light, Heavy),
+        '┫' => (Heavy, None, Heavy, Heavy),
+        '┬' => (Light, Light, None, Light),
+        '┭' => (Heavy, Light, None, Light),
+        '┮' => (Light, Heavy, None, Light),
+        '┯' => (Heavy, Heavy, None, Light),
+        '┰' => (Light, Light, None, Heavy),
+        '┱' => (Heavy, Light, None, Heavy),
+        '┲' => (Light, Heavy, None, Heavy),
+        '┳' => (Heavy, Heavy, None, Heavy),
+        '┴' => (Light, Light, Light, None),
+        '┵' => (Heavy, Light, Light, None),
+        '┶' => (Light, Heavy, Light, None),
+        '┷' => (Heavy, Heavy, Light, None),
+        '┸' => (Light, Light, Heavy, None),
+        '┹' => (Heavy, Light, Heavy, None),
+        '┺' => (Light, Heavy, Heavy, None),
+        '┻' => (Heavy, Heavy, Heavy, None),
+        '┼' => (Light, Light, Light, Light),
+        '┽' => (Heavy, Light, Light, Light),
+        '┾' => (Light, Heavy, Light, Light),
+        '┿' => (Heavy, Heavy, Light, Light),
+        '╀' => (Light, Light, Heavy, Light),
+        '╁' => (Light, Light, Light, Heavy),
+        '╂' => (Light, Light, Heavy, Heavy),
+        '╃' => (Heavy, Light, Heavy, Light),
+        '╄' => (Light, Heavy, Heavy, Light),
+        '╅' => (Heavy, Light, Light, Heavy),
+        '╆' => (Light, Heavy, Light, Heavy),
+        '╇' => (Heavy, Heavy, Heavy, Light),
+        '╈' => (Heavy, Heavy, Light, Heavy),
+        '╉' => (Heavy, Light, Heavy, Heavy),
+        '╊' => (Light, Heavy, Heavy, Heavy),
+        '╋' => (Heavy, Heavy, Heavy, Heavy),
+        '═' => (Double, Double, None, None),
+        '║' => (None, None, Double, Double),
+        '╒' => (None, Double, None, Light),
+        '╓' => (None, Light, None, Double),
+        '╔' => (None, Double, None, Double),
+        '╕' => (Double, None, None, Light),
+        '╖' => (Light, None, None, Double),
+        '╗' => (Double, None, None, Double),
+        '╘' => (None, Double, Light, None),
+        '╙' => (None, Light, Double, None),
+        '╚' => (None, Double, Double, None),
+        '╛' => (Double, None, Light, None),
+        '╜' => (Light, None, Double, None),
+        '╝' => (Double, None, Double, None),
+        '╞' => (None, Double, Light, Light),
+        '╟' => (None, Light, Double, Double),
+        '╠' => (None, Double, Double, Double),
+        '╡' => (Double, None, Light, Light),
+        '╢' => (Light, None, Double, Double),
+        '╣' => (Double, None, Double, Double),
+        '╤' => (Double, Double, None, Light),
+        '╥' => (Light, Light, None, Double),
+        '╦' => (Double, Double, None, Double),
+        '╧' => (Double, Double, Light, None),
+        '╨' => (Light, Light, Double, None),
+        '╩' => (Double, Double, Double, None),
+        '╪' => (Double, Double, Light, Light),
+        '╫' => (Light, Light, Double, Double),
+        '╬' => (Double, Double, Double, Double),
+        '╴' => (Light, None, None, None),
+        '╵' => (None, None, Light, None),
+        '╶' => (None, Light, None, None),
+        '╷' => (None, None, None, Light),
+        '╸' => (Heavy, None, None, None),
+        '╹' => (None, None, Heavy, None),
+        '╺' => (None, Heavy, None, None),
+        '╻' => (None, None, None, Heavy),
+        '╼' => (Light, Heavy, None, None),
+        '╽' => (None, None, Light, Heavy),
+        '╾' => (Heavy, Light, None, None),
+        '╿' => (None, None, Heavy, Light),
+        _ => return false,
+    };
+
+    let draw_h = |x0: f32, x1: f32, w: LineWeight| match w {
+        None => {}
+        Light => {
+            painter.line_segment([pos2(x0, cy), pos2(x1, cy)], Stroke::new(light_w, fg));
+        }
+        Heavy => {
+            painter.line_segment([pos2(x0, cy), pos2(x1, cy)], Stroke::new(heavy_w, fg));
+        }
+        Double => {
+            painter.line_segment(
+                [pos2(x0, cy - dbl_gap), pos2(x1, cy - dbl_gap)],
+                Stroke::new(light_w, fg),
+            );
+            painter.line_segment(
+                [pos2(x0, cy + dbl_gap), pos2(x1, cy + dbl_gap)],
+                Stroke::new(light_w, fg),
+            );
+        }
+    };
+    let draw_v = |y0: f32, y1: f32, w: LineWeight| match w {
+        None => {}
+        Light => {
+            painter.line_segment([pos2(cx, y0), pos2(cx, y1)], Stroke::new(light_w, fg));
+        }
+        Heavy => {
+            painter.line_segment([pos2(cx, y0), pos2(cx, y1)], Stroke::new(heavy_w, fg));
+        }
+        Double => {
+            painter.line_segment(
+                [pos2(cx - dbl_gap, y0), pos2(cx - dbl_gap, y1)],
+                Stroke::new(light_w, fg),
+            );
+            painter.line_segment(
+                [pos2(cx + dbl_gap, y0), pos2(cx + dbl_gap, y1)],
+                Stroke::new(light_w, fg),
+            );
+        }
+    };
+
+    let (wl, wr, wu, wd) = arms;
+    draw_h(l, cx, wl);
+    draw_h(cx, r, wr);
+    draw_v(t, cy, wu);
+    draw_v(cy, b, wd);
+    true
+}
+
+fn paint_block_element(painter: &egui::Painter, cell: Rect, ch: char, fg: Color32) -> bool {
+    let l = cell.min.x;
+    let r = cell.max.x;
+    let t = cell.min.y;
+    let b = cell.max.y;
+    let w = cell.width();
+    let h = cell.height();
+    let cx = cell.center().x;
+    let cy = cell.center().y;
+
+    let fill = |rect: Rect, color: Color32| {
+        painter.rect_filled(rect, 0.0, color);
+    };
+    match ch {
+        '▀' => fill(Rect::from_min_max(pos2(l, t), pos2(r, cy)), fg),
+        '▁'..='█' => {
+            let eighths = (ch as u32 - '▁' as u32 + 1) as f32 / 8.0;
+            fill(Rect::from_min_max(pos2(l, b - h * eighths), pos2(r, b)), fg);
+        }
+        '▉'..='▏' => {
+            let eighths = (8 - (ch as u32 - '▉' as u32 + 1)) as f32 / 8.0;
+            fill(Rect::from_min_max(pos2(l, t), pos2(l + w * eighths, b)), fg);
+        }
+        '▐' => fill(Rect::from_min_max(pos2(cx, t), pos2(r, b)), fg),
+        '░' => fill(cell, fg.linear_multiply(0.25)),
+        '▒' => fill(cell, fg.linear_multiply(0.50)),
+        '▓' => fill(cell, fg.linear_multiply(0.75)),
+        '▔' => fill(Rect::from_min_max(pos2(l, t), pos2(r, t + h / 8.0)), fg),
+        '▕' => fill(Rect::from_min_max(pos2(r - w / 8.0, t), pos2(r, b)), fg),
+        '▖' => fill(Rect::from_min_max(pos2(l, cy), pos2(cx, b)), fg),
+        '▗' => fill(Rect::from_min_max(pos2(cx, cy), pos2(r, b)), fg),
+        '▘' => fill(Rect::from_min_max(pos2(l, t), pos2(cx, cy)), fg),
+        '▙' => {
+            fill(Rect::from_min_max(pos2(l, t), pos2(cx, b)), fg);
+            fill(Rect::from_min_max(pos2(cx, cy), pos2(r, b)), fg);
+        }
+        '▚' => {
+            fill(Rect::from_min_max(pos2(l, t), pos2(cx, cy)), fg);
+            fill(Rect::from_min_max(pos2(cx, cy), pos2(r, b)), fg);
+        }
+        '▛' => {
+            fill(Rect::from_min_max(pos2(l, t), pos2(r, cy)), fg);
+            fill(Rect::from_min_max(pos2(l, cy), pos2(cx, b)), fg);
+        }
+        '▜' => {
+            fill(Rect::from_min_max(pos2(l, t), pos2(r, cy)), fg);
+            fill(Rect::from_min_max(pos2(cx, cy), pos2(r, b)), fg);
+        }
+        '▝' => fill(Rect::from_min_max(pos2(cx, t), pos2(r, cy)), fg),
+        '▞' => {
+            fill(Rect::from_min_max(pos2(cx, t), pos2(r, cy)), fg);
+            fill(Rect::from_min_max(pos2(l, cy), pos2(cx, b)), fg);
+        }
+        '▟' => {
+            fill(Rect::from_min_max(pos2(cx, t), pos2(r, b)), fg);
+            fill(Rect::from_min_max(pos2(l, cy), pos2(cx, b)), fg);
+        }
+        _ => return false,
+    }
+    true
 }
 
 fn ctrl_key_byte(key: Key) -> Option<u8> {
