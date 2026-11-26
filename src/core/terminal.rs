@@ -154,7 +154,8 @@ impl TerminalState {
         }
 
         let mut text = String::with_capacity((end_row - start_row + 1) * self.cols);
-        let mut cell_map: Vec<(usize, usize)> = Vec::with_capacity((end_row - start_row + 1) * self.cols);
+        let mut cell_map: Vec<(usize, usize)> =
+            Vec::with_capacity((end_row - start_row + 1) * self.cols);
         let mut target_char_idx: Option<usize> = None;
 
         for r in start_row..=end_row {
@@ -199,14 +200,7 @@ impl TerminalState {
 }
 
 const URL_SCHEMES: &[&str] = &[
-    "https://",
-    "http://",
-    "ftp://",
-    "ftps://",
-    "ssh://",
-    "ws://",
-    "wss://",
-    "file://",
+    "https://", "http://", "ftp://", "ftps://", "ssh://", "ws://", "wss://", "file://",
 ];
 
 fn is_url_char(c: char) -> bool {
@@ -365,7 +359,8 @@ mod tests {
 
     #[test]
     fn preserves_balanced_parentheses_in_urls() {
-        let urls = find_urls_in_line("See https://en.wikipedia.org/wiki/Rust_(programming_language).");
+        let urls =
+            find_urls_in_line("See https://en.wikipedia.org/wiki/Rust_(programming_language).");
         assert_eq!(urls.len(), 1);
         assert_eq!(
             urls[0].2,
