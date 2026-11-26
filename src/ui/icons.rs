@@ -27,6 +27,7 @@ pub fn paint(painter: &Painter, center: Pos2, glyph: &str, size: f32, color: Col
 }
 
 /// Termius "Serial" icon: a DB-style comb connector (ꟺ).
+#[allow(dead_code)]
 pub fn paint_serial(painter: &Painter, c: Pos2, color: Color32) {
     let s = Stroke::new(1.9_f32, color);
     let (l, r, top, bot) = (c.x - 6.5, c.x + 6.5, c.y - 5.0, c.y + 5.0);

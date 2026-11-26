@@ -304,8 +304,8 @@ pub fn render_settings_modal(
                         });
                     });
 
-                    if let Some(anchor) = lang_anchor {
-                        if let Some(id) = render_popover_menu(
+                    if let Some(anchor) = lang_anchor
+                        && let Some(id) = render_popover_menu(
                             ctx,
                             "settings_lang_popover",
                             anchor,
@@ -332,7 +332,6 @@ pub fn render_settings_modal(
                                 settings_changed = true;
                             }
                         }
-                    }
                 }
                 SettingsTab::Terminal => {
                     egui::ScrollArea::vertical().show(&mut content_ui, |ui| {

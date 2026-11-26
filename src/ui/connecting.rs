@@ -5,7 +5,7 @@ use crate::storage::{HostSource, OsKind};
 use crate::ui::icons::{self, IconStyle, fill};
 use crate::ui::os_icons::paint_os_tile;
 use crate::ui::theme;
-use egui::{Align2, Color32, CornerRadius, Pos2, Rect, Sense, Stroke, Ui, pos2, vec2};
+use egui::{Align2, Color32, CornerRadius, Rect, Sense, Stroke, Ui, pos2, vec2};
 
 pub enum ConnectingAction {
     None,
@@ -13,6 +13,7 @@ pub enum ConnectingAction {
     ToggleLogs,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_connecting_screen(
     ui: &mut Ui,
     label: &str,

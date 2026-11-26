@@ -142,13 +142,11 @@ pub fn render_popover_menu(
             }
         });
 
-    if *open && ctx.input(|i| i.pointer.primary_pressed()) {
-        if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
-            if !area_resp.response.rect.contains(pos) && !anchor.contains(pos) {
+    if *open && ctx.input(|i| i.pointer.primary_pressed())
+        && let Some(pos) = ctx.input(|i| i.pointer.interact_pos())
+            && !area_resp.response.rect.contains(pos) && !anchor.contains(pos) {
                 *open = false;
             }
-        }
-    }
 
     clicked_id
 }

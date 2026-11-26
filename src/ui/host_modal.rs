@@ -102,7 +102,7 @@ fn styled_field(
     id: &str,
     text: &mut String,
     hint: &str,
-    is_password: bool,
+    show_secret: Option<&mut bool>,
     leading_icon: Option<&str>,
 ) {
     let h = 34.0;
@@ -125,9 +125,13 @@ fn styled_field(
         rect.left() + 10.0
     };
 
+    let has_eye = show_secret.is_some();
+    let is_password = show_secret.as_ref().map(|s| !**s).unwrap_or(false);
+    let right_pad = if has_eye { 32.0 } else { 10.0 };
+
     let edit_rect = egui::Rect::from_min_max(
         pos2(text_left, rect.top()),
-        pos2(rect.right() - 10.0, rect.bottom()),
+        pos2(rect.right() - right_pad, rect.bottom()),
     );
     let resp = ui.put(
         edit_rect,
@@ -146,6 +150,21 @@ fn styled_field(
                     .font(theme::regular(13.0)),
             ),
     );
+
+    if let Some(show) = show_secret {
+        let eye_r = egui::Rect::from_center_size(pos2(rect.right() - 17.0, rect.center().y), vec2(24.0, 24.0));
+        let eye_resp = ui
+            .interact(eye_r, ui.id().with((id, "eye")), Sense::click())
+            .on_hover_cursor(egui::CursorIcon::PointingHand);
+        if eye_resp.hovered() {
+            ui.painter().rect_filled(eye_r, CornerRadius::same(6), theme::shade(12));
+        }
+        let eye_glyph = if *show { regular::EYE_SLASH } else { regular::EYE };
+        icons::paint(ui.painter(), eye_r.center(), eye_glyph, 14.5, theme::TEXT_MUTED, IconStyle::Regular);
+        if eye_resp.clicked() {
+            *show = !*show;
+        }
+    }
 
     let stroke = if resp.has_focus() {
         Stroke::new(1.2_f32, theme::FOCUS_RING)
@@ -260,7 +279,7 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState, lang: Language
                             "panel_hostname",
                             &mut state.hostname,
                             s.panel_ip_hint,
-                            false,
+                            None,
                             None,
                         );
                     });
@@ -276,7 +295,7 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState, lang: Language
                             .color(theme::TEXT_PRIMARY),
                     );
                     ui.add_space(8.0);
-                    styled_field(ui, "panel_label", &mut state.label, s.panel_label_hint, false, None);
+                    styled_field(ui, "panel_label", &mut state.label, s.panel_label_hint, None, None);
                 });
 
                 ui.add_space(10.0);
@@ -330,48 +349,19 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState, lang: Language
                         "panel_user",
                         &mut state.username,
                         s.panel_username,
-                        false,
+                        None,
                         Some(regular::USER),
                     );
                     ui.add_space(8.0);
 
-                    // Password row with eye toggle
-                    ui.horizontal(|ui| {
-                        let eye_w = 30.0;
-                        let field_w = (ui.available_width() - eye_w - 4.0).max(80.0);
-                        ui.allocate_ui(vec2(field_w, 34.0), |ui| {
-                            styled_field(
-                                ui,
-                                "panel_pass",
-                                &mut state.password,
-                                s.panel_password,
-                                !state.show_password,
-                                Some(regular::LOCK),
-                            );
-                        });
-                        let (eye_rect, eye_resp) =
-                            ui.allocate_exact_size(vec2(eye_w, 34.0), Sense::click());
-                        let eye_resp = eye_resp.on_hover_cursor(egui::CursorIcon::PointingHand);
-                        if eye_resp.hovered() {
-                            ui.painter().rect_filled(eye_rect, CornerRadius::same(6), theme::shade(12));
-                        }
-                        let eye_glyph = if state.show_password {
-                            regular::EYE_SLASH
-                        } else {
-                            regular::EYE
-                        };
-                        icons::paint(
-                            ui.painter(),
-                            eye_rect.center(),
-                            eye_glyph,
-                            15.0,
-                            theme::TEXT_MUTED,
-                            IconStyle::Regular,
-                        );
-                        if eye_resp.clicked() {
-                            state.show_password = !state.show_password;
-                        }
-                    });
+                    styled_field(
+                        ui,
+                        "panel_pass",
+                        &mut state.password,
+                        s.panel_password,
+                        Some(&mut state.show_password),
+                        Some(regular::LOCK),
+                    );
 
                     ui.add_space(10.0);
                     ui.horizontal(|ui| {
@@ -387,7 +377,7 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState, lang: Language
                             "panel_key",
                             &mut state.key_path,
                             "~/.ssh/id_ed25519",
-                            false,
+                            None,
                             Some(regular::KEY),
                         );
                     }

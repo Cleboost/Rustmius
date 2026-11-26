@@ -87,7 +87,8 @@ fn single_line_input(ui: &mut Ui, rect: Rect, text: &mut String, hint: &str, id:
     )
 }
 
-/// Header strip (quick connect + toolbar). Returns `(remaining_content_rect, view_btn_rect, sort_btn_rect)`.
+/// Header strip (quick connect + toolbar). Returns `(remaining_content_rect, new_host_btn_rect, view_btn_rect, sort_btn_rect)`.
+#[allow(clippy::too_many_arguments)]
 fn render_header(
     ui: &mut Ui,
     area: Rect,
@@ -95,9 +96,10 @@ fn render_header(
     view_mode: HostViewMode,
     view_menu_open: &mut bool,
     sort_menu_open: &mut bool,
+    new_host_menu_open: &mut bool,
     lang: Language,
     action: &mut HostGridAction,
-) -> (Rect, Rect, Rect) {
+) -> (Rect, Rect, Rect, Rect) {
     let s = tr(lang);
     let painter = ui.painter_at(area);
     let header = Rect::from_min_size(area.min, vec2(area.width(), theme::HEADER_H));
@@ -111,7 +113,14 @@ fn render_header(
     painter.rect_filled(qc, CornerRadius::same(6), theme::shade(14));
     let connect = Rect::from_min_max(pos2(r - 86.0, t + 14.0), pos2(r - 11.0, t + 40.0));
     let enabled = !quick_connect.trim().is_empty();
-    let cresp = ui.interact(connect, ui.id().with("qc_connect"), if enabled { Sense::click() } else { Sense::hover() });
+    let mut cresp = ui.interact(
+        connect,
+        ui.id().with("qc_connect"),
+        if enabled { Sense::click() } else { Sense::hover() },
+    );
+    if enabled {
+        cresp = cresp.on_hover_cursor(egui::CursorIcon::PointingHand);
+    }
     let cfill = if enabled && cresp.hovered() {
         theme::ACCENT_BLUE_BOTTOM
     } else if enabled {
@@ -159,7 +168,7 @@ fn render_header(
     painter.rect_filled(
         chevron,
         CornerRadius { nw: 2, ne: 6, sw: 2, se: 6 },
-        theme::shade(if chresp.hovered() { 30 } else { 20 }),
+        theme::shade(if chresp.hovered() || *new_host_menu_open { 30 } else { 20 }),
     );
     icons::paint(
         &painter,
@@ -169,19 +178,13 @@ fn render_header(
         theme::TEXT_PRIMARY,
         IconStyle::Bold,
     );
-    let popup_id = ui.id().with("new_host_popup");
     if chresp.clicked() {
-        ui.memory_mut(|m| m.toggle_popup(popup_id));
+        *new_host_menu_open = !*new_host_menu_open;
+        if *new_host_menu_open {
+            *view_menu_open = false;
+            *sort_menu_open = false;
+        }
     }
-    egui::popup::popup_below_widget(ui, popup_id, &chresp, egui::PopupCloseBehavior::CloseOnClick, |ui| {
-        ui.set_min_width(200.0);
-        if ui.button(s.new_host).clicked() {
-            *action = HostGridAction::NewHost;
-        }
-        if ui.button(s.import_ssh_config).clicked() {
-            *action = HostGridAction::ImportSshConfig;
-        }
-    });
 
     // Right-aligned view toggles
     let view_btn_rect = Rect::from_center_size(pos2(r - 103.0, cy), vec2(30.0, 30.0));
@@ -221,7 +224,7 @@ fn render_header(
         }
     }
 
-    (Rect::from_min_max(pos2(l, header.bottom()), area.max), view_btn_rect, sort_btn_rect)
+    (Rect::from_min_max(pos2(l, header.bottom()), area.max), chevron, view_btn_rect, sort_btn_rect)
 }
 
 fn render_empty_state(ui: &mut Ui, area: Rect, input: &mut String, lang: Language, action: &mut HostGridAction) {
@@ -284,6 +287,7 @@ fn render_empty_state(ui: &mut Ui, area: Rect, input: &mut String, lang: Languag
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_cards(
     ui: &mut Ui,
     area: Rect,
@@ -297,10 +301,10 @@ fn render_cards(
     let s = tr(lang);
     let mut hosts: Vec<&Host> = vault.hosts.iter().collect();
     match sort_mode {
-        HostSortMode::Az => hosts.sort_by(|a, b| a.label.to_ascii_lowercase().cmp(&b.label.to_ascii_lowercase())),
-        HostSortMode::Za => hosts.sort_by(|a, b| b.label.to_ascii_lowercase().cmp(&a.label.to_ascii_lowercase())),
-        HostSortMode::NewestFirst => hosts.sort_by(|a, b| b.updated_at.cmp(&a.updated_at)),
-        HostSortMode::OldestFirst => hosts.sort_by(|a, b| a.updated_at.cmp(&b.updated_at)),
+        HostSortMode::Az => hosts.sort_by_key(|h| h.label.to_ascii_lowercase()),
+        HostSortMode::Za => hosts.sort_by_key(|h| std::cmp::Reverse(h.label.to_ascii_lowercase())),
+        HostSortMode::NewestFirst => hosts.sort_by_key(|h| std::cmp::Reverse(h.updated_at)),
+        HostSortMode::OldestFirst => hosts.sort_by_key(|h| h.updated_at),
     }
 
     let inner = area.shrink2(vec2(13.0, 0.0));
@@ -498,6 +502,7 @@ fn render_cards(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_host_grid(
     ui: &mut Ui,
     vault: &Vault,
@@ -508,18 +513,20 @@ pub fn render_host_grid(
     view_menu_open: &mut bool,
     sort_mode: &mut HostSortMode,
     sort_menu_open: &mut bool,
+    new_host_menu_open: &mut bool,
     lang: Language,
 ) -> HostGridAction {
     let s = tr(lang);
     let mut action = HostGridAction::None;
     let area = ui.max_rect();
-    let (content, view_btn_rect, sort_btn_rect) = render_header(
+    let (content, new_host_btn_rect, view_btn_rect, sort_btn_rect) = render_header(
         ui,
         area,
         quick_connect,
         *view_mode,
         view_menu_open,
         sort_menu_open,
+        new_host_menu_open,
         lang,
         &mut action,
     );
@@ -527,6 +534,34 @@ pub fn render_host_grid(
         render_empty_state(ui, content, empty_host_input, lang, &mut action);
     } else {
         render_cards(ui, content, vault, ghost_hosts, *view_mode, *sort_mode, lang, &mut action);
+    }
+
+    if let Some(id) = render_popover_menu(
+        ui.ctx(),
+        "new_host_popover",
+        new_host_btn_rect,
+        228.0,
+        new_host_menu_open,
+        &[
+            MenuEntry::Item {
+                id: 0,
+                icon: MenuIcon::Phosphor(regular::PLUS, IconStyle::Regular),
+                label: s.new_host,
+                selected: false,
+            },
+            MenuEntry::Item {
+                id: 1,
+                icon: MenuIcon::Phosphor(regular::TERMINAL_WINDOW, IconStyle::Regular),
+                label: s.import_ssh_config,
+                selected: false,
+            },
+        ],
+    ) {
+        action = if id == 0 {
+            HostGridAction::NewHost
+        } else {
+            HostGridAction::ImportSshConfig
+        };
     }
 
     if let Some(id) = render_popover_menu(

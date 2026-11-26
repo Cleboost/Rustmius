@@ -40,6 +40,7 @@ pub const TEXT_MUTED: Color32 = Color32::from_rgb(0x66, 0x72, 0x7A);
 pub const TEXT_PLACEHOLDER: Color32 = Color32::from_rgb(0x7D, 0x87, 0x8A);
 pub const TEXT_DISABLED: Color32 = Color32::from_rgb(0x7C, 0x87, 0x89);
 pub const ICON_DARK: Color32 = Color32::from_rgb(0x1D, 0x25, 0x2F);
+#[allow(dead_code)]
 pub const ICON_MUTED: Color32 = Color32::from_rgb(0x98, 0xA0, 0xA6);
 
 pub const ACCENT_BLUE: Color32 = Color32::from_rgb(0x24, 0x96, 0xEE);
