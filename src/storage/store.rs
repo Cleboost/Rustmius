@@ -63,10 +63,7 @@ pub fn write_secure(path: &Path, bytes: &[u8]) -> Result<()> {
         fs::create_dir_all(parent)?;
     }
 
-    let file_name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("vault");
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("vault");
     let tmp_path = path.with_file_name(format!(".{file_name}.tmp.{}", std::process::id()));
 
     let write_result = (|| -> Result<()> {
@@ -109,18 +106,12 @@ pub fn default_sync_config_path() -> Result<PathBuf> {
 }
 
 fn backup_path(path: &Path) -> PathBuf {
-    let file_name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("vault");
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("vault");
     path.with_file_name(format!("{file_name}.bak"))
 }
 
 fn quarantine_corrupted_file(path: &Path) {
-    let file_name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("vault");
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("vault");
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
