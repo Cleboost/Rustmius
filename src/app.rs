@@ -398,7 +398,11 @@ impl RustmiusApp {
     fn close_session(&mut self, id: Uuid) {
         if let Some(pos) = self.tabs.iter().position(|t| t.id == id) {
             let removed = self.tabs.remove(pos);
-            let _ = removed.ssh.cmd_tx.send(SshCommand::Close);
+            if removed.connected {
+                let _ = removed.ssh.cmd_tx.send(SshCommand::Close);
+            } else {
+                removed.ssh.abort();
+            }
             if self.active == ActiveTab::Session(id) {
                 self.active = self
                     .tabs

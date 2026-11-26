@@ -26,6 +26,13 @@ pub enum SshEvent {
 pub struct SshSession {
     pub cmd_tx: mpsc::UnboundedSender<SshCommand>,
     pub evt_rx: mpsc::UnboundedReceiver<SshEvent>,
+    abort_handle: tokio::task::AbortHandle,
+}
+
+impl SshSession {
+    pub fn abort(&self) {
+        self.abort_handle.abort();
+    }
 }
 
 struct ClientHandler;
@@ -52,7 +59,7 @@ pub fn spawn_ssh_session(
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
     let (evt_tx, evt_rx) = mpsc::unbounded_channel();
 
-    rt.spawn(async move {
+    let join_handle = rt.spawn(async move {
         if let Err(err) = run_ssh(host, cols, rows, cmd_rx, evt_tx.clone(), ctx.clone()).await {
             let _ = evt_tx.send(SshEvent::Error(format!("{err:#}")));
             ctx.request_repaint();
@@ -61,7 +68,11 @@ pub fn spawn_ssh_session(
         ctx.request_repaint();
     });
 
-    SshSession { cmd_tx, evt_rx }
+    SshSession {
+        cmd_tx,
+        evt_rx,
+        abort_handle: join_handle.abort_handle(),
+    }
 }
 
 fn expand_tilde(path: &str) -> PathBuf {
@@ -174,6 +185,8 @@ async fn authenticate(session: &mut Handle<ClientHandler>, host: &Host) -> Resul
     }
 }
 
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
 async fn run_ssh(
     host: Host,
     cols: u32,
@@ -184,9 +197,18 @@ async fn run_ssh(
 ) -> Result<()> {
     let config = Arc::new(client::Config::default());
     let addr = format!("{}:{}", host.hostname, host.port);
-    let mut session = client::connect(config, &addr, ClientHandler)
-        .await
-        .with_context(|| format!("TCP connection failed to {addr}"))?;
+    let mut session = tokio::time::timeout(
+        CONNECT_TIMEOUT,
+        client::connect(config, &addr, ClientHandler),
+    )
+    .await
+    .map_err(|_| {
+        anyhow::anyhow!(
+            "Connection timed out to {addr} after {}s",
+            CONNECT_TIMEOUT.as_secs()
+        )
+    })?
+    .with_context(|| format!("TCP connection failed to {addr}"))?;
 
     if !authenticate(&mut session, &host).await? {
         anyhow::bail!("SSH authentication failed for {}@{addr}", host.username);
