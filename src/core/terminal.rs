@@ -1,5 +1,5 @@
 use alacritty_terminal::event::VoidListener;
-use alacritty_terminal::grid::Scroll;
+use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Column, Line, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::term::cell::Flags;
@@ -54,6 +54,22 @@ impl TerminalState {
 
     pub fn scroll_display(&mut self, lines: i32) {
         self.term.scroll_display(Scroll::Delta(lines));
+    }
+
+    /// Returns `(display_offset, history_size, screen_lines)`.
+    pub fn scroll_info(&self) -> (usize, usize, usize) {
+        let grid = self.term.grid();
+        (grid.display_offset(), grid.history_size(), self.rows)
+    }
+
+    pub fn scroll_to_offset(&mut self, target_offset: usize) {
+        let grid = self.term.grid();
+        let current = grid.display_offset() as i32;
+        let target = target_offset.min(grid.history_size()) as i32;
+        let delta = target - current;
+        if delta != 0 {
+            self.term.scroll_display(Scroll::Delta(delta));
+        }
     }
 
     pub fn term(&self) -> &Term<VoidListener> {

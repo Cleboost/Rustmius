@@ -448,11 +448,13 @@ pub fn render_terminal(
     }
 
     // Keyboard & scroll input
-    if response.has_focus() {
+    let has_focus = response.has_focus();
+    let is_hovered = response.hovered();
+    if has_focus || is_hovered {
         let events = ui.input(|i| i.events.clone());
         for ev in events {
             match ev {
-                Event::Copy => {
+                Event::Copy if has_focus => {
                     if let Some(selected) = terminal.selection_text() {
                         ui.ctx().copy_text(selected);
                         terminal.clear_selection();
@@ -460,7 +462,7 @@ pub fn render_terminal(
                         let _ = cmd_tx.send(SshCommand::Data(vec![0x03]));
                     }
                 }
-                Event::Paste(text) => {
+                Event::Paste(text) if has_focus => {
                     let bytes = if terminal.is_bracketed_paste() {
                         let sanitized = text.replace("\x1b[200~", "").replace("\x1b[201~", "");
                         format!("\x1b[200~{sanitized}\x1b[201~").into_bytes()
@@ -470,7 +472,7 @@ pub fn render_terminal(
                     let _ = cmd_tx.send(SshCommand::Data(bytes));
                     link_state.popover_open = false;
                 }
-                Event::Text(text) => {
+                Event::Text(text) if has_focus => {
                     let _ = cmd_tx.send(SshCommand::Data(text.into_bytes()));
                     link_state.popover_open = false;
                 }
@@ -479,7 +481,7 @@ pub fn render_terminal(
                     pressed: true,
                     modifiers,
                     ..
-                } => {
+                } if has_focus => {
                     if modifiers.ctrl
                         && let Some(byte) = ctrl_key_byte(key)
                     {
@@ -492,8 +494,12 @@ pub fn render_terminal(
                         link_state.popover_open = false;
                     }
                 }
-                Event::MouseWheel { delta, .. } => {
-                    let lines = (delta.y / 20.0).round() as i32;
+                Event::MouseWheel { unit, delta, .. } => {
+                    let lines = match unit {
+                        egui::MouseWheelUnit::Line => (delta.y * 3.0).round() as i32,
+                        egui::MouseWheelUnit::Point => (delta.y / cell_h.max(1.0)).round() as i32,
+                        egui::MouseWheelUnit::Page => (delta.y * rows as f32).round() as i32,
+                    };
                     if lines != 0 {
                         terminal.scroll_display(lines);
                         link_state.popover_open = false;
@@ -527,6 +533,54 @@ pub fn render_terminal(
     );
 
     ui.data_mut(|d| d.insert_temp(link_state_id, link_state));
+
+    // Scrollbar
+    let (_display_offset, history_size, screen_lines) = terminal.scroll_info();
+    if history_size > 0 {
+        let track_margin_v = 4.0;
+        let track_h = (rect.height() - track_margin_v * 2.0).max(1.0);
+        let hit_rect = Rect::from_min_max(
+            Pos2::new(rect.right() - 12.0, rect.top() + track_margin_v),
+            Pos2::new(rect.right(), rect.bottom() - track_margin_v),
+        );
+        let sb_resp = ui.interact(
+            hit_rect,
+            response.id.with("scrollbar"),
+            Sense::click_and_drag(),
+        );
+
+        let total_lines = (history_size + screen_lines) as f32;
+        let thumb_h = ((screen_lines as f32 / total_lines) * track_h).clamp(20.0, track_h);
+        let scrollable_h = (track_h - thumb_h).max(1.0);
+
+        if (sb_resp.dragged() || sb_resp.clicked())
+            && let Some(pos) = sb_resp.interact_pointer_pos()
+        {
+            let frac = ((pos.y - hit_rect.top() - thumb_h * 0.5) / scrollable_h).clamp(0.0, 1.0);
+            let target_offset = ((1.0 - frac) * history_size as f32).round() as usize;
+            terminal.scroll_to_offset(target_offset);
+        }
+
+        let (display_offset, history_size, _) = terminal.scroll_info();
+        let frac = if history_size > 0 {
+            1.0 - (display_offset as f32 / history_size as f32)
+        } else {
+            1.0
+        };
+        let thumb_y = hit_rect.top() + frac * scrollable_h;
+        let active = sb_resp.hovered() || sb_resp.dragged();
+        let bar_w = if active { 6.0 } else { 4.0 };
+        let thumb_rect = Rect::from_min_size(
+            Pos2::new(rect.right() - bar_w - 2.0, thumb_y),
+            Vec2::new(bar_w, thumb_h),
+        );
+        let color = if active {
+            Color32::from_white_alpha(150)
+        } else {
+            Color32::from_white_alpha(75)
+        };
+        painter.rect_filled(thumb_rect, bar_w * 0.5, color);
+    }
 }
 
 fn segment_rect_for_row(
