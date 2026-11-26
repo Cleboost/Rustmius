@@ -87,7 +87,12 @@ where
     let hash_alg = session.best_supported_rsa_hash().await?.flatten();
     for pubkey in identities {
         if let Ok(res) = session
-            .authenticate_publickey_with(username, pubkey.public_key().into_owned(), hash_alg, agent)
+            .authenticate_publickey_with(
+                username,
+                pubkey.public_key().into_owned(),
+                hash_alg,
+                agent,
+            )
             .await
             && res.success()
         {
