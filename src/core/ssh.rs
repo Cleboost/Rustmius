@@ -287,18 +287,16 @@ async fn run_ssh(
         evt_tx: evt_tx.clone(),
         ctx: ctx.clone(),
     };
-    let mut session = tokio::time::timeout(
-        CONNECT_TIMEOUT,
-        client::connect(config, &addr, handler),
-    )
-    .await
-    .map_err(|_| {
-        anyhow::anyhow!(
-            "Connection timed out to {addr} after {}s",
-            CONNECT_TIMEOUT.as_secs()
-        )
-    })?
-    .with_context(|| format!("TCP connection failed to {addr}"))?;
+    let mut session =
+        tokio::time::timeout(CONNECT_TIMEOUT, client::connect(config, &addr, handler))
+            .await
+            .map_err(|_| {
+                anyhow::anyhow!(
+                    "Connection timed out to {addr} after {}s",
+                    CONNECT_TIMEOUT.as_secs()
+                )
+            })?
+            .with_context(|| format!("TCP connection failed to {addr}"))?;
 
     if !authenticate(&mut session, &host).await? {
         anyhow::bail!("SSH authentication failed for {}@{addr}", host.username);

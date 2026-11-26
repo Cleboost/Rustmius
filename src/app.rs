@@ -1,16 +1,15 @@
 use crate::core::ssh::{
     HostKeyDecision, HostKeyPrompt, SshCommand, SshEvent, SshSession, spawn_ssh_session,
 };
-use crate::storage::known_hosts::{
-    HostKeyCheckResult, KnownHostEntry, load_os_known_hosts, now_unix_secs,
-    remove_os_known_host,
-};
 use crate::core::terminal::TerminalState;
 use crate::i18n::tr;
 use crate::storage::gist_sync::{
     SyncConfig, create_vault_gist, decode_encrypted_vault, encode_encrypted_vault,
     fetch_vault_gist, find_existing_vault_gist, load_sync_config, merge_vaults, save_sync_config,
     update_vault_gist,
+};
+use crate::storage::known_hosts::{
+    HostKeyCheckResult, KnownHostEntry, load_os_known_hosts, now_unix_secs, remove_os_known_host,
 };
 use crate::storage::ssh_config::{find_unimported_ssh_hosts, import_ssh_config_into_vault};
 use crate::storage::store::{
@@ -643,7 +642,8 @@ impl RustmiusApp {
             .order(egui::Order::Foreground)
             .fixed_pos(modal_rect.min)
             .show(ctx, |ui| {
-                let (rect, _) = ui.allocate_exact_size(vec2(modal_w, modal_h), egui::Sense::hover());
+                let (rect, _) =
+                    ui.allocate_exact_size(vec2(modal_w, modal_h), egui::Sense::hover());
                 let painter = ui.painter();
                 painter.rect_filled(
                     rect.translate(vec2(0.0, 6.0)),
@@ -701,7 +701,11 @@ impl RustmiusApp {
                     vec2(28.0, 28.0),
                 );
                 let close_resp = ui
-                    .interact(close_r, ui.id().with("kh_modal_close"), egui::Sense::click())
+                    .interact(
+                        close_r,
+                        ui.id().with("kh_modal_close"),
+                        egui::Sense::click(),
+                    )
                     .on_hover_cursor(CursorIcon::PointingHand);
                 if close_resp.hovered() {
                     painter.rect_filled(close_r, CornerRadius::same(6), theme::shade(16));
@@ -791,12 +795,9 @@ impl RustmiusApp {
                             });
                             ui.add_space(8.0);
                             ui.label(
-                                RichText::new(format!(
-                                    "{} ({old_algorithm})",
-                                    s.kh_old_key_label
-                                ))
-                                .font(theme::medium(11.5))
-                                .color(theme::TEXT_MUTED),
+                                RichText::new(format!("{} ({old_algorithm})", s.kh_old_key_label))
+                                    .font(theme::medium(11.5))
+                                    .color(theme::TEXT_MUTED),
                             );
                             ui.label(
                                 RichText::new(old_fingerprint)
@@ -1003,9 +1004,10 @@ impl RustmiusApp {
             .map(|e| (e, true))
             .collect();
         for os_e in os_entries {
-            if !combined.iter().any(|(e, _)| {
-                e.host.eq_ignore_ascii_case(&os_e.host) && e.port == os_e.port
-            }) {
+            if !combined
+                .iter()
+                .any(|(e, _)| e.host.eq_ignore_ascii_case(&os_e.host) && e.port == os_e.port)
+            {
                 combined.push((os_e, false));
             }
         }
