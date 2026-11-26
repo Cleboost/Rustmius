@@ -32,7 +32,8 @@ jobs:
             libx11-dev \
             libxcursor-dev \
             libxrandr-dev \
-            libxi-dev
+            libxi-dev \
+            libssl-dev
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -89,7 +90,8 @@ jobs:
             libx11-dev \
             libxcursor-dev \
             libxrandr-dev \
-            libxi-dev
+            libxi-dev \
+            libssl-dev
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
