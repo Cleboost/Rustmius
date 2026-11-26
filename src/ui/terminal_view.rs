@@ -543,7 +543,11 @@ pub fn render_terminal(
             Pos2::new(rect.right() - 12.0, rect.top() + track_margin_v),
             Pos2::new(rect.right(), rect.bottom() - track_margin_v),
         );
-        let sb_resp = ui.interact(hit_rect, response.id.with("scrollbar"), Sense::click_and_drag());
+        let sb_resp = ui.interact(
+            hit_rect,
+            response.id.with("scrollbar"),
+            Sense::click_and_drag(),
+        );
 
         let total_lines = (history_size + screen_lines) as f32;
         let thumb_h = ((screen_lines as f32 / total_lines) * track_h).clamp(20.0, track_h);
