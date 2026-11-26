@@ -80,6 +80,7 @@ pub struct RustmiusApp {
     view_menu_open: bool,
     sort_mode: HostSortMode,
     sort_menu_open: bool,
+    new_host_menu_open: bool,
     titlebar_menu_open: bool,
     settings_modal: SettingsModalState,
     app_settings: AppSettings,
@@ -96,30 +97,28 @@ pub struct RustmiusApp {
 impl RustmiusApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         theme::apply_termius_theme(&cc.egui_ctx);
-        let rt = Runtime::new().expect("Impossible de démarrer le runtime Tokio");
-        let vault_path = default_vault_path().expect("Impossible de résoudre le chemin du coffre");
+        let rt = Runtime::new().expect("Failed to start Tokio runtime");
+        let vault_path = default_vault_path().expect("Failed to resolve vault path");
         let sync_path =
-            default_sync_config_path().expect("Impossible de résoudre le chemin sync.enc");
+            default_sync_config_path().expect("Failed to resolve sync.enc path");
         let settings_path =
-            default_settings_path().expect("Impossible de résoudre le chemin settings.json");
+            default_settings_path().expect("Failed to resolve settings.json path");
         let app_settings = load_app_settings(&settings_path);
         let mut sync_locked = sync_path.exists();
         let mut sync_cfg = None;
         let mut master_password = None;
         let mut initial_pull = false;
-        if sync_locked {
-            if let Some(pw) = &app_settings.auto_unlock_password {
-                if let Ok(cfg) = load_sync_config(&sync_path, pw) {
+        if sync_locked
+            && let Some(pw) = &app_settings.auto_unlock_password
+                && let Ok(cfg) = load_sync_config(&sync_path, pw) {
                     initial_pull = cfg.auto_sync;
                     sync_cfg = Some(cfg);
                     master_password = Some(pw.clone());
                     sync_locked = false;
                 }
-            }
-        }
 
         let vault = load_plain_vault(&vault_path).unwrap_or_else(|e| {
-            tracing::error!("Erreur chargement vault.json: {e:#}");
+            tracing::error!("Failed to load vault.json: {e:#}");
             Vault::new()
         });
         if !vault_path.exists() {
@@ -146,6 +145,7 @@ impl RustmiusApp {
             view_menu_open: false,
             sort_mode: HostSortMode::NewestFirst,
             sort_menu_open: false,
+            new_host_menu_open: false,
             titlebar_menu_open: false,
             settings_modal: SettingsModalState::default(),
             app_settings,
@@ -166,19 +166,19 @@ impl RustmiusApp {
 
     fn persist_vault(&mut self, ctx: Option<&egui::Context>) {
         if let Err(e) = save_plain_vault(&self.vault_path, &self.vault) {
-            tracing::error!("Erreur sauvegarde coffre: {e:#}");
+            tracing::error!("Failed to save vault: {e:#}");
         }
-        if let (Some(cfg), Some(pw), Some(ctx)) = (&self.sync_cfg, &self.master_password, ctx) {
-            if cfg.auto_sync {
+        if let (Some(cfg), Some(pw), Some(ctx)) = (&self.sync_cfg, &self.master_password, ctx)
+            && cfg.auto_sync {
                 self.spawn_push(cfg.github_token.clone(), cfg.gist_id.clone(), pw.clone(), ctx.clone());
             }
-        }
     }
 
     fn spawn_create_sync(&mut self, token: String, password: String, ctx: egui::Context) {
+        let s = tr(self.app_settings.language);
         self.settings_modal.sync_busy = true;
         self.settings_modal.sync_error = None;
-        self.settings_modal.sync_status = Some("Création du Gist chiffré...".to_string());
+        self.settings_modal.sync_status = Some(s.sync_status_creating.to_string());
         let vault = self.vault.clone();
         let tx = self.sync_tx.clone();
         self.rt.spawn(async move {
@@ -206,15 +206,17 @@ impl RustmiusApp {
     }
 
     fn spawn_connect_existing(&mut self, token: String, password: String, ctx: egui::Context) {
+        let s = tr(self.app_settings.language);
+        let not_found_msg = s.sync_err_not_found;
         self.settings_modal.sync_busy = true;
         self.settings_modal.sync_error = None;
-        self.settings_modal.sync_status = Some("Recherche de rustmius-vault.enc dans vos Gists...".to_string());
+        self.settings_modal.sync_status = Some(s.sync_status_searching.to_string());
         let tx = self.sync_tx.clone();
         self.rt.spawn(async move {
             let res = async {
                 let found = find_existing_vault_gist(&token).await?;
                 let Some((gist_id, content)) = found else {
-                    anyhow::bail!("Aucun Gist contenant rustmius-vault.enc n'a été trouvé.");
+                    anyhow::bail!("{not_found_msg}");
                 };
                 let remote_vault = decode_encrypted_vault(&content, &password)?;
                 let cfg = SyncConfig {
@@ -246,9 +248,10 @@ impl RustmiusApp {
         let (Some(cfg), Some(pw)) = (&self.sync_cfg, &self.master_password) else {
             return;
         };
+        let s = tr(self.app_settings.language);
         self.settings_modal.sync_busy = true;
         self.settings_modal.sync_error = None;
-        self.settings_modal.sync_status = Some("Synchronisation depuis GitHub Gist...".to_string());
+        self.settings_modal.sync_status = Some(s.sync_status_syncing.to_string());
         let token = cfg.github_token.clone();
         let gist_id = cfg.gist_id.clone();
         let password = pw.clone();
@@ -293,6 +296,7 @@ impl RustmiusApp {
     }
 
     fn drain_sync_events(&mut self, ctx: &egui::Context) {
+        let s = tr(self.app_settings.language);
         while let Ok(evt) = self.sync_rx.try_recv() {
             match evt {
                 SyncEvent::Created { cfg, password } => {
@@ -301,7 +305,7 @@ impl RustmiusApp {
                     self.master_password = Some(password);
                     self.settings_modal.sync_busy = false;
                     self.settings_modal.sync_error = None;
-                    self.settings_modal.sync_status = Some("Coffre créé et synchronisé !".to_string());
+                    self.settings_modal.sync_status = Some(s.sync_status_created.to_string());
                     self.settings_modal.token_input.clear();
                     self.settings_modal.password_input.clear();
                     self.settings_modal.confirm_password_input.clear();
@@ -321,7 +325,7 @@ impl RustmiusApp {
                     self.master_password = Some(password.clone());
                     self.settings_modal.sync_busy = false;
                     self.settings_modal.sync_error = None;
-                    self.settings_modal.sync_status = Some("Coffre fusionné et connecté !".to_string());
+                    self.settings_modal.sync_status = Some(s.sync_status_connected.to_string());
                     self.settings_modal.token_input.clear();
                     self.settings_modal.password_input.clear();
                     self.settings_modal.confirm_password_input.clear();
@@ -340,7 +344,7 @@ impl RustmiusApp {
                         self.spawn_push(token, gist_id, password, ctx.clone());
                     }
                     self.settings_modal.sync_busy = false;
-                    self.settings_modal.sync_status = Some("Synchronisé.".to_string());
+                    self.settings_modal.sync_status = Some(s.sync_status_synced.to_string());
                 }
                 SyncEvent::Pushed => {
                     if let (Some(cfg), Some(pw)) = (&mut self.sync_cfg, &self.master_password) {
@@ -348,7 +352,7 @@ impl RustmiusApp {
                         let _ = save_sync_config(&self.sync_path, cfg, pw);
                     }
                     self.settings_modal.sync_busy = false;
-                    self.settings_modal.sync_status = Some("Synchronisé.".to_string());
+                    self.settings_modal.sync_status = Some(s.sync_status_synced.to_string());
                 }
                 SyncEvent::Error(err) => {
                     self.settings_modal.sync_busy = false;
@@ -395,6 +399,7 @@ impl RustmiusApp {
     }
 
     fn drain_ssh_events(&mut self, ctx: &egui::Context) {
+        let s = tr(self.app_settings.language);
         let mut os_updates = Vec::new();
         for tab in self.tabs.iter_mut() {
             while let Ok(evt) = tab.ssh.evt_rx.try_recv() {
@@ -415,14 +420,18 @@ impl RustmiusApp {
                     SshEvent::Error(err) => {
                         tab.connected = true;
                         tab.logs.push(format!("Error: {err}"));
-                        tab.terminal
-                            .feed_bytes(format!("\r\n\x1b[31m[Erreur SSH] {err}\x1b[0m\r\n").as_bytes());
+                        tab.terminal.feed_bytes(
+                            format!("\r\n\x1b[31m[{}] {err}\x1b[0m\r\n", s.term_ssh_error)
+                                .as_bytes(),
+                        );
                     }
                     SshEvent::Closed => {
                         tab.connected = true;
                         tab.logs.push("Session closed.".to_string());
-                        tab.terminal
-                            .feed_bytes(b"\r\n\x1b[33m[Session ferm\xc3\xa9e]\x1b[0m\r\n");
+                        tab.terminal.feed_bytes(
+                            format!("\r\n\x1b[33m[{}]\x1b[0m\r\n", s.term_session_closed)
+                                .as_bytes(),
+                        );
                     }
                 }
             }
@@ -430,13 +439,12 @@ impl RustmiusApp {
         if !os_updates.is_empty() {
             let mut changed = false;
             for (host_id, os) in os_updates {
-                if let Some(h) = self.vault.hosts.iter_mut().find(|h| h.id == host_id) {
-                    if h.os != os {
+                if let Some(h) = self.vault.hosts.iter_mut().find(|h| h.id == host_id)
+                    && h.os != os {
                         h.os = os;
                         h.updated_at = Utc::now();
                         changed = true;
                     }
-                }
             }
             if changed {
                 self.persist_vault(Some(ctx));
@@ -470,6 +478,7 @@ impl RustmiusApp {
             }
             HostGridAction::DeleteHost(id) => {
                 self.vault.hosts.retain(|h| h.id != id);
+                self.vault.deleted_hosts.insert(id, Utc::now());
                 self.persist_vault(Some(ctx));
                 self.ghost_hosts = find_unimported_ssh_hosts(&self.vault);
             }
@@ -605,6 +614,7 @@ impl eframe::App for RustmiusApp {
 
         let s = tr(self.app_settings.language);
         if self.sync_locked {
+            self.titlebar_menu_open = false;
             egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx, |ui| {
                 let area = ui.max_rect();
                 let card_w = 380.0;
@@ -658,6 +668,7 @@ impl eframe::App for RustmiusApp {
                     let pw_resp = ui.put(
                         edit_rect,
                         egui::TextEdit::singleline(&mut self.unlock_password)
+                            .id_salt("unlock_pw_input")
                             .password(!self.unlock_show_password)
                             .frame(false)
                             .font(theme::regular(13.0))
@@ -670,6 +681,17 @@ impl eframe::App for RustmiusApp {
                             )
                             .desired_width(edit_rect.width()),
                     );
+                    let init_id = pw_resp.id.with("unlock_initial_focus");
+                    let did_focus = ui.data_mut(|d| {
+                        let already = d.get_temp::<bool>(init_id).unwrap_or(false);
+                        if !already {
+                            d.insert_temp(init_id, true);
+                        }
+                        already
+                    });
+                    if !did_focus {
+                        pw_resp.request_focus();
+                    }
                     let eye_r = egui::Rect::from_center_size(
                         egui::pos2(field_rect.right() - 18.0, field_rect.center().y),
                         vec2(26.0, 26.0),
@@ -823,6 +845,8 @@ impl eframe::App for RustmiusApp {
                             &mut tab.terminal,
                             &tab.ssh.cmd_tx,
                             self.app_settings.text_size,
+                            self.app_settings.copy_on_select,
+                            self.app_settings.bright_bold,
                         );
                     } else {
                         match render_connecting_screen(
@@ -857,6 +881,7 @@ impl eframe::App for RustmiusApp {
                         &mut self.view_menu_open,
                         &mut self.sort_mode,
                         &mut self.sort_menu_open,
+                        &mut self.new_host_menu_open,
                         self.app_settings.language,
                     );
                 }

@@ -124,6 +124,17 @@ pub struct Strings {
     pub sync_err_token: &'static str,
     pub sync_err_pass: &'static str,
     pub sync_err_pass_mismatch: &'static str,
+    pub sync_status_creating: &'static str,
+    pub sync_status_searching: &'static str,
+    pub sync_status_syncing: &'static str,
+    pub sync_status_created: &'static str,
+    pub sync_status_connected: &'static str,
+    pub sync_status_synced: &'static str,
+    pub sync_err_not_found: &'static str,
+
+    // Terminal / SSH
+    pub term_ssh_error: &'static str,
+    pub term_session_closed: &'static str,
 
     // Unlock screen
     pub unlock_title: &'static str,
@@ -229,6 +240,16 @@ pub const EN: Strings = Strings {
     sync_err_token: "Please enter a GitHub token.",
     sync_err_pass: "Please enter a master password.",
     sync_err_pass_mismatch: "Passwords do not match.",
+    sync_status_creating: "Creating encrypted Gist...",
+    sync_status_searching: "Searching for rustmius-vault.enc in your Gists...",
+    sync_status_syncing: "Syncing with GitHub Gist...",
+    sync_status_created: "Vault created and synced!",
+    sync_status_connected: "Vault merged and connected!",
+    sync_status_synced: "Synced.",
+    sync_err_not_found: "No Gist containing rustmius-vault.enc was found.",
+
+    term_ssh_error: "SSH Error",
+    term_session_closed: "Session closed",
 
     unlock_title: "Unlock Sync Vault",
     unlock_desc: "Enter your master password to unlock and sync your vault.",
@@ -316,7 +337,7 @@ pub const FR: Strings = Strings {
     sync_disconnect: "Déconnecter",
     sync_hero_title: "Sync Vault via GitHub Gist",
     sync_hero_desc: "Vos hôtes sont chiffrés localement (AES-256-GCM) avant de quitter votre machine.",
-    sync_question: "As-tu déjà un coffre synchronisé ?",
+    sync_question: "Avez-vous déjà un coffre synchronisé ?",
     sync_new_title: "Créer un nouveau coffre",
     sync_new_desc: "Crée un Gist privé rustmius-vault.enc chiffré avec votre mot de passe maître.",
     sync_existing_title: "J'ai déjà un coffre synchronisé",
@@ -333,6 +354,16 @@ pub const FR: Strings = Strings {
     sync_err_token: "Veuillez saisir un token GitHub.",
     sync_err_pass: "Veuillez saisir un mot de passe maître.",
     sync_err_pass_mismatch: "Les mots de passe ne correspondent pas.",
+    sync_status_creating: "Création du Gist chiffré...",
+    sync_status_searching: "Recherche de rustmius-vault.enc dans vos Gists...",
+    sync_status_syncing: "Synchronisation avec GitHub Gist...",
+    sync_status_created: "Coffre créé et synchronisé !",
+    sync_status_connected: "Coffre fusionné et connecté !",
+    sync_status_synced: "Synchronisé.",
+    sync_err_not_found: "Aucun Gist contenant rustmius-vault.enc n'a été trouvé.",
+
+    term_ssh_error: "Erreur SSH",
+    term_session_closed: "Session fermée",
 
     unlock_title: "Déverrouiller Sync Vault",
     unlock_desc: "Entrez votre mot de passe maître pour déverrouiller et synchroniser votre coffre.",
