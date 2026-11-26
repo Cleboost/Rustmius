@@ -587,7 +587,7 @@ fn render_link_popover(
     let hint_font = theme::regular(11.0);
     let key_font = theme::semibold(10.0);
 
-    let (url_w, hint_w, key_w) = ctx.fonts(|f| {
+    let (url_w, hint_w, key_w) = ctx.fonts_mut(|f| {
         let uw = f
             .layout_no_wrap(display_url.clone(), url_font.clone(), Color32::WHITE)
             .size()
@@ -613,7 +613,7 @@ fn render_link_popover(
     let pop_w = top_row_w.max(bot_row_w).clamp(190.0, 440.0);
     let pop_h = 54.0;
 
-    let screen = ctx.screen_rect();
+    let screen = ctx.content_rect();
     let place_above = anchor.top() - pop_h - 6.0 >= term_rect.top() + 4.0;
     let ideal_x = anchor.left().min(anchor.center().x - pop_w * 0.35);
     let clamped_x = ideal_x.clamp(
@@ -873,13 +873,23 @@ fn ctrl_key_byte(key: Key) -> Option<u8> {
         Key::F => 0x06,
         Key::G => 0x07,
         Key::H => 0x08,
+        Key::I => 0x09,
+        Key::J => 0x0A,
         Key::K => 0x0B,
         Key::L => 0x0C,
+        Key::M => 0x0D,
         Key::N => 0x0E,
+        Key::O => 0x0F,
         Key::P => 0x10,
+        Key::Q => 0x11,
         Key::R => 0x12,
+        Key::S => 0x13,
+        Key::T => 0x14,
         Key::U => 0x15,
+        Key::V => 0x16,
         Key::W => 0x17,
+        Key::X => 0x18,
+        Key::Y => 0x19,
         Key::Z => 0x1A,
         _ => return None,
     };
