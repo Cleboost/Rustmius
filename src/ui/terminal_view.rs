@@ -237,9 +237,17 @@ pub fn render_terminal(
     // Mouse selection & Ctrl+Click link opening
     let ctrl_link_hovered = ctrl_down && hovered_cell_and_link.is_some();
     if response.drag_started_by(PointerButton::Primary) {
-        if !ctrl_link_hovered && let Some(pos) = response.interact_pointer_pos() {
+        if !ctrl_link_hovered
+            && let Some(pos) = ui
+                .input(|i| i.pointer.press_origin())
+                .or_else(|| response.interact_pointer_pos())
+        {
             let (col, row) = pos_to_cell(pos);
             terminal.start_selection(col, row);
+            if let Some(cur) = response.interact_pointer_pos() {
+                let (cur_col, cur_row) = pos_to_cell(cur);
+                terminal.update_selection(cur_col, cur_row);
+            }
             link_state.popover_open = false;
             link_state.dwell_since = None;
         }
