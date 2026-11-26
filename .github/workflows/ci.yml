@@ -4,27 +4,35 @@ on:
   push:
     branches:
       - '**'
-    files:
+    paths:
       - '**/*.rs'
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - '.github/workflows/ci.yml'
 
 permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build
+  build-and-test:
+    name: Build & Test
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libvte-2.91-gtk4-dev libadwaita-1-dev
+          sudo apt-get install -y \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxi-dev
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -33,20 +41,20 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Cargo Check
-        run: cargo check
+        run: cargo check --all-targets
 
-      - name: Cargo Build
-        run: cargo build
+      - name: Cargo Test
+        run: cargo test --locked
 
   lint:
-    name: Lint
+    name: Format (rustfmt)
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -57,7 +65,7 @@ jobs:
         run: cargo fmt --all
 
       - name: Commit changes
-        uses: stefanzweifel/git-auto-commit-action@v7
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "style: apply rustfmt"
 
@@ -69,12 +77,19 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libvte-2.91-gtk4-dev libadwaita-1-dev
+          sudo apt-get install -y \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxi-dev
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -85,12 +100,12 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Auto-fix clippy
-        run: cargo clippy --fix --allow-dirty -- -D warnings
+        run: cargo clippy --fix --allow-dirty --all-targets -- -D warnings
 
       - name: Commit changes
-        uses: stefanzweifel/git-auto-commit-action@v7
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "fix: apply clippy suggestions"
 
       - name: Clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --all-targets -- -D warnings

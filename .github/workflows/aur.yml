@@ -8,7 +8,7 @@ on:
 
 jobs:
   publish:
-    name: AUR Publish
+    name: AUR Publish (${{ matrix.package }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Publish AUR package
         uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
@@ -26,5 +26,5 @@ jobs:
           commit_username: ${{ secrets.AUR_USERNAME }}
           commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: Update ${{ matrix.package }}
+          commit_message: "Update ${{ matrix.package }}"
           ssh_keyscan_types: rsa,ecdsa,ed25519
