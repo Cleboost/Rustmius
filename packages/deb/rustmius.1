@@ -1,14 +1,14 @@
 .TH RUSTMIUS 1 "2026" "rustmius @VERSION@" "User Commands"
 .SH NAME
-rustmius \- local Termius alternative for Linux (GTK4)
+rustmius \- fast, native, open-source SSH client and host manager for Linux
 .SH SYNOPSIS
 .B rustmius
 .SH DESCRIPTION
 .B Rustmius
-is a modern, fast, and fully local alternative to Termius, built with Rust
-and GTK4. It provides an integrated SSH terminal (via VTE), an advanced SFTP
-explorer with drag & drop, a host manager, and secure secret storage through
-the system keyring.
+is a modern, fast, and local-first alternative to Termius, built in pure Rust
+with egui/eframe, russh, and alacritty_terminal. It provides an integrated SSH
+terminal, a host manager with ~/.ssh/config discovery, and optional E2E
+encrypted GitHub Gist vault synchronization.
 .PP
 Rustmius is a graphical application and takes no command-line arguments; run
 it from your application launcher or from a terminal.

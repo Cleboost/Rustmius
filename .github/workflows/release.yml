@@ -5,54 +5,48 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   prepare:
     name: Prepare Version
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     outputs:
-      new_version: ${{ steps.bump.outputs.new_version }}
-      version_only: ${{ steps.bump.outputs.version_only }}
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
       sha: ${{ steps.commit.outputs.sha }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Calculate Version
-        id: bump
+      - name: Extract version
+        id: meta
         run: |
-          NEW_VERSION="${{ github.ref_name }}"
-          VERSION_ONLY="${NEW_VERSION#v}"
-          
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "version_only=$VERSION_ONLY" >> $GITHUB_OUTPUT
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Update Cargo.toml
+      - name: Sync Cargo.toml version
         run: |
-          VERSION="${{ steps.bump.outputs.version_only }}"
-          awk '/^\[package\]/ {print; p=1; next} p && /^version =/ {print "version = \"'$VERSION'\""; p=0; next} {print}' Cargo.toml > Cargo.toml.tmp && mv Cargo.toml.tmp Cargo.toml
+          VERSION="${{ steps.meta.outputs.version }}"
+          sed -i -E "0.1,/^version =/s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
           cargo update --workspace
 
-      - name: Commit and Push
+      - name: Commit & Push version bump
         id: commit
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Cargo.toml Cargo.lock
-          
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "nothing to commit"
-          else
-            git commit -m "chore: bump version to ${{ steps.bump.outputs.new_version }}"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): bump version to ${{ steps.meta.outputs.tag }}"
             git push origin HEAD:master
           fi
-          
-          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build (${{ matrix.suffix }})
@@ -60,29 +54,34 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read
-      id-token: none
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            cpu: generic
+            rustflags: ""
             suffix: x86_64
           - target: x86_64-unknown-linux-gnu
-            cpu: x86-64-v3
+            rustflags: "-C target-cpu=x86-64-v3"
             suffix: x86_64-v3
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.sha }}
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libvte-2.91-gtk4-dev
+          sudo apt-get install -y \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxi-dev
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -92,20 +91,19 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Build (Performance optimized)
-        run: |
-          export RUSTFLAGS="-C target-cpu=${{ matrix.cpu }}"
-          if [ "${{ matrix.cpu }}" = "generic" ]; then export RUSTFLAGS=""; fi
-          cargo build --release --target ${{ matrix.target }}
+      - name: Build release binary
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
+        run: cargo build --release --locked --target ${{ matrix.target }}
 
-      - name: Prepare binary
+      - name: Stage binary
         run: |
           cd target/${{ matrix.target }}/release
           strip rustmius || true
           mv rustmius rustmius-${{ matrix.suffix }}
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v7
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.suffix }}
           path: target/${{ matrix.target }}/release/rustmius-${{ matrix.suffix }}
@@ -117,26 +115,33 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.sha }}
 
       - name: Install packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libvte-2.91-gtk4-dev dpkg-dev imagemagick
+          sudo apt-get install -y \
+            dpkg-dev \
+            imagemagick \
+            libxkbcommon0 \
+            libwayland-client0 \
+            libgl1 \
+            libx11-6 \
+            libxcursor1 \
+            libxrandr2 \
+            libxi6
 
-      - name: Download prebuilt generic binary
-        uses: actions/download-artifact@v8
+      - name: Download generic binary
+        uses: actions/download-artifact@v4
         with:
           name: binary-x86_64
           path: prebuilt
 
-      - name: Stage binary for packaging
-        run: |
-          mkdir -p target/release
-          install -m755 prebuilt/rustmius-x86_64 target/release/rustmius
+      - name: Stage binary
+        run: install -Dm755 prebuilt/rustmius-x86_64 target/release/rustmius
 
       - name: Build .deb package
         env:
@@ -144,59 +149,55 @@ jobs:
         run: ./packages/deb/build-deb.sh
 
       - name: Upload .deb artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: deb
           path: dist/*.deb
 
   release:
-    name: Create Release
+    name: Publish GitHub Release
     needs: [prepare, build, deb]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: Download binary artifacts
-        uses: actions/download-artifact@v8
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: binary-*
           merge-multiple: true
 
-      - name: Download .deb artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: deb
-          path: artifacts
+      - name: Generate SHA256SUMS
+        run: |
+          cd artifacts
+          sha256sum rustmius-* *.deb > SHA256SUMS.txt
 
-      - name: Release
-        uses: softprops/action-gh-release@v3
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.prepare.outputs.new_version }}
+          tag_name: ${{ needs.prepare.outputs.tag }}
           target_commitish: ${{ needs.prepare.outputs.sha }}
+          generate_release_notes: true
           files: |
             artifacts/rustmius-*
             artifacts/*.deb
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            artifacts/SHA256SUMS.txt
 
   aur:
     name: Update AUR (${{ matrix.package }})
-    needs: [prepare, build]
+    needs: [prepare, build, release]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     strategy:
+      max-parallel: 1
       matrix:
         package: [rustmius, rustmius-bin]
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
+        with:
+          ref: master
 
-      - name: Download Artifacts
+      - name: Download binary (rustmius-bin)
         if: matrix.package == 'rustmius-bin'
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: binary-x86_64
           path: .
@@ -204,58 +205,48 @@ jobs:
       - name: Update PKGBUILD (rustmius-bin)
         if: matrix.package == 'rustmius-bin'
         run: |
-          VERSION="${{ needs.prepare.outputs.version_only }}"
-          # Paths updated to packages/ subdirectory
-          HASH_DESKTOP=$(sha256sum packages/org.rustmius.Rustmius.desktop | cut -d' ' -f1)
-          HASH_PNG=$(sha256sum packages/rustmius.png | cut -d' ' -f1)
-          HASH_LICENSE=$(sha256sum LICENSE | cut -d' ' -f1)
-          HASH_BINARY=$(sha256sum rustmius-x86_64 | cut -d' ' -f1)
+          VERSION="${{ needs.prepare.outputs.version }}"
+          H_DESKTOP=$(sha256sum packages/org.rustmius.Rustmius.desktop | cut -d' ' -f1)
+          H_PNG=$(sha256sum packages/rustmius.png | cut -d' ' -f1)
+          H_LICENSE=$(sha256sum LICENSE | cut -d' ' -f1)
+          H_BIN=$(sha256sum rustmius-x86_64 | cut -d' ' -f1)
 
-          # Target the specific PKGBUILD in packages/rustmius-bin/
           TARGET="packages/rustmius-bin/PKGBUILD"
-          awk -v v="$VERSION" -v d="$HASH_DESKTOP" -v p="$HASH_PNG" -v l="$HASH_LICENSE" -v b="$HASH_BINARY" '
-          BEGIN { h[0]=d; h[1]=p; h[2]=l; h[3]=b; i=0 }
-          /^pkgver=/ { $0="pkgver=" v }
-          /^pkgrel=/ { $0="pkgrel=1" }
-          /^pkgdesc=/ { $0="pkgdesc=\"Full local Termius alternative for Linux (GTK4) - binary release\"" }
-          /'\''[0-9a-f]{64}'\''/ && i < 4 {
-            sub(/'\''[0-9a-f]{64}'\''/, "'\''" h[i++] "'\''")
-          }
-          { print }
-          ' "$TARGET" > "$TARGET.tmp" && mv "$TARGET.tmp" "$TARGET"
+          sed -i "s/^pkgver=.*/pkgver=$VERSION/" "$TARGET"
+          sed -i "s/^pkgrel=.*/pkgrel=1/" "$TARGET"
+          python3 -c '
+          import re, sys
+          path, sums = sys.argv[1], sys.argv[2:]
+          text = open(path).read()
+          new_sums = "sha256sums=(\n    '\''" + "'\''\n    '\''".join(sums) + "'\''\n)"
+          text = re.sub(r"sha256sums=\([^)]*\)", new_sums, text, flags=re.S)
+          open(path, "w").write(text)
+          ' "$TARGET" "$H_DESKTOP" "$H_PNG" "$H_LICENSE" "$H_BIN"
 
       - name: Update PKGBUILD (rustmius)
         if: matrix.package == 'rustmius'
         run: |
-          VERSION="${{ needs.prepare.outputs.version_only }}"
-          # Get source archive hash
-          URL="https://github.com/Cleboost/Rustmius/archive/v$VERSION.tar.gz"
-          curl -L -o source.tar.gz "$URL"
-          HASH_SOURCE=$(sha256sum source.tar.gz | cut -d' ' -f1)
+          VERSION="${{ needs.prepare.outputs.version }}"
+          curl -fsSL -o source.tar.gz "https://github.com/Cleboost/Rustmius/archive/${{ needs.prepare.outputs.tag }}.tar.gz"
+          H_SRC=$(sha256sum source.tar.gz | cut -d' ' -f1)
 
           TARGET="packages/rustmius/PKGBUILD"
           sed -i "s/^pkgver=.*/pkgver=$VERSION/" "$TARGET"
           sed -i "s/^pkgrel=.*/pkgrel=1/" "$TARGET"
-          sed -i "s/^pkgdesc=.*/pkgdesc=\"Full local Termius alternative for Linux (GTK4) - built from stable source\"/" "$TARGET"
-          # Update the source hash (it's the only hash in this PKGBUILD)
-          sed -i "s/sha256sums=('.*')/sha256sums=('$HASH_SOURCE')/" "$TARGET"
+          sed -i "s/^sha256sums=.*/sha256sums=('$H_SRC')/" "$TARGET"
 
-      - name: Commit and Push PKGBUILDs
+      - name: Commit & Push PKGBUILD
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add packages/
-          
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "nothing to commit"
-          else
-            git commit -m "chore: update PKGBUILDs to ${{ needs.prepare.outputs.new_version }}"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(aur): update ${{ matrix.package }} to ${{ needs.prepare.outputs.tag }}"
             git pull --rebase origin master
             git push origin HEAD:master
           fi
 
-      - name: Publish AUR package
+      - name: Publish to AUR
         uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
         with:
           pkgname: ${{ matrix.package }}
@@ -263,5 +254,5 @@ jobs:
           commit_username: ${{ secrets.AUR_USERNAME }}
           commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "Update to ${{ needs.prepare.outputs.new_version }}"
+          commit_message: "Update to ${{ needs.prepare.outputs.tag }}"
           ssh_keyscan_types: rsa,ecdsa,ed25519

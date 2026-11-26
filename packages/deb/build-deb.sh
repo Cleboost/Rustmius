@@ -92,7 +92,7 @@ if command -v dpkg-shlibdeps >/dev/null 2>&1; then
 fi
 # Fallback if shlibdeps is unavailable.
 if [[ -z "$DEPENDS" ]]; then
-    DEPENDS="libc6, libgtk-4-1 (>= 4.6), libvte-2.91-gtk4-0, libssl3"
+    DEPENDS="libc6, libxkbcommon0, libgl1, libx11-6, libwayland-client0"
 fi
 echo ">> Depends: $DEPENDS"
 
@@ -110,11 +110,11 @@ Depends: $DEPENDS
 Section: net
 Priority: optional
 Homepage: https://github.com/Cleboost/Rustmius
-Description: Local Termius alternative for Linux (GTK4)
- Rustmius is a modern, fast, and fully local alternative to Termius,
- built with Rust and GTK4. It provides an integrated SSH terminal
- (via VTE), an advanced SFTP explorer with drag & drop, a host
- manager, and secure secret storage through the system keyring.
+Description: Fast, native, open-source SSH client and host manager for Linux
+ Rustmius is a modern, fast, and local-first alternative to Termius,
+ built in pure Rust with egui/eframe, russh, and alacritty_terminal.
+ It provides an integrated SSH terminal, host manager with ~/.ssh/config
+ discovery, and optional E2E encrypted GitHub Gist vault sync.
 EOF
 
 # Maintainer scripts: refresh icon + desktop caches.

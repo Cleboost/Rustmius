@@ -1,12 +1,12 @@
 pkgname=rustmius-bin
 _pkgname=rustmius
-pkgver=2.5.0
+pkgver=3.0.0
 pkgrel=1
-pkgdesc="Full local Termius alternative for Linux (GTK4) - binary release"
+pkgdesc="Fast, native, open-source SSH client and host manager for Linux - binary release"
 arch=('x86_64')
 url="https://github.com/Cleboost/Rustmius"
 license=('AGPL-3.0-or-later')
-depends=('gtk4' 'vte4')
+depends=('libxkbcommon' 'wayland' 'libglvnd' 'libx11' 'libxcursor' 'libxrandr' 'libxi')
 provides=("$_pkgname")
 conflicts=("$_pkgname")
 
