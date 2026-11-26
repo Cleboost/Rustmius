@@ -19,7 +19,7 @@ const MAGIC: &[u8; 4] = b"RMV2";
 
 pub fn default_vault_path() -> Result<PathBuf> {
     let dirs = ProjectDirs::from("com", "cleboost", "rustmius")
-        .context("Impossible de déterminer le répertoire de données de l'application")?;
+        .context("Failed to determine application data directory")?;
     let data_dir = dirs.data_dir();
     fs::create_dir_all(data_dir)?;
     Ok(data_dir.join("vault.json"))
@@ -49,18 +49,28 @@ impl Default for AppSettings {
 
 pub fn default_settings_path() -> Result<PathBuf> {
     let dirs = ProjectDirs::from("com", "cleboost", "rustmius")
-        .context("Impossible de déterminer le répertoire de données de l'application")?;
+        .context("Failed to determine application data directory")?;
     let data_dir = dirs.data_dir();
     fs::create_dir_all(data_dir)?;
     Ok(data_dir.join("settings.json"))
 }
 
-pub fn save_app_settings(path: &Path, settings: &AppSettings) -> Result<()> {
+pub fn write_secure(path: &Path, bytes: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::write(path, serde_json::to_string_pretty(settings)?)?;
+    fs::write(path, bytes)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+    }
     Ok(())
+}
+
+pub fn save_app_settings(path: &Path, settings: &AppSettings) -> Result<()> {
+    let json = serde_json::to_string_pretty(settings)?;
+    write_secure(path, json.as_bytes())
 }
 
 pub fn load_app_settings(path: &Path) -> AppSettings {
@@ -72,19 +82,15 @@ pub fn load_app_settings(path: &Path) -> AppSettings {
 
 pub fn default_sync_config_path() -> Result<PathBuf> {
     let dirs = ProjectDirs::from("com", "cleboost", "rustmius")
-        .context("Impossible de déterminer le répertoire de données de l'application")?;
+        .context("Failed to determine application data directory")?;
     let data_dir = dirs.data_dir();
     fs::create_dir_all(data_dir)?;
     Ok(data_dir.join("sync.enc"))
 }
 
 pub fn save_plain_vault(path: &Path, vault: &Vault) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
     let json = serde_json::to_string_pretty(vault)?;
-    fs::write(path, json)?;
-    Ok(())
+    write_secure(path, json.as_bytes())
 }
 
 pub fn load_plain_vault(path: &Path) -> Result<Vault> {
@@ -100,7 +106,7 @@ fn derive_key(password: &str, salt: &[u8]) -> Result<Zeroizing<[u8; 32]>> {
     let mut key = Zeroizing::new([0u8; 32]);
     Argon2::default()
         .hash_password_into(password.as_bytes(), salt, key.as_mut())
-        .map_err(|e| anyhow::anyhow!("Échec de dérivation de clé Argon2: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("Argon2 key derivation failed: {e}"))?;
     Ok(key)
 }
 
@@ -117,7 +123,7 @@ pub fn encrypt_bytes(plaintext: &[u8], password: &str) -> Result<Vec<u8>> {
 
     let ciphertext = cipher
         .encrypt(nonce, plaintext)
-        .map_err(|e| anyhow::anyhow!("Échec du chiffrement: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("Encryption failed: {e}"))?;
 
     let mut out = Vec::with_capacity(MAGIC.len() + SALT_LEN + NONCE_LEN + ciphertext.len());
     out.extend_from_slice(MAGIC);
@@ -130,7 +136,7 @@ pub fn encrypt_bytes(plaintext: &[u8], password: &str) -> Result<Vec<u8>> {
 pub fn decrypt_bytes(data: &[u8], password: &str) -> Result<Zeroizing<Vec<u8>>> {
     let header_len = MAGIC.len() + SALT_LEN + NONCE_LEN;
     if data.len() < header_len || &data[..MAGIC.len()] != MAGIC {
-        bail!("Format de fichier chiffré invalide");
+        bail!("Invalid encrypted file format");
     }
 
     let salt = &data[MAGIC.len()..MAGIC.len() + SALT_LEN];
@@ -144,7 +150,7 @@ pub fn decrypt_bytes(data: &[u8], password: &str) -> Result<Zeroizing<Vec<u8>>> 
 
     let plaintext = cipher
         .decrypt(nonce, ciphertext)
-        .map_err(|_| anyhow::anyhow!("Mot de passe maître incorrect ou fichier corrompu"))?;
+        .map_err(|_| anyhow::anyhow!("Incorrect master password or corrupted file"))?;
     Ok(Zeroizing::new(plaintext))
 }
 
@@ -157,20 +163,6 @@ pub fn decrypt_vault(data: &[u8], password: &str) -> Result<Vault> {
     let plaintext = decrypt_bytes(data, password)?;
     let vault: Vault = serde_json::from_slice(&plaintext)?;
     Ok(vault)
-}
-
-pub fn save_vault(path: &Path, vault: &Vault, password: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let encrypted = encrypt_vault(vault, password)?;
-    fs::write(path, encrypted)?;
-    Ok(())
-}
-
-pub fn load_vault(path: &Path, password: &str) -> Result<Vault> {
-    let data = fs::read(path)?;
-    decrypt_vault(&data, password)
 }
 
 #[cfg(test)]

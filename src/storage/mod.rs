@@ -4,6 +4,7 @@ pub mod store;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -87,6 +88,7 @@ pub struct Group {
 }
 
 impl Group {
+    #[allow(dead_code)]
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -101,6 +103,8 @@ pub struct Vault {
     pub version: u32,
     pub hosts: Vec<Host>,
     pub groups: Vec<Group>,
+    #[serde(default)]
+    pub deleted_hosts: HashMap<Uuid, DateTime<Utc>>,
 }
 
 impl Vault {
@@ -109,6 +113,7 @@ impl Vault {
             version: 1,
             hosts: Vec::new(),
             groups: Vec::new(),
+            deleted_hosts: HashMap::new(),
         }
     }
 }

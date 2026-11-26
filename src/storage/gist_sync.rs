@@ -1,6 +1,6 @@
 //! GitHub Gist E2E encrypted vault synchronization.
 
-use crate::storage::store::{decrypt_bytes, decrypt_vault, encrypt_bytes, encrypt_vault};
+use crate::storage::store::{decrypt_bytes, decrypt_vault, encrypt_bytes, encrypt_vault, write_secure};
 use crate::storage::{Group, Host, Vault};
 use anyhow::{Context, Result, bail};
 use base64::Engine;
@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 use uuid::Uuid;
 
 pub const GIST_FILENAME: &str = "rustmius-vault.enc";
@@ -25,13 +26,9 @@ pub struct SyncConfig {
 }
 
 pub fn save_sync_config(path: &Path, cfg: &SyncConfig, master_password: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
     let json = serde_json::to_vec(cfg)?;
     let encrypted = encrypt_bytes(&json, master_password)?;
-    fs::write(path, encrypted)?;
-    Ok(())
+    write_secure(path, &encrypted)
 }
 
 pub fn load_sync_config(path: &Path, master_password: &str) -> Result<SyncConfig> {
@@ -50,12 +47,25 @@ pub fn decode_encrypted_vault(encoded: &str, password: &str) -> Result<Vault> {
     let cleaned: String = encoded.chars().filter(|c| !c.is_whitespace()).collect();
     let raw = B64
         .decode(cleaned)
-        .context("Contenu Base64 du Gist invalide")?;
+        .context("Invalid Base64 Gist content")?;
     decrypt_vault(&raw, password)
 }
 
-/// Fusionne deux coffres par `id`, en conservant la version au `updated_at` le plus récent.
+/// Merges two vaults by `id`, keeping the entry with the most recent `updated_at`
+/// while respecting deletion tombstones (`deleted_hosts`).
 pub fn merge_vaults(local: &Vault, remote: &Vault) -> Vault {
+    let mut deleted_hosts: HashMap<Uuid, DateTime<Utc>> = local.deleted_hosts.clone();
+    for (&id, &ts) in &remote.deleted_hosts {
+        deleted_hosts
+            .entry(id)
+            .and_modify(|existing| {
+                if ts > *existing {
+                    *existing = ts;
+                }
+            })
+            .or_insert(ts);
+    }
+
     let mut hosts_map: HashMap<Uuid, Host> = HashMap::new();
     for h in &local.hosts {
         hosts_map.insert(h.id, h.clone());
@@ -70,6 +80,12 @@ pub fn merge_vaults(local: &Vault, remote: &Vault) -> Vault {
             })
             .or_insert_with(|| h.clone());
     }
+    hosts_map.retain(|id, host| {
+        deleted_hosts
+            .get(id)
+            .map(|del_ts| host.updated_at > *del_ts)
+            .unwrap_or(true)
+    });
 
     let mut groups_map: HashMap<Uuid, Group> = HashMap::new();
     for g in &local.groups {
@@ -90,6 +106,7 @@ pub fn merge_vaults(local: &Vault, remote: &Vault) -> Vault {
         version: local.version.max(remote.version).max(1),
         hosts: hosts_map.into_values().collect(),
         groups: groups_map.into_values().collect(),
+        deleted_hosts,
     }
 }
 
@@ -106,9 +123,13 @@ fn github_client(token: &str) -> Result<reqwest::Client> {
     let auth = format!("Bearer {}", token.trim());
     headers.insert(
         reqwest::header::AUTHORIZATION,
-        reqwest::header::HeaderValue::from_str(&auth).context("Token GitHub invalide")?,
+        reqwest::header::HeaderValue::from_str(&auth).context("Invalid GitHub token")?,
     );
-    Ok(reqwest::Client::builder().default_headers(headers).build()?)
+    Ok(reqwest::Client::builder()
+        .default_headers(headers)
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(20))
+        .build()?)
 }
 
 #[derive(Deserialize)]
@@ -180,10 +201,10 @@ pub async fn fetch_vault_gist(token: &str, gist_id: &str) -> Result<String> {
     let file = gist
         .files
         .get(GIST_FILENAME)
-        .context("Fichier rustmius-vault.enc introuvable dans le Gist")?;
+        .context("File rustmius-vault.enc not found in Gist")?;
     file.content
         .clone()
-        .context("Contenu du Gist vide")
+        .context("Empty Gist content")
 }
 
 pub async fn update_vault_gist(token: &str, gist_id: &str, encrypted_b64: &str) -> Result<()> {
@@ -229,17 +250,36 @@ mod tests {
             version: 1,
             hosts: vec![h1],
             groups: vec![],
+            deleted_hosts: HashMap::new(),
         };
         let remote = Vault {
             version: 1,
             hosts: vec![h1_newer, h2.clone()],
             groups: vec![],
+            deleted_hosts: HashMap::new(),
         };
 
         let merged = merge_vaults(&local, &remote);
         assert_eq!(merged.hosts.len(), 2);
         let found = merged.hosts.iter().find(|h| h.id == h1_id).unwrap();
         assert_eq!(found.hostname, "2.2.2.2");
+    }
+
+    #[test]
+    fn merges_vaults_respecting_deleted_host_tombstone() {
+        let mut h1 = Host::new("old", "1.1.1.1", "root");
+        h1.updated_at = Utc::now() - Duration::minutes(10);
+        let h1_id = h1.id;
+
+        let mut local = Vault::new();
+        local.deleted_hosts.insert(h1_id, Utc::now());
+
+        let mut remote = Vault::new();
+        remote.hosts.push(h1);
+
+        let merged = merge_vaults(&local, &remote);
+        assert!(merged.hosts.is_empty());
+        assert!(merged.deleted_hosts.contains_key(&h1_id));
     }
 
     #[test]

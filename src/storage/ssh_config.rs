@@ -21,12 +21,11 @@ pub fn parse_ssh_config(content: &str) -> Vec<Host> {
         let val = parts.next().unwrap_or("").trim().trim_matches('"');
 
         if key == "host" {
-            if let Some(h) = current.take() {
-                if !h.hostname.is_empty() {
+            if let Some(h) = current.take()
+                && !h.hostname.is_empty() {
                     hosts.push(h);
                 }
-            }
-            // Ignorer les wildcards comme `Host *` ou `Host *.example.com`
+            // Ignore wildcards like `Host *` or `Host *.example.com`
             let alias = val.split_whitespace().next().unwrap_or("");
             if alias.is_empty() || alias.contains('*') || alias.contains('?') {
                 current = None;
@@ -54,11 +53,10 @@ pub fn parse_ssh_config(content: &str) -> Vec<Host> {
         }
     }
 
-    if let Some(h) = current.take() {
-        if !h.hostname.is_empty() {
+    if let Some(h) = current.take()
+        && !h.hostname.is_empty() {
             hosts.push(h);
         }
-    }
 
     hosts
 }
@@ -69,7 +67,7 @@ fn whoami_fallback() -> String {
         .unwrap_or_else(|_| "root".to_string())
 }
 
-/// Retourne les hôtes de `~/.ssh/config` qui ne sont pas encore dans le `Vault`.
+/// Returns hosts from `~/.ssh/config` that are not yet in the `Vault`.
 pub fn find_unimported_ssh_hosts(vault: &Vault) -> Vec<Host> {
     let Some(path) = default_ssh_config_path() else {
         return Vec::new();
@@ -91,8 +89,8 @@ pub fn find_unimported_ssh_hosts(vault: &Vault) -> Vec<Host> {
         .collect()
 }
 
-/// Importe les hôtes de `~/.ssh/config` qui ne sont pas encore dans le `Vault`.
-/// Retourne le nombre d'hôtes ajoutés.
+/// Imports hosts from `~/.ssh/config` that are not yet in the `Vault`.
+/// Returns the number of added hosts.
 pub fn import_ssh_config_into_vault(vault: &mut Vault) -> usize {
     let to_add = find_unimported_ssh_hosts(vault);
     let added = to_add.len();
