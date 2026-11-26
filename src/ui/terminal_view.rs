@@ -255,7 +255,13 @@ pub fn render_terminal(
                     }
                 }
                 Event::Paste(text) => {
-                    let _ = cmd_tx.send(SshCommand::Data(text.into_bytes()));
+                    let bytes = if terminal.is_bracketed_paste() {
+                        let sanitized = text.replace("\x1b[200~", "").replace("\x1b[201~", "");
+                        format!("\x1b[200~{sanitized}\x1b[201~").into_bytes()
+                    } else {
+                        text.into_bytes()
+                    };
+                    let _ = cmd_tx.send(SshCommand::Data(bytes));
                 }
                 Event::Text(text) => {
                     let _ = cmd_tx.send(SshCommand::Data(text.into_bytes()));
