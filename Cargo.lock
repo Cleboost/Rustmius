@@ -4092,7 +4092,7 @@ dependencies = [
 
 [[package]]
 name = "rustmius"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "aes-gcm",
  "alacritty_terminal",
