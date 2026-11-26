@@ -2,7 +2,7 @@
 
 use crate::i18n::{Language, tr};
 use crate::storage::OsKind;
-use crate::ui::icons::{self, IconStyle, bold, fill, regular};
+use crate::ui::icons::{self, IconStyle, fill, regular};
 use crate::ui::os_icons::paint_os_mini_badge;
 use crate::ui::popover_menu::{MenuEntry, MenuIcon, render_popover_menu};
 use crate::ui::theme;
@@ -177,14 +177,6 @@ pub fn render_titlebar(
         14.0,
         theme::TOPBAR_MUTED,
         IconStyle::Regular,
-    );
-    icons::paint(
-        &painter,
-        pos2(left + 168.5, cy + 0.5),
-        bold::CARET_DOWN,
-        12.0,
-        Color32::from_rgb(0xC7, 0xC9, 0xD6),
-        IconStyle::Bold,
     );
     if vresp.clicked() {
         action = TitlebarAction::Select(ActiveTab::Vaults);
