@@ -7,7 +7,7 @@ description = "Fast, native, open-source SSH client and host manager built in Ru
 repository = "https://github.com/Cleboost/Rustmius"
 
 [dependencies]
-eframe = { version = "0.36", default-features = false, features = ["accesskit", "default_fonts", "glow", "wgpu", "wayland", "x11"] }
+eframe = { version = "0.37", default-features = false, features = ["accesskit", "default_fonts", "glow", "wgpu", "wayland", "x11"] }
 egui = "0.36"
 alacritty_terminal = "0.26"
 russh = "0.65"
