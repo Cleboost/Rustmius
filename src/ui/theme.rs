@@ -61,9 +61,8 @@ pub const TERM_FG: Color32 = Color32::from_rgb(0xE6, 0xEA, 0xF2);
 const INTER_REGULAR: &str = "inter-regular";
 const INTER_MEDIUM: &str = "inter-medium";
 const INTER_SEMIBOLD: &str = "inter-semibold";
-pub const PH_REGULAR: &str = "ph-regular";
-pub const PH_FILL: &str = "ph-fill";
-pub const PH_BOLD: &str = "ph-bold";
+pub const TI_REGULAR: &str = "ti-regular";
+pub const TI_FILLED: &str = "ti-filled";
 
 pub fn regular(size: f32) -> FontId {
     FontId::proportional(size)
@@ -93,9 +92,14 @@ pub fn install_fonts(ctx: &egui::Context) {
         INTER_SEMIBOLD,
         FontData::from_static(include_bytes!("../../assets/fonts/Inter-SemiBold.ttf")),
     );
-    add(PH_REGULAR, egui_phosphor::Variant::Regular.font_data());
-    add(PH_FILL, egui_phosphor::Variant::Fill.font_data());
-    add(PH_BOLD, egui_phosphor::Variant::Bold.font_data());
+    add(
+        TI_REGULAR,
+        FontData::from_static(include_bytes!("../../assets/fonts/tabler-icons.ttf")),
+    );
+    add(
+        TI_FILLED,
+        FontData::from_static(include_bytes!("../../assets/fonts/tabler-icons-filled.ttf")),
+    );
 
     let defaults = fonts
         .families
@@ -104,7 +108,7 @@ pub fn install_fonts(ctx: &egui::Context) {
         .unwrap_or_default();
 
     let family = |primary: &str| {
-        let mut v = vec![primary.to_owned(), PH_REGULAR.to_owned()];
+        let mut v = vec![primary.to_owned(), TI_REGULAR.to_owned()];
         v.extend(defaults.iter().cloned());
         v
     };
@@ -119,10 +123,14 @@ pub fn install_fonts(ctx: &egui::Context) {
         FontFamily::Name(INTER_SEMIBOLD.into()),
         family(INTER_SEMIBOLD),
     );
-    for ph in [PH_REGULAR, PH_FILL, PH_BOLD] {
+    for ti in [TI_REGULAR, TI_FILLED] {
         fonts.families.insert(
-            FontFamily::Name(ph.into()),
-            vec![ph.to_owned(), INTER_REGULAR.to_owned()],
+            FontFamily::Name(ti.into()),
+            vec![
+                ti.to_owned(),
+                TI_REGULAR.to_owned(),
+                INTER_REGULAR.to_owned(),
+            ],
         );
     }
 

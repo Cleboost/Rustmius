@@ -1,7 +1,7 @@
 //! Termius left navigation rail.
 
 use crate::i18n::{Language, tr};
-use crate::ui::icons::{self, IconStyle, bold, fill};
+use crate::ui::icons::{self, IconStyle, bold, fill, regular};
 use crate::ui::theme;
 use egui::{Align2, CornerRadius, Rect, Sense, Stroke, Ui, pos2, vec2};
 
@@ -22,7 +22,12 @@ const ITEMS: [(NavSection, &str, &str, IconStyle); 6] = [
         fill::HARD_DRIVES,
         IconStyle::Fill,
     ),
-    (NavSection::Keychain, "Keychain", fill::KEY, IconStyle::Fill),
+    (
+        NavSection::Keychain,
+        "Keychain",
+        regular::KEY,
+        IconStyle::Regular,
+    ),
     (
         NavSection::PortForwarding,
         "Port Forwarding",
