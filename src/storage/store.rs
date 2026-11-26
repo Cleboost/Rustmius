@@ -7,7 +7,7 @@ use aes_gcm::{
 use anyhow::{Context, Result, bail};
 use argon2::Argon2;
 use directories::ProjectDirs;
-use rand::RngCore;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -114,16 +114,16 @@ fn derive_key(password: &str, salt: &[u8]) -> Result<Zeroizing<[u8; 32]>> {
 pub fn encrypt_bytes(plaintext: &[u8], password: &str) -> Result<Vec<u8>> {
     let mut salt = [0u8; SALT_LEN];
     let mut nonce_bytes = [0u8; NONCE_LEN];
-    rand::thread_rng().fill_bytes(&mut salt);
-    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    rand::rng().fill_bytes(&mut salt);
+    rand::rng().fill_bytes(&mut nonce_bytes);
 
     let key_bytes = derive_key(password, &salt)?;
-    let key = Key::<Aes256Gcm>::from_slice(key_bytes.as_ref());
-    let cipher = Aes256Gcm::new(key);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let key = Key::<Aes256Gcm>::try_from(key_bytes.as_ref())?;
+    let cipher = Aes256Gcm::new(&key);
+    let nonce = Nonce::try_from(nonce_bytes.as_slice())?;
 
     let ciphertext = cipher
-        .encrypt(nonce, plaintext)
+        .encrypt(&nonce, plaintext)
         .map_err(|e| anyhow::anyhow!("Encryption failed: {e}"))?;
 
     let mut out = Vec::with_capacity(MAGIC.len() + SALT_LEN + NONCE_LEN + ciphertext.len());
@@ -147,12 +147,12 @@ pub fn decrypt_bytes(data: &[u8], password: &str) -> Result<Zeroizing<Vec<u8>>> 
     let ciphertext = &data[header_len..];
 
     let key_bytes = derive_key(password, salt)?;
-    let key = Key::<Aes256Gcm>::from_slice(key_bytes.as_ref());
-    let cipher = Aes256Gcm::new(key);
-    let nonce = Nonce::from_slice(nonce_bytes);
+    let key = Key::<Aes256Gcm>::try_from(key_bytes.as_ref())?;
+    let cipher = Aes256Gcm::new(&key);
+    let nonce = Nonce::try_from(nonce_bytes)?;
 
     let plaintext = cipher
-        .decrypt(nonce, ciphertext)
+        .decrypt(&nonce, ciphertext)
         .map_err(|_| anyhow::anyhow!("Incorrect master password or corrupted file"))?;
     Ok(Zeroizing::new(plaintext))
 }

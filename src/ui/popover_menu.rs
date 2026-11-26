@@ -43,7 +43,7 @@ pub fn render_popover_menu(
         };
     }
 
-    let screen = ctx.screen_rect();
+    let screen = ctx.content_rect();
     let y_offset = (1.0 - anim_t) * -6.0;
     let ideal_x = anchor.center().x - width * 0.5;
     let clamped_x = ideal_x.clamp(screen.left() + 8.0, (screen.right() - width - 8.0).max(8.0));

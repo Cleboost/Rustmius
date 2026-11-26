@@ -184,5 +184,5 @@ pub fn apply_termius_theme(ctx: &egui::Context) {
         .text_styles
         .insert(egui::TextStyle::Heading, semibold(16.0));
 
-    ctx.set_style(style);
+    ctx.set_global_style(style);
 }
