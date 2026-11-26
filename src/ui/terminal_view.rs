@@ -172,6 +172,9 @@ pub fn render_terminal(
     });
     if !did_focus || response.clicked() {
         response.request_focus();
+        if !did_focus {
+            ui.ctx().request_repaint();
+        }
     }
 
     let painter = ui.painter_at(rect);
@@ -448,7 +451,7 @@ pub fn render_terminal(
     }
 
     // Keyboard & scroll input
-    let has_focus = response.has_focus();
+    let has_focus = response.has_focus() || !did_focus;
     let is_hovered = response.hovered();
     if has_focus || is_hovered {
         let events = ui.input(|i| i.events.clone());

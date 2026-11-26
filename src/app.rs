@@ -885,15 +885,17 @@ impl eframe::App for RustmiusApp {
                 ActiveTab::Session(id) => {
                     if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
                         if tab.connected {
-                            render_terminal(
-                                ui,
-                                &mut tab.terminal,
-                                &tab.ssh.cmd_tx,
-                                self.app_settings.text_size,
-                                self.app_settings.copy_on_select,
-                                self.app_settings.bright_bold,
-                                self.app_settings.language,
-                            );
+                            ui.push_id(tab.id, |ui| {
+                                render_terminal(
+                                    ui,
+                                    &mut tab.terminal,
+                                    &tab.ssh.cmd_tx,
+                                    self.app_settings.text_size,
+                                    self.app_settings.copy_on_select,
+                                    self.app_settings.bright_bold,
+                                    self.app_settings.language,
+                                );
+                            });
                         } else {
                             match render_connecting_screen(
                                 ui,
