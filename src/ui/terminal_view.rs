@@ -954,10 +954,30 @@ fn paint_box_drawing(painter: &egui::Painter, cell: Rect, ch: char, fg: Color32)
         '╭' | '╮' | '╯' | '╰' => {
             let rx = (r - cx).min(b - cy) * 0.65;
             let pts: Vec<Pos2> = match ch {
-                '╭' => vec![pos2(cx, b), pos2(cx, cy + rx * 0.4), pos2(cx + rx * 0.4, cy), pos2(r, cy)],
-                '╮' => vec![pos2(l, cy), pos2(cx - rx * 0.4, cy), pos2(cx, cy + rx * 0.4), pos2(cx, b)],
-                '╯' => vec![pos2(l, cy), pos2(cx - rx * 0.4, cy), pos2(cx, cy - rx * 0.4), pos2(cx, t)],
-                '╰' => vec![pos2(cx, t), pos2(cx, cy - rx * 0.4), pos2(cx + rx * 0.4, cy), pos2(r, cy)],
+                '╭' => vec![
+                    pos2(cx, b),
+                    pos2(cx, cy + rx * 0.4),
+                    pos2(cx + rx * 0.4, cy),
+                    pos2(r, cy),
+                ],
+                '╮' => vec![
+                    pos2(l, cy),
+                    pos2(cx - rx * 0.4, cy),
+                    pos2(cx, cy + rx * 0.4),
+                    pos2(cx, b),
+                ],
+                '╯' => vec![
+                    pos2(l, cy),
+                    pos2(cx - rx * 0.4, cy),
+                    pos2(cx, cy - rx * 0.4),
+                    pos2(cx, t),
+                ],
+                '╰' => vec![
+                    pos2(cx, t),
+                    pos2(cx, cy - rx * 0.4),
+                    pos2(cx + rx * 0.4, cy),
+                    pos2(r, cy),
+                ],
                 _ => unreachable!(),
             };
             painter.add(egui::Shape::line(pts, Stroke::new(light_w, fg)));
