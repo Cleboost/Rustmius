@@ -122,19 +122,22 @@ async fn authenticate(session: &mut Handle<ClientHandler>, host: &Host) -> Resul
             Ok(res.success())
         }
         AuthMethod::Agent => {
-            // 1. Try system SSH agent (SSH_AUTH_SOCK) then Bitwarden SSH agent socket
-            if let Ok(mut agent) = russh::keys::agent::client::AgentClient::connect_env().await
-                && try_agent_auth(session, &host.username, &mut agent).await?
+            // 1. Try system SSH agent (SSH_AUTH_SOCK) then Bitwarden SSH agent socket (Unix only)
+            #[cfg(unix)]
             {
-                return Ok(true);
-            }
-            let bw_sock = expand_tilde("~/.bitwarden-ssh-agent.sock");
-            if bw_sock.exists()
-                && let Ok(mut agent) =
-                    russh::keys::agent::client::AgentClient::connect_uds(&bw_sock).await
-                && try_agent_auth(session, &host.username, &mut agent).await?
-            {
-                return Ok(true);
+                if let Ok(mut agent) = russh::keys::agent::client::AgentClient::connect_env().await
+                    && try_agent_auth(session, &host.username, &mut agent).await?
+                {
+                    return Ok(true);
+                }
+                let bw_sock = expand_tilde("~/.bitwarden-ssh-agent.sock");
+                if bw_sock.exists()
+                    && let Ok(mut agent) =
+                        russh::keys::agent::client::AgentClient::connect_uds(&bw_sock).await
+                    && try_agent_auth(session, &host.username, &mut agent).await?
+                {
+                    return Ok(true);
+                }
             }
 
             // 2. Fall back to local keys in ~/.ssh/
