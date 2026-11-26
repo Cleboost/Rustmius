@@ -3,7 +3,7 @@ use alacritty_terminal::grid::Scroll;
 use alacritty_terminal::index::{Column, Line, Point, Side};
 use alacritty_terminal::selection::{Selection, SelectionType};
 use alacritty_terminal::term::cell::Flags;
-use alacritty_terminal::term::{Config, Term, test::TermSize};
+use alacritty_terminal::term::{Config, Term, TermMode, test::TermSize};
 use alacritty_terminal::vte::ansi::Processor;
 
 /// A detected clickable link in the visible terminal viewport.
@@ -86,6 +86,10 @@ impl TerminalState {
 
     pub fn selection_text(&self) -> Option<String> {
         self.term.selection_to_string().filter(|s| !s.is_empty())
+    }
+
+    pub fn is_bracketed_paste(&self) -> bool {
+        self.term.mode().contains(TermMode::BRACKETED_PASTE)
     }
 
     /// Detects a link (OSC 8 hyperlink or plain-text URL, including wrapped lines)
