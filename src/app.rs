@@ -1,10 +1,15 @@
-use crate::core::ssh::{SshCommand, SshEvent, SshSession, spawn_ssh_session};
+use crate::core::ssh::{
+    HostKeyDecision, HostKeyPrompt, SshCommand, SshEvent, SshSession, spawn_ssh_session,
+};
 use crate::core::terminal::TerminalState;
 use crate::i18n::tr;
 use crate::storage::gist_sync::{
     SyncConfig, create_vault_gist, decode_encrypted_vault, encode_encrypted_vault,
     fetch_vault_gist, find_existing_vault_gist, load_sync_config, merge_vaults, save_sync_config,
     update_vault_gist,
+};
+use crate::storage::known_hosts::{
+    HostKeyCheckResult, KnownHostEntry, load_os_known_hosts, now_unix_secs, remove_os_known_host,
 };
 use crate::storage::ssh_config::{find_unimported_ssh_hosts, import_ssh_config_into_vault};
 use crate::storage::store::{
@@ -16,6 +21,7 @@ use crate::ui::background::paint_backdrop;
 use crate::ui::connecting::{ConnectingAction, render_connecting_screen};
 use crate::ui::host_grid::{HostGridAction, HostSortMode, HostViewMode, render_host_grid};
 use crate::ui::host_modal::{HostModalAction, HostModalState, render_host_panel};
+use crate::ui::icons::{self, IconStyle};
 use crate::ui::settings_modal::{
     SettingsModalState, SyncOnboardingStep, SyncUiAction, render_settings_modal,
 };
@@ -95,6 +101,12 @@ pub struct RustmiusApp {
     master_password: Option<String>,
     sync_tx: mpsc::UnboundedSender<SyncEvent>,
     sync_rx: mpsc::UnboundedReceiver<SyncEvent>,
+    pending_host_key: Option<PendingHostKey>,
+}
+
+struct PendingHostKey {
+    prompt: HostKeyPrompt,
+    reply: std::sync::Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<HostKeyDecision>>>>,
 }
 
 impl RustmiusApp {
@@ -159,6 +171,7 @@ impl RustmiusApp {
             master_password,
             sync_tx,
             sync_rx,
+            pending_host_key: None,
         };
         if initial_pull {
             app.spawn_pull(cc.egui_ctx.clone());
@@ -373,7 +386,14 @@ impl RustmiusApp {
 
     fn connect_host(&mut self, host: Host, ctx: &egui::Context) {
         let id = Uuid::new_v4();
-        let ssh = spawn_ssh_session(self.rt.handle(), host.clone(), 80, 24, ctx.clone());
+        let ssh = spawn_ssh_session(
+            self.rt.handle(),
+            host.clone(),
+            80,
+            24,
+            self.vault.known_hosts.clone(),
+            ctx.clone(),
+        );
         let initial_log = format!(
             "Connecting to {}@{}:{}...",
             host.username, host.hostname, host.port
@@ -447,6 +467,9 @@ impl RustmiusApp {
                             format!("\r\n\x1b[33m[{}]\x1b[0m\r\n", s.term_session_closed)
                                 .as_bytes(),
                         );
+                    }
+                    SshEvent::HostKeyVerification(prompt, reply) => {
+                        self.pending_host_key = Some(PendingHostKey { prompt, reply });
                     }
                 }
             }
@@ -590,6 +613,603 @@ fn placeholder(ui: &mut egui::Ui, text: &str) {
         theme::medium(14.0),
         theme::TEXT_MUTED,
     );
+}
+
+impl RustmiusApp {
+    fn render_host_key_modal(&mut self, ctx: &egui::Context) {
+        let Some(pending) = self.pending_host_key.take() else {
+            return;
+        };
+        let s = tr(self.app_settings.language);
+        let mut decision: Option<HostKeyDecision> = None;
+        let is_changed = matches!(pending.prompt.status, HostKeyCheckResult::Changed { .. });
+
+        let screen = ctx.content_rect();
+        egui::Area::new(egui::Id::new("host_key_backdrop"))
+            .order(egui::Order::Middle)
+            .fixed_pos(screen.min)
+            .show(ctx, |ui| {
+                let _ = ui.allocate_response(screen.size(), egui::Sense::click());
+                ui.painter()
+                    .rect_filled(screen, 0.0, Color32::from_black_alpha(95));
+            });
+
+        let modal_w = (screen.width() - 64.0).min(520.0);
+        let modal_h = if is_changed { 386.0 } else { 276.0 };
+        let modal_rect = egui::Rect::from_center_size(screen.center(), vec2(modal_w, modal_h));
+
+        egui::Area::new(egui::Id::new("host_key_modal"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(modal_rect.min)
+            .show(ctx, |ui| {
+                let (rect, _) =
+                    ui.allocate_exact_size(vec2(modal_w, modal_h), egui::Sense::hover());
+                let painter = ui.painter();
+                painter.rect_filled(
+                    rect.translate(vec2(0.0, 6.0)),
+                    CornerRadius::same(12),
+                    Color32::from_black_alpha(45),
+                );
+                painter.rect_filled(
+                    rect,
+                    CornerRadius::same(12),
+                    Color32::from_rgb(0xE8, 0xED, 0xEF),
+                );
+                painter.rect_stroke(
+                    rect,
+                    CornerRadius::same(12),
+                    Stroke::new(1.0, theme::shade(24)),
+                    egui::StrokeKind::Inside,
+                );
+
+                // Header bar
+                let header_h = 48.0;
+                let header = egui::Rect::from_min_size(rect.min, vec2(modal_w, header_h));
+                painter.hline(
+                    header.x_range(),
+                    header.bottom(),
+                    Stroke::new(1.0, theme::SEPARATOR),
+                );
+                let header_icon_color = if is_changed {
+                    theme::DANGER
+                } else {
+                    theme::ACCENT_BLUE
+                };
+                icons::paint(
+                    painter,
+                    egui::pos2(header.left() + 24.0, header.center().y),
+                    icons::regular::VAULT,
+                    17.0,
+                    header_icon_color,
+                    IconStyle::Regular,
+                );
+                let title = if is_changed {
+                    s.kh_modal_changed_title
+                } else {
+                    s.kh_modal_unknown_title
+                };
+                painter.text(
+                    egui::pos2(header.left() + 42.0, header.center().y),
+                    Align2::LEFT_CENTER,
+                    title,
+                    theme::semibold(14.5),
+                    theme::TEXT_PRIMARY,
+                );
+
+                let close_r = egui::Rect::from_center_size(
+                    egui::pos2(header.right() - 24.0, header.center().y),
+                    vec2(28.0, 28.0),
+                );
+                let close_resp = ui
+                    .interact(
+                        close_r,
+                        ui.id().with("kh_modal_close"),
+                        egui::Sense::click(),
+                    )
+                    .on_hover_cursor(CursorIcon::PointingHand);
+                if close_resp.hovered() {
+                    painter.rect_filled(close_r, CornerRadius::same(6), theme::shade(16));
+                }
+                icons::paint(
+                    painter,
+                    close_r.center(),
+                    icons::regular::X,
+                    14.0,
+                    theme::TEXT_MUTED,
+                    IconStyle::Regular,
+                );
+                if close_resp.clicked() {
+                    decision = Some(HostKeyDecision::Cancel);
+                }
+
+                // Footer bar separator
+                let footer_h = 64.0;
+                let footer_rect = egui::Rect::from_min_max(
+                    egui::pos2(rect.left(), rect.bottom() - footer_h),
+                    rect.max,
+                );
+                painter.hline(
+                    footer_rect.x_range(),
+                    footer_rect.top(),
+                    Stroke::new(1.0, theme::SEPARATOR),
+                );
+
+                // Body
+                let body_rect = egui::Rect::from_min_max(
+                    egui::pos2(rect.left() + 20.0, header.bottom() + 16.0),
+                    egui::pos2(rect.right() - 20.0, footer_rect.top() - 12.0),
+                );
+                let mut child = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(body_rect)
+                        .layout(egui::Layout::top_down(egui::Align::LEFT)),
+                );
+
+                if let HostKeyCheckResult::Changed {
+                    old_fingerprint,
+                    old_algorithm,
+                } = &pending.prompt.status
+                {
+                    egui::Frame::NONE
+                        .fill(Color32::from_rgb(0xFC, 0xE8, 0xE8))
+                        .stroke(Stroke::new(1.0, Color32::from_rgb(0xF5, 0xA3, 0xA3)))
+                        .corner_radius(CornerRadius::same(10))
+                        .inner_margin(egui::Margin::symmetric(14, 10))
+                        .show(&mut child, |ui| {
+                            ui.set_width(ui.available_width());
+                            ui.label(
+                                RichText::new(s.kh_modal_changed_banner)
+                                    .font(theme::semibold(13.0))
+                                    .color(Color32::from_rgb(0xB9, 0x1C, 0x1C)),
+                            );
+                            ui.add_space(2.0);
+                            ui.label(
+                                RichText::new(s.kh_modal_changed_desc)
+                                    .font(theme::regular(12.0))
+                                    .color(Color32::from_rgb(0x7F, 0x1D, 0x1D)),
+                            );
+                        });
+                    child.add_space(12.0);
+
+                    egui::Frame::NONE
+                        .fill(theme::light(110))
+                        .stroke(Stroke::new(1.0, theme::shade(14)))
+                        .corner_radius(CornerRadius::same(10))
+                        .inner_margin(egui::Margin::same(14))
+                        .show(&mut child, |ui| {
+                            ui.set_width(ui.available_width());
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new(format!("{}:", s.kh_host_label))
+                                        .font(theme::medium(12.0))
+                                        .color(theme::TEXT_MUTED),
+                                );
+                                ui.label(
+                                    RichText::new(format!(
+                                        "{}:{}",
+                                        pending.prompt.host, pending.prompt.port
+                                    ))
+                                    .font(theme::semibold(13.0))
+                                    .color(theme::TEXT_PRIMARY),
+                                );
+                            });
+                            ui.add_space(8.0);
+                            ui.label(
+                                RichText::new(format!("{} ({old_algorithm})", s.kh_old_key_label))
+                                    .font(theme::medium(11.5))
+                                    .color(theme::TEXT_MUTED),
+                            );
+                            ui.label(
+                                RichText::new(old_fingerprint)
+                                    .monospace()
+                                    .size(11.5)
+                                    .color(theme::TEXT_MUTED),
+                            );
+                            ui.add_space(8.0);
+                            ui.label(
+                                RichText::new(format!(
+                                    "{} ({})",
+                                    s.kh_new_key_label, pending.prompt.algorithm
+                                ))
+                                .font(theme::medium(11.5))
+                                .color(Color32::from_rgb(0xB9, 0x1C, 0x1C)),
+                            );
+                            ui.label(
+                                RichText::new(&pending.prompt.fingerprint_sha256)
+                                    .monospace()
+                                    .size(11.5)
+                                    .color(theme::TEXT_PRIMARY),
+                            );
+                        });
+                } else {
+                    child.label(
+                        RichText::new(s.kh_modal_unknown_desc)
+                            .font(theme::regular(12.5))
+                            .color(theme::TEXT_MUTED),
+                    );
+                    child.add_space(12.0);
+
+                    egui::Frame::NONE
+                        .fill(theme::light(110))
+                        .stroke(Stroke::new(1.0, theme::shade(14)))
+                        .corner_radius(CornerRadius::same(10))
+                        .inner_margin(egui::Margin::same(14))
+                        .show(&mut child, |ui| {
+                            ui.set_width(ui.available_width());
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new(format!("{}:", s.kh_host_label))
+                                        .font(theme::medium(12.0))
+                                        .color(theme::TEXT_MUTED),
+                                );
+                                ui.label(
+                                    RichText::new(format!(
+                                        "{}:{}",
+                                        pending.prompt.host, pending.prompt.port
+                                    ))
+                                    .font(theme::semibold(13.0))
+                                    .color(theme::TEXT_PRIMARY),
+                                );
+                                ui.add_space(4.0);
+                                egui::Frame::NONE
+                                    .fill(theme::shade(12))
+                                    .corner_radius(CornerRadius::same(4))
+                                    .inner_margin(egui::Margin::symmetric(6, 2))
+                                    .show(ui, |ui| {
+                                        ui.label(
+                                            RichText::new(&pending.prompt.algorithm)
+                                                .font(theme::medium(11.0))
+                                                .color(theme::TEXT_MUTED),
+                                        );
+                                    });
+                            });
+                            ui.add_space(8.0);
+                            ui.label(
+                                RichText::new(s.kh_fingerprint_label)
+                                    .font(theme::medium(11.5))
+                                    .color(theme::TEXT_MUTED),
+                            );
+                            ui.add_space(2.0);
+                            ui.label(
+                                RichText::new(&pending.prompt.fingerprint_sha256)
+                                    .monospace()
+                                    .size(12.0)
+                                    .color(theme::TEXT_PRIMARY),
+                            );
+                        });
+                }
+
+                // Footer action buttons (centered vertically inside dedicated footer bar)
+                let footer_inner = egui::Rect::from_min_max(
+                    egui::pos2(footer_rect.left() + 20.0, footer_rect.top() + 14.0),
+                    egui::pos2(footer_rect.right() - 20.0, footer_rect.bottom() - 14.0),
+                );
+                let mut footer_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(footer_inner)
+                        .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                );
+                footer_ui.spacing_mut().button_padding = vec2(14.0, 0.0);
+                footer_ui.spacing_mut().item_spacing.x = 8.0;
+
+                let secondary_btn = |ui: &mut egui::Ui, label: &str| {
+                    ui.add(
+                        egui::Button::new(
+                            RichText::new(label)
+                                .font(theme::semibold(13.0))
+                                .color(theme::TEXT_PRIMARY),
+                        )
+                        .fill(theme::shade(18))
+                        .stroke(Stroke::NONE)
+                        .corner_radius(CornerRadius::same(7))
+                        .min_size(vec2(0.0, 36.0)),
+                    )
+                    .on_hover_cursor(CursorIcon::PointingHand)
+                };
+
+                // Cancel on the left
+                let cancel_label = if is_changed {
+                    s.kh_btn_cancel_conn
+                } else {
+                    s.kh_btn_cancel
+                };
+                if secondary_btn(&mut footer_ui, cancel_label).clicked() {
+                    decision = Some(HostKeyDecision::Cancel);
+                }
+
+                // Primary + Allow once on the right
+                footer_ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.spacing_mut().button_padding = vec2(14.0, 0.0);
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    if is_changed {
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    RichText::new(s.kh_btn_replace)
+                                        .font(theme::semibold(13.0))
+                                        .color(Color32::WHITE),
+                                )
+                                .fill(theme::DANGER)
+                                .stroke(Stroke::NONE)
+                                .corner_radius(CornerRadius::same(7))
+                                .min_size(vec2(0.0, 36.0)),
+                            )
+                            .on_hover_cursor(CursorIcon::PointingHand)
+                            .clicked()
+                        {
+                            decision = Some(HostKeyDecision::TrustAndSave);
+                        }
+                        if secondary_btn(ui, s.kh_btn_once).clicked() {
+                            decision = Some(HostKeyDecision::AllowOnce);
+                        }
+                    } else {
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    RichText::new(s.kh_btn_add)
+                                        .font(theme::semibold(13.0))
+                                        .color(Color32::WHITE),
+                                )
+                                .fill(theme::ACCENT_BLUE)
+                                .stroke(Stroke::NONE)
+                                .corner_radius(CornerRadius::same(7))
+                                .min_size(vec2(0.0, 36.0)),
+                            )
+                            .on_hover_cursor(CursorIcon::PointingHand)
+                            .clicked()
+                        {
+                            decision = Some(HostKeyDecision::TrustAndSave);
+                        }
+                        if secondary_btn(ui, s.kh_btn_once).clicked() {
+                            decision = Some(HostKeyDecision::AllowOnce);
+                        }
+                    }
+                });
+            });
+
+        if let Some(dec) = decision {
+            if dec == HostKeyDecision::TrustAndSave {
+                let entry = KnownHostEntry {
+                    host: pending.prompt.host.clone(),
+                    port: pending.prompt.port,
+                    algorithm: pending.prompt.algorithm.clone(),
+                    public_key_b64: pending.prompt.public_key_b64.clone(),
+                    fingerprint_sha256: pending.prompt.fingerprint_sha256.clone(),
+                    added_at: now_unix_secs(),
+                };
+                self.vault.known_hosts.retain(|e| {
+                    !(e.host.eq_ignore_ascii_case(&entry.host) && e.port == entry.port)
+                });
+                self.vault.known_hosts.push(entry);
+                self.persist_vault(Some(ctx));
+            }
+            if let Ok(mut guard) = pending.reply.lock()
+                && let Some(tx) = guard.take()
+            {
+                let _ = tx.send(dec);
+            }
+        } else {
+            self.pending_host_key = Some(pending);
+        }
+    }
+
+    fn render_known_hosts_view(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let s = tr(self.app_settings.language);
+        let os_entries = load_os_known_hosts();
+        let mut combined: Vec<(KnownHostEntry, bool)> = self
+            .vault
+            .known_hosts
+            .iter()
+            .cloned()
+            .map(|e| (e, true))
+            .collect();
+        for os_e in os_entries {
+            if !combined
+                .iter()
+                .any(|(e, _)| e.host.eq_ignore_ascii_case(&os_e.host) && e.port == os_e.port)
+            {
+                combined.push((os_e, false));
+            }
+        }
+
+        let mut to_remove: Option<(String, u16)> = None;
+
+        egui::Frame::NONE
+            .inner_margin(egui::Margin::symmetric(24, 20))
+            .show(ui, |ui| {
+                // Header
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(s.nav_known_hosts)
+                            .font(theme::semibold(18.0))
+                            .color(theme::TEXT_PRIMARY),
+                    );
+                    ui.add_space(6.0);
+                    egui::Frame::NONE
+                        .fill(theme::shade(14))
+                        .corner_radius(CornerRadius::same(10))
+                        .inner_margin(egui::Margin::symmetric(8, 2))
+                        .show(ui, |ui| {
+                            ui.label(
+                                RichText::new(combined.len().to_string())
+                                    .font(theme::semibold(11.5))
+                                    .color(theme::TEXT_MUTED),
+                            );
+                        });
+                });
+                ui.add_space(4.0);
+                ui.label(
+                    RichText::new(s.kh_subtitle)
+                        .font(theme::regular(12.5))
+                        .color(theme::TEXT_MUTED),
+                );
+                ui.add_space(16.0);
+
+                if combined.is_empty() {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(60.0);
+                        ui.label(
+                            RichText::new(icons::regular::GLOBE)
+                                .font(icons::font(36.0, IconStyle::Regular))
+                                .color(theme::TEXT_MUTED),
+                        );
+                        ui.add_space(8.0);
+                        ui.label(
+                            RichText::new(s.kh_empty)
+                                .font(theme::medium(13.5))
+                                .color(theme::TEXT_MUTED),
+                        );
+                    });
+                    return;
+                }
+
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        for (entry, in_vault) in &combined {
+                            egui::Frame::NONE
+                                .fill(theme::light(115))
+                                .stroke(Stroke::new(1.0, theme::shade(16)))
+                                .corner_radius(CornerRadius::same(10))
+                                .inner_margin(egui::Margin::symmetric(16, 12))
+                                .show(ui, |ui| {
+                                    ui.set_width(ui.available_width());
+                                    ui.horizontal(|ui| {
+                                        // Left icon badge
+                                        let (icon_rect, _) = ui.allocate_exact_size(
+                                            vec2(36.0, 36.0),
+                                            egui::Sense::hover(),
+                                        );
+                                        ui.painter().rect_filled(
+                                            icon_rect,
+                                            CornerRadius::same(8),
+                                            theme::shade(10),
+                                        );
+                                        icons::paint(
+                                            ui.painter(),
+                                            icon_rect.center(),
+                                            if *in_vault {
+                                                icons::regular::VAULT
+                                            } else {
+                                                icons::regular::GLOBE
+                                            },
+                                            18.0,
+                                            if *in_vault {
+                                                theme::ACCENT_BLUE
+                                            } else {
+                                                theme::ICON_DARK
+                                            },
+                                            IconStyle::Regular,
+                                        );
+
+                                        ui.add_space(8.0);
+
+                                        // Host info
+                                        ui.vertical(|ui| {
+                                            ui.horizontal(|ui| {
+                                                let host_label = if entry.port == 22 {
+                                                    entry.host.clone()
+                                                } else {
+                                                    format!("{}:{}", entry.host, entry.port)
+                                                };
+                                                ui.label(
+                                                    RichText::new(host_label)
+                                                        .font(theme::semibold(13.5))
+                                                        .color(theme::TEXT_PRIMARY),
+                                                );
+                                                ui.add_space(4.0);
+                                                egui::Frame::NONE
+                                                    .fill(theme::shade(12))
+                                                    .corner_radius(CornerRadius::same(4))
+                                                    .inner_margin(egui::Margin::symmetric(6, 2))
+                                                    .show(ui, |ui| {
+                                                        ui.label(
+                                                            RichText::new(&entry.algorithm)
+                                                                .font(theme::medium(10.5))
+                                                                .color(theme::TEXT_MUTED),
+                                                        );
+                                                    });
+                                                let (src_text, src_bg, src_fg) = if *in_vault {
+                                                    (
+                                                        s.kh_source_vault_os,
+                                                        Color32::from_rgba_unmultiplied(
+                                                            0x24, 0x96, 0xEE, 28,
+                                                        ),
+                                                        theme::ACCENT_BLUE,
+                                                    )
+                                                } else {
+                                                    (
+                                                        s.kh_source_os,
+                                                        theme::shade(10),
+                                                        theme::TEXT_MUTED,
+                                                    )
+                                                };
+                                                egui::Frame::NONE
+                                                    .fill(src_bg)
+                                                    .corner_radius(CornerRadius::same(4))
+                                                    .inner_margin(egui::Margin::symmetric(6, 2))
+                                                    .show(ui, |ui| {
+                                                        ui.label(
+                                                            RichText::new(src_text)
+                                                                .font(theme::medium(10.5))
+                                                                .color(src_fg),
+                                                        );
+                                                    });
+                                            });
+                                            ui.add_space(3.0);
+                                            ui.label(
+                                                RichText::new(&entry.fingerprint_sha256)
+                                                    .monospace()
+                                                    .size(11.5)
+                                                    .color(theme::TEXT_MUTED),
+                                            );
+                                        });
+
+                                        // Right delete button
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                let del_btn = ui
+                                                    .add(
+                                                        egui::Button::new(
+                                                            RichText::new(s.kh_delete)
+                                                                .font(theme::medium(12.0))
+                                                                .color(theme::DANGER),
+                                                        )
+                                                        .fill(Color32::from_rgba_unmultiplied(
+                                                            0xEF, 0x44, 0x44, 18,
+                                                        ))
+                                                        .stroke(Stroke::new(
+                                                            1.0,
+                                                            Color32::from_rgba_unmultiplied(
+                                                                0xEF, 0x44, 0x44, 55,
+                                                            ),
+                                                        ))
+                                                        .corner_radius(CornerRadius::same(6))
+                                                        .min_size(vec2(0.0, 28.0)),
+                                                    )
+                                                    .on_hover_cursor(CursorIcon::PointingHand);
+                                                if del_btn.clicked() {
+                                                    to_remove =
+                                                        Some((entry.host.clone(), entry.port));
+                                                }
+                                            },
+                                        );
+                                    });
+                                });
+                            ui.add_space(8.0);
+                        }
+                    });
+            });
+
+        if let Some((h, p)) = to_remove {
+            self.vault
+                .known_hosts
+                .retain(|e| !(e.host.eq_ignore_ascii_case(&h) && e.port == p));
+            let _ = remove_os_known_host(&h, p);
+            self.persist_vault(Some(ctx));
+        }
+    }
 }
 
 impl eframe::App for RustmiusApp {
@@ -950,7 +1570,7 @@ impl eframe::App for RustmiusApp {
                         placeholder(ui, &format!("{} — {}", s.nav_snippets, s.coming_soon))
                     }
                     NavSection::KnownHosts => {
-                        placeholder(ui, &format!("{} — {}", s.nav_known_hosts, s.coming_soon))
+                        self.render_known_hosts_view(ui, ctx);
                     }
                     NavSection::Logs => {
                         placeholder(ui, &format!("{} — {}", s.nav_logs, s.coming_soon))
@@ -971,6 +1591,7 @@ impl eframe::App for RustmiusApp {
         if settings_changed {
             let _ = save_app_settings(&self.settings_path, &self.app_settings);
         }
+        self.render_host_key_modal(ctx);
         match sync_action {
             SyncUiAction::CreateNew { token, password } => {
                 self.spawn_create_sync(token, password, ctx.clone());

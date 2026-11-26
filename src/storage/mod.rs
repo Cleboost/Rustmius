@@ -1,4 +1,5 @@
 pub mod gist_sync;
+pub mod known_hosts;
 pub mod ssh_config;
 pub mod store;
 
@@ -109,6 +110,8 @@ pub struct Vault {
     pub groups: Vec<Group>,
     #[serde(default)]
     pub deleted_hosts: HashMap<Uuid, DateTime<Utc>>,
+    #[serde(default)]
+    pub known_hosts: Vec<known_hosts::KnownHostEntry>,
 }
 
 impl Vault {
@@ -118,6 +121,7 @@ impl Vault {
             hosts: Vec::new(),
             groups: Vec::new(),
             deleted_hosts: HashMap::new(),
+            known_hosts: Vec::new(),
         }
     }
 }

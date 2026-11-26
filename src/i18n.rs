@@ -144,6 +144,27 @@ pub struct Strings {
     pub unlock_title: &'static str,
     pub unlock_desc: &'static str,
     pub unlock_btn: &'static str,
+
+    // Known Hosts & Host Key Verification
+    pub kh_subtitle: &'static str,
+    pub kh_empty: &'static str,
+    pub kh_source_vault_os: &'static str,
+    pub kh_source_os: &'static str,
+    pub kh_delete: &'static str,
+    pub kh_modal_unknown_title: &'static str,
+    pub kh_modal_unknown_desc: &'static str,
+    pub kh_modal_changed_title: &'static str,
+    pub kh_modal_changed_banner: &'static str,
+    pub kh_modal_changed_desc: &'static str,
+    pub kh_host_label: &'static str,
+    pub kh_fingerprint_label: &'static str,
+    pub kh_old_key_label: &'static str,
+    pub kh_new_key_label: &'static str,
+    pub kh_btn_add: &'static str,
+    pub kh_btn_once: &'static str,
+    pub kh_btn_cancel: &'static str,
+    pub kh_btn_cancel_conn: &'static str,
+    pub kh_btn_replace: &'static str,
 }
 
 pub const EN: Strings = Strings {
@@ -262,6 +283,26 @@ pub const EN: Strings = Strings {
     unlock_title: "Unlock Sync Vault",
     unlock_desc: "Enter your master password to unlock and sync your vault.",
     unlock_btn: "Unlock",
+
+    kh_subtitle: "Synced with ~/.ssh/known_hosts and your GitHub Gist vault.",
+    kh_empty: "No known hosts saved yet.",
+    kh_source_vault_os: "Vault + OS",
+    kh_source_os: "OS (~/.ssh/known_hosts)",
+    kh_delete: "Remove",
+    kh_modal_unknown_title: "Unknown Host Key",
+    kh_modal_unknown_desc: "The authenticity of this host cannot be established yet. Verify the fingerprint before continuing.",
+    kh_modal_changed_title: "Host Key Changed",
+    kh_modal_changed_banner: "Warning: This host's public key has changed!",
+    kh_modal_changed_desc: "This could indicate a Man-in-the-Middle attack, or that the server's SSH host key was regenerated or reinstalled.",
+    kh_host_label: "Host",
+    kh_fingerprint_label: "SHA-256 Fingerprint",
+    kh_old_key_label: "Previous key",
+    kh_new_key_label: "New key",
+    kh_btn_add: "Add new host",
+    kh_btn_once: "Allow once",
+    kh_btn_cancel: "Cancel",
+    kh_btn_cancel_conn: "Cancel connection",
+    kh_btn_replace: "Replace old key",
 };
 
 pub const FR: Strings = Strings {
@@ -380,6 +421,26 @@ pub const FR: Strings = Strings {
     unlock_title: "Déverrouiller Sync Vault",
     unlock_desc: "Entrez votre mot de passe maître pour déverrouiller et synchroniser votre coffre.",
     unlock_btn: "Déverrouiller",
+
+    kh_subtitle: "Synchronisé avec ~/.ssh/known_hosts et votre coffre GitHub Gist.",
+    kh_empty: "Aucun hôte connu enregistré pour le moment.",
+    kh_source_vault_os: "Coffre + OS",
+    kh_source_os: "OS (~/.ssh/known_hosts)",
+    kh_delete: "Supprimer",
+    kh_modal_unknown_title: "Nouvel hôte inconnu",
+    kh_modal_unknown_desc: "L'authenticité de cet hôte ne peut pas encore être vérifiée. Contrôlez l'empreinte avant de continuer.",
+    kh_modal_changed_title: "Clé d'hôte modifiée",
+    kh_modal_changed_banner: "Attention : la clé publique de cet hôte a changé !",
+    kh_modal_changed_desc: "Cela peut indiquer une interception (MITM) ou une réinstallation / régénération de la clé SSH du serveur.",
+    kh_host_label: "Hôte",
+    kh_fingerprint_label: "Empreinte SHA-256",
+    kh_old_key_label: "Ancienne clé",
+    kh_new_key_label: "Nouvelle clé",
+    kh_btn_add: "Ajouter le nouvel hôte",
+    kh_btn_once: "Autoriser une fois",
+    kh_btn_cancel: "Annuler",
+    kh_btn_cancel_conn: "Annuler la connexion",
+    kh_btn_replace: "Remplacer l'ancienne clé",
 };
 
 pub fn tr(lang: Language) -> &'static Strings {
