@@ -1,10 +1,10 @@
-# 🦀 Rustmius v2
+# 🦀 Rustmius v3
 
 [![Release](https://img.shields.io/github/v/release/Cleboost/Rustmius?style=flat-square&color=orange)](https://github.com/Cleboost/Rustmius/releases)
 [![License](https://img.shields.io/github/license/Cleboost/Rustmius?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-linux-lightgrey?style=flat-square)](https://github.com/Cleboost/Rustmius)
 
-**Rustmius v2** is a fast, native, open-source SSH client and host manager inspired by Termius, rewritten from the ground up in pure Rust using `egui`/`eframe`, `russh`, and `alacritty_terminal`.
+**Rustmius v3** is a fast, native, open-source SSH client and host manager inspired by Termius, rewritten from the ground up in pure Rust using `egui`/`eframe`, `russh`, and `alacritty_terminal`.
 
 ---
 
@@ -17,7 +17,7 @@
 - **Multilingual UI**: Built-in English and French translations selectable in Settings → General.
 
 > [!NOTE]
-> **Alpha status (`2.0.0-alpha.1`)**: SSH host key verification (`~/.ssh/known_hosts` / TOFU prompt) and SFTP/Keychain/Snippets tabs are planned for upcoming releases.
+> **v3.0.0**: SSH host key verification (`~/.ssh/known_hosts` / TOFU prompt) and SFTP/Keychain/Snippets tabs are planned for upcoming 3.x releases.
 
 ---
 

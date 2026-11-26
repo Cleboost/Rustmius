@@ -114,7 +114,7 @@ fn github_client(token: &str) -> Result<reqwest::Client> {
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert(
         reqwest::header::USER_AGENT,
-        reqwest::header::HeaderValue::from_static("Rustmius/2.0"),
+        reqwest::header::HeaderValue::from_static("Rustmius/3.0"),
     );
     headers.insert(
         reqwest::header::ACCEPT,

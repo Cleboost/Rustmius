@@ -1,5 +1,5 @@
 {
-  description = "Rustmius v2 development environment (egui + eframe)";
+  description = "Rustmius v3 development environment (egui + eframe)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

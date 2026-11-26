@@ -15,7 +15,8 @@ use zeroize::Zeroizing;
 
 const SALT_LEN: usize = 16;
 const NONCE_LEN: usize = 12;
-const MAGIC: &[u8; 4] = b"RMV2";
+const MAGIC: &[u8; 4] = b"RMV3";
+const LEGACY_MAGIC: &[u8; 4] = b"RMV2";
 
 pub fn default_vault_path() -> Result<PathBuf> {
     let dirs = ProjectDirs::from("com", "cleboost", "rustmius")
@@ -135,7 +136,7 @@ pub fn encrypt_bytes(plaintext: &[u8], password: &str) -> Result<Vec<u8>> {
 
 pub fn decrypt_bytes(data: &[u8], password: &str) -> Result<Zeroizing<Vec<u8>>> {
     let header_len = MAGIC.len() + SALT_LEN + NONCE_LEN;
-    if data.len() < header_len || &data[..MAGIC.len()] != MAGIC {
+    if data.len() < header_len || (&data[..MAGIC.len()] != MAGIC && &data[..MAGIC.len()] != LEGACY_MAGIC) {
         bail!("Invalid encrypted file format");
     }
 
