@@ -126,7 +126,65 @@ pub fn install_fonts(ctx: &egui::Context) {
         );
     }
 
+    let mut mono = fonts
+        .families
+        .get(&FontFamily::Monospace)
+        .cloned()
+        .unwrap_or_default();
+    let noto_emoji_vec = "noto-emoji-vector";
+    add(
+        noto_emoji_vec,
+        FontData::from_static(include_bytes!("../../assets/fonts/NotoEmoji-Regular.ttf")),
+    );
+    mono.push(noto_emoji_vec.to_owned());
+    for fallback in ["NotoEmoji-Regular", "emoji-icon-font"] {
+        if fonts.font_data.contains_key(fallback) && !mono.iter().any(|f| f == fallback) {
+            mono.push(fallback.to_owned());
+        }
+    }
+    for (idx, path) in discover_system_mono_fallbacks().into_iter().enumerate() {
+        if let Ok(bytes) = std::fs::read(&path) {
+            let name = format!("system-mono-fallback-{idx}");
+            fonts
+                .font_data
+                .insert(name.clone(), FontData::from_owned(bytes).into());
+            mono.push(name);
+        }
+    }
+    fonts.families.insert(FontFamily::Monospace, mono);
+
     ctx.set_fonts(fonts);
+}
+
+fn discover_system_mono_fallbacks() -> Vec<std::path::PathBuf> {
+    let mut paths = Vec::new();
+    let patterns = [
+        "Noto Sans Mono CJK JP",
+        "Noto Sans CJK JP",
+        "DejaVu Sans Mono",
+        "Noto Sans Symbols 2",
+    ];
+    for pattern in patterns {
+        let Ok(output) = std::process::Command::new("fc-match")
+            .args(["-f", "%{file}\n", pattern])
+            .output()
+        else {
+            continue;
+        };
+        if !output.status.success() {
+            continue;
+        }
+        let raw = String::from_utf8_lossy(&output.stdout);
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let path = std::path::PathBuf::from(trimmed);
+        if path.is_file() && !paths.contains(&path) {
+            paths.push(path);
+        }
+    }
+    paths
 }
 
 pub fn apply_termius_theme(ctx: &egui::Context) {
