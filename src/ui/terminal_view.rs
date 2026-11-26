@@ -178,7 +178,10 @@ pub fn render_terminal(
     painter.rect_filled(rect, 0.0, theme::TERM_BG);
 
     let origin = Pos2::new(rect.min.x + PAD, rect.min.y + PAD);
-    let grid_rect = Rect::from_min_size(origin, Vec2::new(cols as f32 * cell_w, rows as f32 * cell_h));
+    let grid_rect = Rect::from_min_size(
+        origin,
+        Vec2::new(cols as f32 * cell_w, rows as f32 * cell_h),
+    );
 
     let pos_to_cell = |pos: Pos2| -> (usize, usize) {
         let col =
@@ -190,7 +193,8 @@ pub fn render_terminal(
 
     // Link hover state
     let link_state_id = response.id.with("terminal_link_hover");
-    let mut link_state: LinkHoverState = ui.data_mut(|d| d.get_temp(link_state_id).unwrap_or_default());
+    let mut link_state: LinkHoverState =
+        ui.data_mut(|d| d.get_temp(link_state_id).unwrap_or_default());
 
     let (now, ctrl_down, pointer_pos) = ui.input(|i| {
         (
@@ -230,18 +234,14 @@ pub fn render_terminal(
     // Mouse selection & Ctrl+Click link opening
     let ctrl_link_hovered = ctrl_down && hovered_cell_and_link.is_some();
     if response.drag_started_by(PointerButton::Primary) {
-        if !ctrl_link_hovered
-            && let Some(pos) = response.interact_pointer_pos()
-        {
+        if !ctrl_link_hovered && let Some(pos) = response.interact_pointer_pos() {
             let (col, row) = pos_to_cell(pos);
             terminal.start_selection(col, row);
             link_state.popover_open = false;
             link_state.dwell_since = None;
         }
     } else if response.dragged_by(PointerButton::Primary) {
-        if !ctrl_link_hovered
-            && let Some(pos) = response.interact_pointer_pos()
-        {
+        if !ctrl_link_hovered && let Some(pos) = response.interact_pointer_pos() {
             let (col, row) = pos_to_cell(pos);
             terminal.update_selection(col, row);
             link_state.popover_open = false;
@@ -270,10 +270,12 @@ pub fn render_terminal(
     // Update link hover dwell state machine
     let is_dragging = response.dragged_by(PointerButton::Primary);
     let in_bridge = link_state.popover_open
-        && pointer_pos.is_some_and(|p| match (link_state.anchor_rect, link_state.popover_rect) {
-            (Some(a), Some(pr)) => a.union(pr).expand(4.0).contains(p),
-            _ => false,
-        });
+        && pointer_pos.is_some_and(
+            |p| match (link_state.anchor_rect, link_state.popover_rect) {
+                (Some(a), Some(pr)) => a.union(pr).expand(4.0).contains(p),
+                _ => false,
+            },
+        );
 
     if is_dragging {
         link_state.active_link = None;
@@ -514,7 +516,15 @@ pub fn render_terminal(
     }
 
     // Animated hover popover
-    render_link_popover(ui.ctx(), response.id, rect, &mut link_state, ctrl_down, now, lang);
+    render_link_popover(
+        ui.ctx(),
+        response.id,
+        rect,
+        &mut link_state,
+        ctrl_down,
+        now,
+        lang,
+    );
 
     ui.data_mut(|d| d.insert_temp(link_state_id, link_state));
 }
@@ -566,10 +576,8 @@ fn render_link_popover(
         return;
     }
 
-    let (Some(link), Some(anchor)) = (
-        state.last_rendered_link.clone(),
-        state.last_anchor_rect,
-    ) else {
+    let (Some(link), Some(anchor)) = (state.last_rendered_link.clone(), state.last_anchor_rect)
+    else {
         return;
     };
 
@@ -585,7 +593,11 @@ fn render_link_popover(
             .size()
             .x;
         let hw = f
-            .layout_no_wrap(s.term_link_click_open.to_owned(), hint_font.clone(), Color32::WHITE)
+            .layout_no_wrap(
+                s.term_link_click_open.to_owned(),
+                hint_font.clone(),
+                Color32::WHITE,
+            )
             .size()
             .x;
         let kw = f
