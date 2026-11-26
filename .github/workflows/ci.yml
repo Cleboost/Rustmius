@@ -9,13 +9,19 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/ci.yml'
+  pull_request:
+    paths:
+      - '**/*.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/ci.yml'
 
 permissions:
   contents: read
 
 jobs:
-  build-and-test:
-    name: Build & Test
+  build:
+    name: Build
     runs-on: ubuntu-latest
 
     steps:
@@ -43,6 +49,33 @@ jobs:
 
       - name: Cargo Check
         run: cargo check --all-targets
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxi-dev \
+            libssl-dev
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Cargo Test
         run: cargo test --locked
