@@ -37,7 +37,12 @@ pub fn paint_backdrop(ctx: &egui::Context, rect: Rect) {
     let w = rect.width();
     let at = |fx: f32, fy: f32| pos2(rect.left() + fx * w, rect.top() + fy * rect.height());
     let blob = |p: Pos2, r: f32, rgb: (u8, u8, u8), a: u8| {
-        radial_blob(&painter, p, r * w, Color32::from_rgba_unmultiplied(rgb.0, rgb.1, rgb.2, a));
+        radial_blob(
+            &painter,
+            p,
+            r * w,
+            Color32::from_rgba_unmultiplied(rgb.0, rgb.1, rgb.2, a),
+        );
     };
 
     blob(at(0.45, 0.32), 0.30, (0xE8, 0xE9, 0xEC), 200);

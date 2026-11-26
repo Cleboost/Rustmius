@@ -3,7 +3,9 @@
 //! All metrics are logical pixels measured from a 1920×1028 Termius reference
 //! capture (Linux, light "Vaults" view).
 
-use egui::{Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Stroke, Style, Visuals};
+use egui::{
+    Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Stroke, Style, Visuals,
+};
 
 // ---------------------------------------------------------------- layout ---
 pub const TITLEBAR_H: f32 = 48.0;
@@ -79,9 +81,18 @@ pub fn install_fonts(ctx: &egui::Context) {
     let mut add = |name: &str, data: FontData| {
         fonts.font_data.insert(name.to_owned(), data.into());
     };
-    add(INTER_REGULAR, FontData::from_static(include_bytes!("../../assets/fonts/Inter-Regular.ttf")));
-    add(INTER_MEDIUM, FontData::from_static(include_bytes!("../../assets/fonts/Inter-Medium.ttf")));
-    add(INTER_SEMIBOLD, FontData::from_static(include_bytes!("../../assets/fonts/Inter-SemiBold.ttf")));
+    add(
+        INTER_REGULAR,
+        FontData::from_static(include_bytes!("../../assets/fonts/Inter-Regular.ttf")),
+    );
+    add(
+        INTER_MEDIUM,
+        FontData::from_static(include_bytes!("../../assets/fonts/Inter-Medium.ttf")),
+    );
+    add(
+        INTER_SEMIBOLD,
+        FontData::from_static(include_bytes!("../../assets/fonts/Inter-SemiBold.ttf")),
+    );
     add(PH_REGULAR, egui_phosphor::Variant::Regular.font_data());
     add(PH_FILL, egui_phosphor::Variant::Fill.font_data());
     add(PH_BOLD, egui_phosphor::Variant::Bold.font_data());
@@ -98,9 +109,16 @@ pub fn install_fonts(ctx: &egui::Context) {
         v
     };
 
-    fonts.families.insert(FontFamily::Proportional, family(INTER_REGULAR));
-    fonts.families.insert(FontFamily::Name(INTER_MEDIUM.into()), family(INTER_MEDIUM));
-    fonts.families.insert(FontFamily::Name(INTER_SEMIBOLD.into()), family(INTER_SEMIBOLD));
+    fonts
+        .families
+        .insert(FontFamily::Proportional, family(INTER_REGULAR));
+    fonts
+        .families
+        .insert(FontFamily::Name(INTER_MEDIUM.into()), family(INTER_MEDIUM));
+    fonts.families.insert(
+        FontFamily::Name(INTER_SEMIBOLD.into()),
+        family(INTER_SEMIBOLD),
+    );
     for ph in [PH_REGULAR, PH_FILL, PH_BOLD] {
         fonts.families.insert(
             FontFamily::Name(ph.into()),
@@ -153,10 +171,18 @@ pub fn apply_termius_theme(ctx: &egui::Context) {
     style.visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);
     style.spacing.item_spacing = egui::vec2(8.0, 8.0);
     style.spacing.button_padding = egui::vec2(12.0, 6.0);
-    style.text_styles.insert(egui::TextStyle::Body, regular(13.0));
-    style.text_styles.insert(egui::TextStyle::Button, medium(13.0));
-    style.text_styles.insert(egui::TextStyle::Small, regular(11.0));
-    style.text_styles.insert(egui::TextStyle::Heading, semibold(16.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Body, regular(13.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Button, medium(13.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Small, regular(11.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Heading, semibold(16.0));
 
     ctx.set_style(style);
 }

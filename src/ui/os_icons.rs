@@ -55,23 +55,133 @@ fn paint_os_symbol(painter: &Painter, c: Pos2, os: OsKind, scale: f32) {
         OsKind::NixOS => paint_nixos(painter, c, fg, scale),
         OsKind::Alpine => paint_alpine(painter, c, fg, scale),
         OsKind::Windows => paint_windows(painter, c, fg, scale),
-        OsKind::Fedora => { painter.text(c, Align2::CENTER_CENTER, "f", theme::semibold(22.0 * scale), fg); }
-        OsKind::RedHat => { painter.text(c, Align2::CENTER_CENTER, "RH", theme::semibold(14.0 * scale), fg); }
-        OsKind::CentOs => { painter.text(c, Align2::CENTER_CENTER, "C", theme::semibold(19.0 * scale), fg); }
-        OsKind::Rocky => { painter.text(c, Align2::CENTER_CENTER, "R", theme::semibold(19.0 * scale), fg); }
-        OsKind::Alma => { painter.text(c, Align2::CENTER_CENTER, "A", theme::semibold(19.0 * scale), fg); }
-        OsKind::Kali => { painter.text(c, Align2::CENTER_CENTER, "K", theme::semibold(19.0 * scale), fg); }
-        OsKind::Mint => { painter.text(c, Align2::CENTER_CENTER, "lm", theme::semibold(15.0 * scale), fg); }
-        OsKind::OpenSuse => { painter.text(c, Align2::CENTER_CENTER, "S", theme::semibold(19.0 * scale), fg); }
-        OsKind::Gentoo => { painter.text(c, Align2::CENTER_CENTER, "g", theme::semibold(20.0 * scale), fg); }
-        OsKind::Manjaro => { painter.text(c, Align2::CENTER_CENTER, "M", theme::semibold(18.0 * scale), fg); }
-        OsKind::FreeBsd => { painter.text(c, Align2::CENTER_CENTER, "BSD", theme::semibold(11.5 * scale), fg); }
-        OsKind::MacOs => { painter.text(c, Align2::CENTER_CENTER, "mac", theme::semibold(12.0 * scale), fg); }
+        OsKind::Fedora => {
+            painter.text(
+                c,
+                Align2::CENTER_CENTER,
+                "f",
+                theme::semibold(22.0 * scale),
+                fg,
+            );
+        }
+        OsKind::RedHat => {
+            painter.text(
+                c,
+                Align2::CENTER_CENTER,
+                "RH",
+                theme::semibold(14.0 * scale),
+                fg,
+            );
+        }
+        OsKind::CentOs => {
+            painter.text(
+                c,
+                Align2::CENTER_CENTER,
+                "C",
+                theme::semibold(19.0 * scale),
+                fg,
+            );
+        }
+        OsKind::Rocky => {
+            painter.text(
+                c,
+                Align2::CENTER_CENTER,
+                "R",
+                theme::semibold(19.0 * scale),
+                fg,
+            );
+        }
+        OsKind::Alma => {
+            painter.text(
+                c,
+                Align2::CENTER_CENTER,
+                "A",
+                theme::semibold(19.0 * scale),
+                fg,
+            );
+        }
+        OsKind::Kali => {
+            painter.text(
+                c,
+                Align2::CENTER_CENTER,
+                "K",
+                theme::semibold(19.0 * scale),
+                fg,
+            );
+        }
+        OsKind::Mint => {
+            painter.text(
+                c,
+                Align2::CENTER_CENTER,
+                "lm",
+                theme::semibold(15.0 * scale),
+                fg,
+            );
+        }
+        OsKind::OpenSuse => {
+            painter.text(
+                c,
+                Align2::CENTER_CENTER,
+                "S",
+                theme::semibold(19.0 * scale),
+                fg,
+            );
+        }
+        OsKind::Gentoo => {
+            painter.text(
+                c,
+                Align2::CENTER_CENTER,
+                "g",
+                theme::semibold(20.0 * scale),
+                fg,
+            );
+        }
+        OsKind::Manjaro => {
+            painter.text(
+                c,
+                Align2::CENTER_CENTER,
+                "M",
+                theme::semibold(18.0 * scale),
+                fg,
+            );
+        }
+        OsKind::FreeBsd => {
+            painter.text(
+                c,
+                Align2::CENTER_CENTER,
+                "BSD",
+                theme::semibold(11.5 * scale),
+                fg,
+            );
+        }
+        OsKind::MacOs => {
+            painter.text(
+                c,
+                Align2::CENTER_CENTER,
+                "mac",
+                theme::semibold(12.0 * scale),
+                fg,
+            );
+        }
         OsKind::Linux => {
-            icons::paint(painter, c, fill::LINUX_LOGO, 22.0 * scale, fg, IconStyle::Fill);
+            icons::paint(
+                painter,
+                c,
+                fill::LINUX_LOGO,
+                22.0 * scale,
+                fg,
+                IconStyle::Fill,
+            );
         }
         OsKind::Unknown => {
-            icons::paint(painter, c, fill::HARD_DRIVES, 20.0 * scale, fg, IconStyle::Fill);
+            icons::paint(
+                painter,
+                c,
+                fill::HARD_DRIVES,
+                20.0 * scale,
+                fg,
+                IconStyle::Fill,
+            );
         }
     }
 }
@@ -83,9 +193,15 @@ fn paint_debian_swirl(painter: &Painter, c: Pos2, fg: Color32, scale: f32) {
         let t = i as f32 / steps as f32;
         let angle = -0.4 + t * std::f32::consts::TAU * 1.45;
         let r = (1.5 + t * 9.5) * scale;
-        pts.push(pos2(c.x + r * angle.cos(), c.y + r * angle.sin() - 0.5 * scale));
+        pts.push(pos2(
+            c.x + r * angle.cos(),
+            c.y + r * angle.sin() - 0.5 * scale,
+        ));
     }
-    painter.add(egui::Shape::line(pts, Stroke::new((2.0 * scale).max(1.2), fg)));
+    painter.add(egui::Shape::line(
+        pts,
+        Stroke::new((2.0 * scale).max(1.2), fg),
+    ));
 }
 
 fn paint_ubuntu(painter: &Painter, c: Pos2, fg: Color32, scale: f32) {
@@ -104,7 +220,13 @@ fn paint_arch(painter: &Painter, c: Pos2, fg: Color32, scale: f32) {
     let br = pos2(c.x + 9.0 * scale, c.y + 9.0 * scale);
     painter.line_segment([top, bl], s);
     painter.line_segment([top, br], s);
-    painter.line_segment([pos2(c.x - 5.0 * scale, c.y + 3.0 * scale), pos2(c.x + 5.0 * scale, c.y + 3.0 * scale)], s);
+    painter.line_segment(
+        [
+            pos2(c.x - 5.0 * scale, c.y + 3.0 * scale),
+            pos2(c.x + 5.0 * scale, c.y + 3.0 * scale),
+        ],
+        s,
+    );
 }
 
 fn paint_nixos(painter: &Painter, c: Pos2, fg: Color32, scale: f32) {
@@ -118,10 +240,34 @@ fn paint_nixos(painter: &Painter, c: Pos2, fg: Color32, scale: f32) {
 
 fn paint_alpine(painter: &Painter, c: Pos2, fg: Color32, scale: f32) {
     let s = Stroke::new((2.0 * scale).max(1.2), fg);
-    painter.line_segment([pos2(c.x - 10.0 * scale, c.y + 6.0 * scale), pos2(c.x - 2.0 * scale, c.y - 6.0 * scale)], s);
-    painter.line_segment([pos2(c.x - 2.0 * scale, c.y - 6.0 * scale), pos2(c.x + 4.0 * scale, c.y + 6.0 * scale)], s);
-    painter.line_segment([pos2(c.x + 1.0 * scale, c.y + 1.0 * scale), pos2(c.x + 5.0 * scale, c.y - 4.0 * scale)], s);
-    painter.line_segment([pos2(c.x + 5.0 * scale, c.y - 4.0 * scale), pos2(c.x + 10.0 * scale, c.y + 6.0 * scale)], s);
+    painter.line_segment(
+        [
+            pos2(c.x - 10.0 * scale, c.y + 6.0 * scale),
+            pos2(c.x - 2.0 * scale, c.y - 6.0 * scale),
+        ],
+        s,
+    );
+    painter.line_segment(
+        [
+            pos2(c.x - 2.0 * scale, c.y - 6.0 * scale),
+            pos2(c.x + 4.0 * scale, c.y + 6.0 * scale),
+        ],
+        s,
+    );
+    painter.line_segment(
+        [
+            pos2(c.x + 1.0 * scale, c.y + 1.0 * scale),
+            pos2(c.x + 5.0 * scale, c.y - 4.0 * scale),
+        ],
+        s,
+    );
+    painter.line_segment(
+        [
+            pos2(c.x + 5.0 * scale, c.y - 4.0 * scale),
+            pos2(c.x + 10.0 * scale, c.y + 6.0 * scale),
+        ],
+        s,
+    );
 }
 
 fn paint_windows(painter: &Painter, c: Pos2, fg: Color32, scale: f32) {

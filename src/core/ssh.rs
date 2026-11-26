@@ -66,9 +66,10 @@ pub fn spawn_ssh_session(
 
 fn expand_tilde(path: &str) -> PathBuf {
     if let Some(stripped) = path.strip_prefix("~/")
-        && let Some(dirs) = directories::UserDirs::new() {
-            return dirs.home_dir().join(stripped);
-        }
+        && let Some(dirs) = directories::UserDirs::new()
+    {
+        return dirs.home_dir().join(stripped);
+    }
     PathBuf::from(path)
 }
 
@@ -88,9 +89,10 @@ where
         if let Ok(res) = session
             .authenticate_publickey_with(username, pubkey, hash_alg, agent)
             .await
-            && res.success() {
-                return Ok(true);
-            }
+            && res.success()
+        {
+            return Ok(true);
+        }
     }
     Ok(false)
 }
@@ -122,33 +124,38 @@ async fn authenticate(session: &mut Handle<ClientHandler>, host: &Host) -> Resul
         AuthMethod::Agent => {
             // 1. Try system SSH agent (SSH_AUTH_SOCK) then Bitwarden SSH agent socket
             if let Ok(mut agent) = russh::keys::agent::client::AgentClient::connect_env().await
-                && try_agent_auth(session, &host.username, &mut agent).await? {
-                    return Ok(true);
-                }
+                && try_agent_auth(session, &host.username, &mut agent).await?
+            {
+                return Ok(true);
+            }
             let bw_sock = expand_tilde("~/.bitwarden-ssh-agent.sock");
             if bw_sock.exists()
-                && let Ok(mut agent) = russh::keys::agent::client::AgentClient::connect_uds(&bw_sock).await
-                    && try_agent_auth(session, &host.username, &mut agent).await? {
-                        return Ok(true);
-                    }
+                && let Ok(mut agent) =
+                    russh::keys::agent::client::AgentClient::connect_uds(&bw_sock).await
+                && try_agent_auth(session, &host.username, &mut agent).await?
+            {
+                return Ok(true);
+            }
 
             // 2. Fall back to local keys in ~/.ssh/
             let candidates = ["~/.ssh/id_ed25519", "~/.ssh/id_rsa", "~/.ssh/id_ecdsa"];
             for candidate in candidates {
                 let key_path = expand_tilde(candidate);
                 if key_path.exists()
-                    && let Ok(key_pair) = load_secret_key(&key_path, None) {
-                        let hash_alg = session.best_supported_rsa_hash().await?.flatten();
-                        if let Ok(res) = session
-                            .authenticate_publickey(
-                                &host.username,
-                                PrivateKeyWithHashAlg::new(Arc::new(key_pair), hash_alg),
-                            )
-                            .await
-                            && res.success() {
-                                return Ok(true);
-                            }
+                    && let Ok(key_pair) = load_secret_key(&key_path, None)
+                {
+                    let hash_alg = session.best_supported_rsa_hash().await?.flatten();
+                    if let Ok(res) = session
+                        .authenticate_publickey(
+                            &host.username,
+                            PrivateKeyWithHashAlg::new(Arc::new(key_pair), hash_alg),
+                        )
+                        .await
+                        && res.success()
+                    {
+                        return Ok(true);
                     }
+                }
             }
             if let Some(pw) = &host.password {
                 let res = session.authenticate_password(&host.username, pw).await?;
@@ -235,7 +242,10 @@ async fn detect_remote_os(session: &mut Handle<ClientHandler>) -> Option<OsKind>
         return None;
     };
     if ch
-        .exec(true, "uname -s 2>/dev/null; cat /etc/os-release 2>/dev/null")
+        .exec(
+            true,
+            "uname -s 2>/dev/null; cat /etc/os-release 2>/dev/null",
+        )
         .await
         .is_err()
     {

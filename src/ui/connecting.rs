@@ -56,7 +56,9 @@ pub fn render_connecting_screen(
     );
 
     let logs_btn = Rect::from_min_size(pos2(left + block_w - 102.0, top + 3.0), vec2(102.0, 36.0));
-    let lresp = ui.interact(logs_btn, ui.id().with("conn_show_logs"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
+    let lresp = ui
+        .interact(logs_btn, ui.id().with("conn_show_logs"), Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
     painter.rect_filled(
         logs_btn,
         CornerRadius::same(8),
@@ -80,7 +82,10 @@ pub fn render_connecting_screen(
     let slate = Color32::from_rgb(0x43, 0x4B, 0x5B);
 
     painter.line_segment(
-        [pos2(left_c.x + 14.0, line_y), pos2(right_c.x - 13.0, line_y)],
+        [
+            pos2(left_c.x + 14.0, line_y),
+            pos2(right_c.x - 13.0, line_y),
+        ],
         Stroke::new(3.0_f32, slate),
     );
 
@@ -94,12 +99,22 @@ pub fn render_connecting_screen(
         let a = start_angle + (i as f32 / 28.0) * arc_span;
         arc_pts.push(pos2(left_c.x + r_arc * a.cos(), left_c.y + r_arc * a.sin()));
     }
-    painter.add(egui::Shape::line(arc_pts, Stroke::new(3.0_f32, theme::ACCENT_BLUE)));
+    painter.add(egui::Shape::line(
+        arc_pts,
+        Stroke::new(3.0_f32, theme::ACCENT_BLUE),
+    ));
     ui.ctx().request_repaint();
 
     // Left blue circle + plug icon
     painter.circle_filled(left_c, 14.0, theme::ACCENT_BLUE);
-    icons::paint(&painter, left_c, fill::PLUG, 15.0, Color32::WHITE, IconStyle::Fill);
+    icons::paint(
+        &painter,
+        left_c,
+        fill::PLUG,
+        15.0,
+        Color32::WHITE,
+        IconStyle::Fill,
+    );
 
     // Right slate circle + ">_"
     painter.circle_filled(right_c, 13.0, slate);
@@ -113,7 +128,9 @@ pub fn render_connecting_screen(
 
     // 3. Close button
     let close_btn = Rect::from_min_size(pos2(left, line_y + 38.0), vec2(82.0, 36.0));
-    let cresp = ui.interact(close_btn, ui.id().with("conn_close"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
+    let cresp = ui
+        .interact(close_btn, ui.id().with("conn_close"), Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
     painter.rect_filled(
         close_btn,
         CornerRadius::same(8),
@@ -132,7 +149,8 @@ pub fn render_connecting_screen(
 
     // 4. Optional logs box
     if show_logs {
-        let log_rect = Rect::from_min_size(pos2(left, close_btn.bottom() + 14.0), vec2(block_w, 140.0));
+        let log_rect =
+            Rect::from_min_size(pos2(left, close_btn.bottom() + 14.0), vec2(block_w, 140.0));
         painter.rect_filled(log_rect, CornerRadius::same(8), theme::TERM_BG);
         let mut log_ui = ui.new_child(egui::UiBuilder::new().max_rect(log_rect.shrink(10.0)));
         egui::ScrollArea::vertical().show(&mut log_ui, |ui| {

@@ -22,9 +22,10 @@ pub fn parse_ssh_config(content: &str) -> Vec<Host> {
 
         if key == "host" {
             if let Some(h) = current.take()
-                && !h.hostname.is_empty() {
-                    hosts.push(h);
-                }
+                && !h.hostname.is_empty()
+            {
+                hosts.push(h);
+            }
             // Ignore wildcards like `Host *` or `Host *.example.com`
             let alias = val.split_whitespace().next().unwrap_or("");
             if alias.is_empty() || alias.contains('*') || alias.contains('?') {
@@ -54,9 +55,10 @@ pub fn parse_ssh_config(content: &str) -> Vec<Host> {
     }
 
     if let Some(h) = current.take()
-        && !h.hostname.is_empty() {
-            hosts.push(h);
-        }
+        && !h.hostname.is_empty()
+    {
+        hosts.push(h);
+    }
 
     hosts
 }

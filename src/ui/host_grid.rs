@@ -8,8 +8,8 @@ use crate::ui::popover_menu::{MenuEntry, MenuIcon, render_popover_menu};
 use crate::ui::theme;
 use egui::epaint::{Mesh, Shape};
 use egui::{
-    Align2, Color32, CornerRadius, Margin, Painter, Rect, RichText, Sense, Stroke, StrokeKind, Ui, pos2,
-    vec2,
+    Align2, Color32, CornerRadius, Margin, Painter, Rect, RichText, Sense, Stroke, StrokeKind, Ui,
+    pos2, vec2,
 };
 use uuid::Uuid;
 
@@ -50,10 +50,26 @@ fn vertical_gradient(painter: &Painter, rect: Rect, radius: f32, top: Color32, b
 
     const SEGMENTS: usize = 8;
     let corners = [
-        (pos2(rect.right() - r, rect.bottom() - r), 0.0_f32, std::f32::consts::FRAC_PI_2),
-        (pos2(rect.left() + r, rect.bottom() - r), std::f32::consts::FRAC_PI_2, std::f32::consts::PI),
-        (pos2(rect.left() + r, rect.top() + r), std::f32::consts::PI, 3.0 * std::f32::consts::FRAC_PI_2),
-        (pos2(rect.right() - r, rect.top() + r), 3.0 * std::f32::consts::FRAC_PI_2, std::f32::consts::TAU),
+        (
+            pos2(rect.right() - r, rect.bottom() - r),
+            0.0_f32,
+            std::f32::consts::FRAC_PI_2,
+        ),
+        (
+            pos2(rect.left() + r, rect.bottom() - r),
+            std::f32::consts::FRAC_PI_2,
+            std::f32::consts::PI,
+        ),
+        (
+            pos2(rect.left() + r, rect.top() + r),
+            std::f32::consts::PI,
+            3.0 * std::f32::consts::FRAC_PI_2,
+        ),
+        (
+            pos2(rect.right() - r, rect.top() + r),
+            3.0 * std::f32::consts::FRAC_PI_2,
+            std::f32::consts::TAU,
+        ),
     ];
 
     for (cc, a0, a1) in corners {
@@ -72,7 +88,13 @@ fn vertical_gradient(painter: &Painter, rect: Rect, radius: f32, top: Color32, b
     painter.add(Shape::mesh(mesh));
 }
 
-fn single_line_input(ui: &mut Ui, rect: Rect, text: &mut String, hint: &str, id: &str) -> egui::Response {
+fn single_line_input(
+    ui: &mut Ui,
+    rect: Rect,
+    text: &mut String,
+    hint: &str,
+    id: &str,
+) -> egui::Response {
     let font = theme::regular(13.0);
     let row_h = ui.fonts(|f| f.row_height(&font));
     let v_pad = ((rect.height() - row_h) * 0.5).max(0.0) as i8;
@@ -85,7 +107,11 @@ fn single_line_input(ui: &mut Ui, rect: Rect, text: &mut String, hint: &str, id:
             .font(font.clone())
             .text_color(theme::TEXT_PRIMARY)
             .desired_width(rect.width())
-            .hint_text(RichText::new(hint).color(theme::TEXT_PLACEHOLDER).font(font)),
+            .hint_text(
+                RichText::new(hint)
+                    .color(theme::TEXT_PLACEHOLDER)
+                    .font(font),
+            ),
     )
 }
 
@@ -106,7 +132,11 @@ fn render_header(
     let painter = ui.painter_at(area);
     let header = Rect::from_min_size(area.min, vec2(area.width(), theme::HEADER_H));
     painter.rect_filled(header, 0.0, theme::light(46));
-    painter.hline(header.x_range(), header.bottom() - 0.5, Stroke::new(1.0_f32, theme::SEPARATOR));
+    painter.hline(
+        header.x_range(),
+        header.bottom() - 0.5,
+        Stroke::new(1.0_f32, theme::SEPARATOR),
+    );
 
     let (l, r, t) = (area.left(), area.right(), area.top());
 
@@ -118,7 +148,11 @@ fn render_header(
     let mut cresp = ui.interact(
         connect,
         ui.id().with("qc_connect"),
-        if enabled { Sense::click() } else { Sense::hover() },
+        if enabled {
+            Sense::click()
+        } else {
+            Sense::hover()
+        },
     );
     if enabled {
         cresp = cresp.on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -136,10 +170,23 @@ fn render_header(
         Align2::CENTER_CENTER,
         s.connect,
         theme::medium(12.5),
-        if enabled { Color32::WHITE } else { theme::TEXT_DISABLED },
+        if enabled {
+            Color32::WHITE
+        } else {
+            theme::TEXT_DISABLED
+        },
     );
-    let input_rect = Rect::from_min_max(pos2(qc.left() + 13.0, qc.top()), pos2(connect.left() - 8.0, qc.bottom()));
-    let qresp = single_line_input(ui, input_rect, quick_connect, s.quick_connect_hint, "quick_connect");
+    let input_rect = Rect::from_min_max(
+        pos2(qc.left() + 13.0, qc.top()),
+        pos2(connect.left() - 8.0, qc.bottom()),
+    );
+    let qresp = single_line_input(
+        ui,
+        input_rect,
+        quick_connect,
+        s.quick_connect_hint,
+        "quick_connect",
+    );
     let submitted = qresp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
     if enabled && (cresp.clicked() || submitted) {
         *action = HostGridAction::QuickConnect(quick_connect.trim().to_string());
@@ -149,28 +196,70 @@ fn render_header(
     let cy = t + 79.5;
     let btn_h = 30.0;
 
-    let new_host = Rect::from_min_max(pos2(l + 13.0, cy - btn_h / 2.0), pos2(l + 113.0, cy + btn_h / 2.0));
-    let nresp = ui.interact(new_host, ui.id().with("tb_new_host"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
+    let new_host = Rect::from_min_max(
+        pos2(l + 13.0, cy - btn_h / 2.0),
+        pos2(l + 113.0, cy + btn_h / 2.0),
+    );
+    let nresp = ui
+        .interact(new_host, ui.id().with("tb_new_host"), Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
     painter.rect_filled(
         new_host,
-        CornerRadius { nw: 6, ne: 2, sw: 6, se: 2 },
+        CornerRadius {
+            nw: 6,
+            ne: 2,
+            sw: 6,
+            se: 2,
+        },
         theme::shade(if nresp.hovered() { 30 } else { 20 }),
     );
     let plus_c = pos2(l + 29.5, cy);
     let plus_stroke = Stroke::new(1.7_f32, theme::TEXT_PRIMARY);
-    painter.line_segment([pos2(plus_c.x - 5.5, plus_c.y), pos2(plus_c.x + 5.5, plus_c.y)], plus_stroke);
-    painter.line_segment([pos2(plus_c.x, plus_c.y - 5.5), pos2(plus_c.x, plus_c.y + 5.5)], plus_stroke);
-    painter.text(pos2(l + 43.0, cy), Align2::LEFT_CENTER, s.new_host, theme::medium(13.0), theme::TEXT_PRIMARY);
+    painter.line_segment(
+        [
+            pos2(plus_c.x - 5.5, plus_c.y),
+            pos2(plus_c.x + 5.5, plus_c.y),
+        ],
+        plus_stroke,
+    );
+    painter.line_segment(
+        [
+            pos2(plus_c.x, plus_c.y - 5.5),
+            pos2(plus_c.x, plus_c.y + 5.5),
+        ],
+        plus_stroke,
+    );
+    painter.text(
+        pos2(l + 43.0, cy),
+        Align2::LEFT_CENTER,
+        s.new_host,
+        theme::medium(13.0),
+        theme::TEXT_PRIMARY,
+    );
     if nresp.clicked() {
         *action = HostGridAction::NewHost;
     }
 
-    let chevron = Rect::from_min_max(pos2(l + 115.0, cy - btn_h / 2.0), pos2(l + 145.0, cy + btn_h / 2.0));
-    let chresp = ui.interact(chevron, ui.id().with("tb_new_menu"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
+    let chevron = Rect::from_min_max(
+        pos2(l + 115.0, cy - btn_h / 2.0),
+        pos2(l + 145.0, cy + btn_h / 2.0),
+    );
+    let chresp = ui
+        .interact(chevron, ui.id().with("tb_new_menu"), Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
     painter.rect_filled(
         chevron,
-        CornerRadius { nw: 2, ne: 6, sw: 2, se: 6 },
-        theme::shade(if chresp.hovered() || *new_host_menu_open { 30 } else { 20 }),
+        CornerRadius {
+            nw: 2,
+            ne: 6,
+            sw: 2,
+            se: 6,
+        },
+        theme::shade(if chresp.hovered() || *new_host_menu_open {
+            30
+        } else {
+            20
+        }),
     );
     icons::paint(
         &painter,
@@ -190,15 +279,28 @@ fn render_header(
 
     // Right-aligned view toggles
     let view_btn_rect = Rect::from_center_size(pos2(r - 103.0, cy), vec2(30.0, 30.0));
-    let vresp = ui.interact(view_btn_rect, ui.id().with("tb_grid"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
+    let vresp = ui
+        .interact(view_btn_rect, ui.id().with("tb_grid"), Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
     if vresp.hovered() || *view_menu_open {
-        painter.rect_filled(view_btn_rect, CornerRadius::same(6), theme::shade(if *view_menu_open { 18 } else { 12 }));
+        painter.rect_filled(
+            view_btn_rect,
+            CornerRadius::same(6),
+            theme::shade(if *view_menu_open { 18 } else { 12 }),
+        );
     }
     let (vglyph, vstyle) = match view_mode {
         HostViewMode::Grid => (fill::SQUARES_FOUR, IconStyle::Fill),
         HostViewMode::List => (regular::LIST_BULLETS, IconStyle::Regular),
     };
-    icons::paint(&painter, view_btn_rect.center(), vglyph, 15.0, theme::ICON_DARK, vstyle);
+    icons::paint(
+        &painter,
+        view_btn_rect.center(),
+        vglyph,
+        15.0,
+        theme::ICON_DARK,
+        vstyle,
+    );
     if vresp.clicked() {
         *view_menu_open = !*view_menu_open;
         if *view_menu_open {
@@ -207,18 +309,40 @@ fn render_header(
     }
 
     let tags_rect = Rect::from_center_size(pos2(r - 65.0, cy), vec2(30.0, 30.0));
-    let tresp = ui.interact(tags_rect, ui.id().with("tb_tags"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
+    let tresp = ui
+        .interact(tags_rect, ui.id().with("tb_tags"), Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
     if tresp.hovered() {
         painter.rect_filled(tags_rect, CornerRadius::same(6), theme::shade(12));
     }
-    icons::paint(&painter, tags_rect.center(), fill::TAG, 15.0, theme::ICON_DARK, IconStyle::Fill);
+    icons::paint(
+        &painter,
+        tags_rect.center(),
+        fill::TAG,
+        15.0,
+        theme::ICON_DARK,
+        IconStyle::Fill,
+    );
 
     let sort_btn_rect = Rect::from_center_size(pos2(r - 27.0, cy), vec2(30.0, 30.0));
-    let sresp = ui.interact(sort_btn_rect, ui.id().with("tb_sort"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
+    let sresp = ui
+        .interact(sort_btn_rect, ui.id().with("tb_sort"), Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
     if sresp.hovered() || *sort_menu_open {
-        painter.rect_filled(sort_btn_rect, CornerRadius::same(6), theme::shade(if *sort_menu_open { 18 } else { 12 }));
+        painter.rect_filled(
+            sort_btn_rect,
+            CornerRadius::same(6),
+            theme::shade(if *sort_menu_open { 18 } else { 12 }),
+        );
     }
-    icons::paint(&painter, sort_btn_rect.center(), fill::CALENDAR, 15.0, theme::ICON_DARK, IconStyle::Fill);
+    icons::paint(
+        &painter,
+        sort_btn_rect.center(),
+        fill::CALENDAR,
+        15.0,
+        theme::ICON_DARK,
+        IconStyle::Fill,
+    );
     if sresp.clicked() {
         *sort_menu_open = !*sort_menu_open;
         if *sort_menu_open {
@@ -226,10 +350,21 @@ fn render_header(
         }
     }
 
-    (Rect::from_min_max(pos2(l, header.bottom()), area.max), chevron, view_btn_rect, sort_btn_rect)
+    (
+        Rect::from_min_max(pos2(l, header.bottom()), area.max),
+        chevron,
+        view_btn_rect,
+        sort_btn_rect,
+    )
 }
 
-fn render_empty_state(ui: &mut Ui, area: Rect, input: &mut String, lang: Language, action: &mut HostGridAction) {
+fn render_empty_state(
+    ui: &mut Ui,
+    area: Rect,
+    input: &mut String,
+    lang: Language,
+    action: &mut HostGridAction,
+) {
     let s = tr(lang);
     let painter = ui.painter_at(area);
     let cx = area.center().x;
@@ -238,9 +373,22 @@ fn render_empty_state(ui: &mut Ui, area: Rect, input: &mut String, lang: Languag
     // Icon tile
     let tile = Rect::from_center_size(pos2(cx, top + 28.0), vec2(56.0, 56.0));
     painter.rect_filled(tile, CornerRadius::same(10), theme::shade(14));
-    icons::paint(&painter, tile.center(), fill::HARD_DRIVES, 24.0, theme::ICON_DARK, IconStyle::Fill);
+    icons::paint(
+        &painter,
+        tile.center(),
+        fill::HARD_DRIVES,
+        24.0,
+        theme::ICON_DARK,
+        IconStyle::Fill,
+    );
 
-    painter.text(pos2(cx, top + 100.0), Align2::CENTER_CENTER, s.empty_title, theme::semibold(16.0), theme::TEXT_PRIMARY);
+    painter.text(
+        pos2(cx, top + 100.0),
+        Align2::CENTER_CENTER,
+        s.empty_title,
+        theme::semibold(16.0),
+        theme::TEXT_PRIMARY,
+    );
     painter.text(
         pos2(cx, top + 133.0),
         Align2::CENTER_CENTER,
@@ -252,7 +400,13 @@ fn render_empty_state(ui: &mut Ui, area: Rect, input: &mut String, lang: Languag
     // Address input
     let field = Rect::from_min_size(pos2(cx - 196.0, top + 166.0), vec2(392.0, 34.0));
     painter.rect_filled(field, CornerRadius::same(6), theme::light(40));
-    let resp = single_line_input(ui, field.shrink2(vec2(11.0, 0.0)), input, s.empty_hint, "empty_host_input");
+    let resp = single_line_input(
+        ui,
+        field.shrink2(vec2(11.0, 0.0)),
+        input,
+        s.empty_hint,
+        "empty_host_input",
+    );
     let init_id = resp.id.with("initial_focus");
     let did_focus = ui.data_mut(|d| {
         let already = d.get_temp::<bool>(init_id).unwrap_or(false);
@@ -273,16 +427,28 @@ fn render_empty_state(ui: &mut Ui, area: Rect, input: &mut String, lang: Languag
 
     // Continue
     let button = Rect::from_min_size(pos2(cx - 196.0, top + 222.0), vec2(392.0, 36.0));
-    let bresp = ui.interact(button, ui.id().with("empty_continue"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
+    let bresp = ui
+        .interact(button, ui.id().with("empty_continue"), Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
     let (t, b) = if bresp.hovered() {
-        (theme::ACCENT_BLUE_TOP.gamma_multiply(1.08), theme::ACCENT_BLUE)
+        (
+            theme::ACCENT_BLUE_TOP.gamma_multiply(1.08),
+            theme::ACCENT_BLUE,
+        )
     } else {
         (theme::ACCENT_BLUE_TOP, theme::ACCENT_BLUE_BOTTOM)
     };
     vertical_gradient(&painter, button, 6.0, t, b);
-    painter.text(button.center(), Align2::CENTER_CENTER, s.continue_btn, theme::semibold(13.0), Color32::WHITE);
+    painter.text(
+        button.center(),
+        Align2::CENTER_CENTER,
+        s.continue_btn,
+        theme::semibold(13.0),
+        Color32::WHITE,
+    );
 
-    let submitted = bresp.clicked() || (resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
+    let submitted =
+        bresp.clicked() || (resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
     if submitted && !input.trim().is_empty() {
         *action = HostGridAction::NewHostWithAddress(input.trim().to_string());
         input.clear();
@@ -311,197 +477,260 @@ fn render_cards(
 
     let inner = area.shrink2(vec2(13.0, 0.0));
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(inner));
-    egui::ScrollArea::vertical().auto_shrink([false, false]).show(&mut child, |ui| {
-        ui.add_space(18.0);
-        ui.label(RichText::new(s.hosts_heading).font(theme::semibold(14.0)).color(theme::TEXT_PRIMARY));
-        ui.add_space(6.0);
-
-        let gap = if view_mode == HostViewMode::List { 8.0 } else { 12.0 };
-        let card_h = if view_mode == HostViewMode::List { 56.0 } else { 64.0 };
-        let width = ui.available_width();
-        let cols = match view_mode {
-            HostViewMode::List => 1,
-            HostViewMode::Grid => (((width + gap) / (260.0 + gap)).floor() as usize).max(1),
-        };
-        let card_w = (width - gap * (cols as f32 - 1.0)) / cols as f32;
-        let rows = hosts.len().div_ceil(cols);
-        let (grid, _) = ui.allocate_exact_size(vec2(width, rows as f32 * (card_h + gap)), Sense::hover());
-        let painter = ui.painter();
-
-        for (idx, host) in hosts.iter().enumerate() {
-            let (row, col) = (idx / cols, idx % cols);
-            let rect = Rect::from_min_size(
-                pos2(grid.left() + col as f32 * (card_w + gap), grid.top() + row as f32 * (card_h + gap)),
-                vec2(card_w, card_h),
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(&mut child, |ui| {
+            ui.add_space(18.0);
+            ui.label(
+                RichText::new(s.hosts_heading)
+                    .font(theme::semibold(14.0))
+                    .color(theme::TEXT_PRIMARY),
             );
-            let resp = ui.interact(rect, ui.id().with(("host_card", host.id)), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
-            let edit_rect = Rect::from_center_size(pos2(rect.right() - 22.0, rect.center().y), vec2(28.0, 28.0));
-            let edit_resp = ui.interact(edit_rect, ui.id().with(("host_edit", host.id)), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
-            let hovered = resp.hovered() || edit_resp.hovered();
-
-            let card_bg = if hovered {
-                Color32::from_rgba_unmultiplied(0xCA, 0xD1, 0xD5, 165)
-            } else {
-                Color32::from_rgba_unmultiplied(0xF6, 0xF8, 0xF9, 200)
-            };
-            let shadow_alpha = if hovered { 26 } else { 16 };
-            painter.rect_filled(
-                rect.translate(vec2(0.0, 3.0)),
-                CornerRadius::same(8),
-                Color32::from_black_alpha(shadow_alpha),
-            );
-            painter.rect_filled(rect, CornerRadius::same(8), card_bg);
-            painter.rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0_f32, theme::shade(12)), StrokeKind::Inside);
-
-            let tile = Rect::from_min_size(pos2(rect.left() + 12.0, rect.center().y - 20.0), vec2(40.0, 40.0));
-            paint_os_tile(painter, tile, host.os, &host.source);
-
-            let tx = tile.right() + 12.0;
-            let right_pad = if hovered { 42.0 } else { 12.0 };
-            let max_w = rect.right() - tx - right_pad;
-            let label = painter.layout(host.label.clone(), theme::semibold(14.0), theme::TEXT_PRIMARY, max_w);
-            painter.galley(pos2(tx, rect.center().y - 18.0), label, theme::TEXT_PRIMARY);
-            painter.text(
-                pos2(tx, rect.center().y + 10.0),
-                Align2::LEFT_CENTER,
-                format!("ssh, {}", host.username),
-                theme::regular(12.0),
-                theme::TEXT_MUTED,
-            );
-
-            if hovered {
-                if edit_resp.hovered() {
-                    painter.rect_filled(edit_rect, CornerRadius::same(6), theme::shade(16));
-                }
-                icons::paint(
-                    painter,
-                    edit_rect.center(),
-                    fill::PENCIL_SIMPLE,
-                    15.0,
-                    theme::ICON_DARK,
-                    IconStyle::Fill,
-                );
-            }
-
-            if edit_resp.clicked() {
-                *action = HostGridAction::EditHost((*host).clone());
-            } else if resp.double_clicked() {
-                *action = HostGridAction::Connect((*host).clone());
-            }
-            resp.context_menu(|ui| {
-                if ui.button(s.ctx_connect).clicked() {
-                    *action = HostGridAction::Connect((*host).clone());
-                    ui.close_menu();
-                }
-                if ui.button(s.ctx_edit).clicked() {
-                    *action = HostGridAction::EditHost((*host).clone());
-                    ui.close_menu();
-                }
-                if ui.button(RichText::new(s.ctx_delete).color(theme::DANGER)).clicked() {
-                    *action = HostGridAction::DeleteHost(host.id);
-                    ui.close_menu();
-                }
-            });
-        }
-
-        if !ghost_hosts.is_empty() {
-            ui.add_space(16.0);
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(s.detected_ssh_heading)
-                        .font(theme::semibold(13.0))
-                        .color(theme::TEXT_MUTED),
-                );
-                if ui.small_button(s.import_all).clicked() {
-                    *action = HostGridAction::ImportSshConfig;
-                }
-            });
             ui.add_space(6.0);
 
-            let ghost_rows = ghost_hosts.len().div_ceil(cols);
-            let (ghost_grid, _) =
-                ui.allocate_exact_size(vec2(width, ghost_rows as f32 * (card_h + gap)), Sense::hover());
+            let gap = if view_mode == HostViewMode::List {
+                8.0
+            } else {
+                12.0
+            };
+            let card_h = if view_mode == HostViewMode::List {
+                56.0
+            } else {
+                64.0
+            };
+            let width = ui.available_width();
+            let cols = match view_mode {
+                HostViewMode::List => 1,
+                HostViewMode::Grid => (((width + gap) / (260.0 + gap)).floor() as usize).max(1),
+            };
+            let card_w = (width - gap * (cols as f32 - 1.0)) / cols as f32;
+            let rows = hosts.len().div_ceil(cols);
+            let (grid, _) =
+                ui.allocate_exact_size(vec2(width, rows as f32 * (card_h + gap)), Sense::hover());
             let painter = ui.painter();
 
-            for (idx, host) in ghost_hosts.iter().enumerate() {
+            for (idx, host) in hosts.iter().enumerate() {
                 let (row, col) = (idx / cols, idx % cols);
                 let rect = Rect::from_min_size(
                     pos2(
-                        ghost_grid.left() + col as f32 * (card_w + gap),
-                        ghost_grid.top() + row as f32 * (card_h + gap),
+                        grid.left() + col as f32 * (card_w + gap),
+                        grid.top() + row as f32 * (card_h + gap),
                     ),
                     vec2(card_w, card_h),
                 );
-                let resp = ui.interact(rect, ui.id().with(("ghost_card", &host.label, idx)), Sense::hover());
-                let bg = if resp.hovered() {
-                    theme::light(80)
+                let resp = ui
+                    .interact(rect, ui.id().with(("host_card", host.id)), Sense::click())
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                let edit_rect = Rect::from_center_size(
+                    pos2(rect.right() - 22.0, rect.center().y),
+                    vec2(28.0, 28.0),
+                );
+                let edit_resp = ui
+                    .interact(
+                        edit_rect,
+                        ui.id().with(("host_edit", host.id)),
+                        Sense::click(),
+                    )
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                let hovered = resp.hovered() || edit_resp.hovered();
+
+                let card_bg = if hovered {
+                    Color32::from_rgba_unmultiplied(0xCA, 0xD1, 0xD5, 165)
                 } else {
-                    theme::light(42)
+                    Color32::from_rgba_unmultiplied(0xF6, 0xF8, 0xF9, 200)
                 };
-                painter.rect_filled(rect, CornerRadius::same(8), bg);
+                let shadow_alpha = if hovered { 26 } else { 16 };
+                painter.rect_filled(
+                    rect.translate(vec2(0.0, 3.0)),
+                    CornerRadius::same(8),
+                    Color32::from_black_alpha(shadow_alpha),
+                );
+                painter.rect_filled(rect, CornerRadius::same(8), card_bg);
                 painter.rect_stroke(
                     rect,
                     CornerRadius::same(8),
-                    Stroke::new(1.0_f32, theme::shade(24)),
+                    Stroke::new(1.0_f32, theme::shade(12)),
                     StrokeKind::Inside,
                 );
 
-                let tile = Rect::from_min_size(pos2(rect.left() + 12.0, rect.center().y - 20.0), vec2(40.0, 40.0));
-                painter.rect_filled(tile, CornerRadius::same(8), theme::shade(28));
-                icons::paint(
-                    painter,
-                    tile.center(),
-                    fill::HARD_DRIVES,
-                    18.0,
-                    theme::TEXT_MUTED,
-                    IconStyle::Fill,
+                let tile = Rect::from_min_size(
+                    pos2(rect.left() + 12.0, rect.center().y - 20.0),
+                    vec2(40.0, 40.0),
                 );
-
-                let import_rect =
-                    Rect::from_center_size(pos2(rect.right() - 40.0, rect.center().y), vec2(60.0, 26.0));
-                let imp_resp = ui.interact(
-                    import_rect,
-                    ui.id().with(("ghost_import", &host.label, idx)),
-                    Sense::click(),
-                ).on_hover_cursor(egui::CursorIcon::PointingHand);
-                painter.rect_filled(
-                    import_rect,
-                    CornerRadius::same(6),
-                    if imp_resp.hovered() {
-                        theme::ACCENT_BLUE
-                    } else {
-                        theme::shade(22)
-                    },
-                );
-                painter.text(
-                    import_rect.center(),
-                    Align2::CENTER_CENTER,
-                    s.import_btn,
-                    theme::medium(12.0),
-                    if imp_resp.hovered() {
-                        Color32::WHITE
-                    } else {
-                        theme::TEXT_PRIMARY
-                    },
-                );
-                if imp_resp.clicked() {
-                    *action = HostGridAction::ImportGhost(host.clone());
-                }
+                paint_os_tile(painter, tile, host.os, &host.source);
 
                 let tx = tile.right() + 12.0;
-                let max_w = (import_rect.left() - tx - 8.0).max(40.0);
-                let label = painter.layout(host.label.clone(), theme::semibold(14.0), theme::TEXT_MUTED, max_w);
-                painter.galley(pos2(tx, rect.center().y - 18.0), label, theme::TEXT_MUTED);
+                let right_pad = if hovered { 42.0 } else { 12.0 };
+                let max_w = rect.right() - tx - right_pad;
+                let label = painter.layout(
+                    host.label.clone(),
+                    theme::semibold(14.0),
+                    theme::TEXT_PRIMARY,
+                    max_w,
+                );
+                painter.galley(pos2(tx, rect.center().y - 18.0), label, theme::TEXT_PRIMARY);
                 painter.text(
                     pos2(tx, rect.center().y + 10.0),
                     Align2::LEFT_CENTER,
-                    format!("ssh, {}@{}", host.username, host.hostname),
-                    theme::regular(11.5),
-                    theme::TEXT_PLACEHOLDER,
+                    format!("ssh, {}", host.username),
+                    theme::regular(12.0),
+                    theme::TEXT_MUTED,
                 );
+
+                if hovered {
+                    if edit_resp.hovered() {
+                        painter.rect_filled(edit_rect, CornerRadius::same(6), theme::shade(16));
+                    }
+                    icons::paint(
+                        painter,
+                        edit_rect.center(),
+                        fill::PENCIL_SIMPLE,
+                        15.0,
+                        theme::ICON_DARK,
+                        IconStyle::Fill,
+                    );
+                }
+
+                if edit_resp.clicked() {
+                    *action = HostGridAction::EditHost((*host).clone());
+                } else if resp.double_clicked() {
+                    *action = HostGridAction::Connect((*host).clone());
+                }
+                resp.context_menu(|ui| {
+                    if ui.button(s.ctx_connect).clicked() {
+                        *action = HostGridAction::Connect((*host).clone());
+                        ui.close_menu();
+                    }
+                    if ui.button(s.ctx_edit).clicked() {
+                        *action = HostGridAction::EditHost((*host).clone());
+                        ui.close_menu();
+                    }
+                    if ui
+                        .button(RichText::new(s.ctx_delete).color(theme::DANGER))
+                        .clicked()
+                    {
+                        *action = HostGridAction::DeleteHost(host.id);
+                        ui.close_menu();
+                    }
+                });
             }
-        }
-    });
+
+            if !ghost_hosts.is_empty() {
+                ui.add_space(16.0);
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(s.detected_ssh_heading)
+                            .font(theme::semibold(13.0))
+                            .color(theme::TEXT_MUTED),
+                    );
+                    if ui.small_button(s.import_all).clicked() {
+                        *action = HostGridAction::ImportSshConfig;
+                    }
+                });
+                ui.add_space(6.0);
+
+                let ghost_rows = ghost_hosts.len().div_ceil(cols);
+                let (ghost_grid, _) = ui.allocate_exact_size(
+                    vec2(width, ghost_rows as f32 * (card_h + gap)),
+                    Sense::hover(),
+                );
+                let painter = ui.painter();
+
+                for (idx, host) in ghost_hosts.iter().enumerate() {
+                    let (row, col) = (idx / cols, idx % cols);
+                    let rect = Rect::from_min_size(
+                        pos2(
+                            ghost_grid.left() + col as f32 * (card_w + gap),
+                            ghost_grid.top() + row as f32 * (card_h + gap),
+                        ),
+                        vec2(card_w, card_h),
+                    );
+                    let resp = ui.interact(
+                        rect,
+                        ui.id().with(("ghost_card", &host.label, idx)),
+                        Sense::hover(),
+                    );
+                    let bg = if resp.hovered() {
+                        theme::light(80)
+                    } else {
+                        theme::light(42)
+                    };
+                    painter.rect_filled(rect, CornerRadius::same(8), bg);
+                    painter.rect_stroke(
+                        rect,
+                        CornerRadius::same(8),
+                        Stroke::new(1.0_f32, theme::shade(24)),
+                        StrokeKind::Inside,
+                    );
+
+                    let tile = Rect::from_min_size(
+                        pos2(rect.left() + 12.0, rect.center().y - 20.0),
+                        vec2(40.0, 40.0),
+                    );
+                    painter.rect_filled(tile, CornerRadius::same(8), theme::shade(28));
+                    icons::paint(
+                        painter,
+                        tile.center(),
+                        fill::HARD_DRIVES,
+                        18.0,
+                        theme::TEXT_MUTED,
+                        IconStyle::Fill,
+                    );
+
+                    let import_rect = Rect::from_center_size(
+                        pos2(rect.right() - 40.0, rect.center().y),
+                        vec2(60.0, 26.0),
+                    );
+                    let imp_resp = ui
+                        .interact(
+                            import_rect,
+                            ui.id().with(("ghost_import", &host.label, idx)),
+                            Sense::click(),
+                        )
+                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    painter.rect_filled(
+                        import_rect,
+                        CornerRadius::same(6),
+                        if imp_resp.hovered() {
+                            theme::ACCENT_BLUE
+                        } else {
+                            theme::shade(22)
+                        },
+                    );
+                    painter.text(
+                        import_rect.center(),
+                        Align2::CENTER_CENTER,
+                        s.import_btn,
+                        theme::medium(12.0),
+                        if imp_resp.hovered() {
+                            Color32::WHITE
+                        } else {
+                            theme::TEXT_PRIMARY
+                        },
+                    );
+                    if imp_resp.clicked() {
+                        *action = HostGridAction::ImportGhost(host.clone());
+                    }
+
+                    let tx = tile.right() + 12.0;
+                    let max_w = (import_rect.left() - tx - 8.0).max(40.0);
+                    let label = painter.layout(
+                        host.label.clone(),
+                        theme::semibold(14.0),
+                        theme::TEXT_MUTED,
+                        max_w,
+                    );
+                    painter.galley(pos2(tx, rect.center().y - 18.0), label, theme::TEXT_MUTED);
+                    painter.text(
+                        pos2(tx, rect.center().y + 10.0),
+                        Align2::LEFT_CENTER,
+                        format!("ssh, {}@{}", host.username, host.hostname),
+                        theme::regular(11.5),
+                        theme::TEXT_PLACEHOLDER,
+                    );
+                }
+            }
+        });
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -535,7 +764,16 @@ pub fn render_host_grid(
     if vault.hosts.is_empty() && ghost_hosts.is_empty() {
         render_empty_state(ui, content, empty_host_input, lang, &mut action);
     } else {
-        render_cards(ui, content, vault, ghost_hosts, *view_mode, *sort_mode, lang, &mut action);
+        render_cards(
+            ui,
+            content,
+            vault,
+            ghost_hosts,
+            *view_mode,
+            *sort_mode,
+            lang,
+            &mut action,
+        );
     }
 
     if let Some(id) = render_popover_menu(
@@ -587,7 +825,11 @@ pub fn render_host_grid(
             },
         ],
     ) {
-        *view_mode = if id == 0 { HostViewMode::Grid } else { HostViewMode::List };
+        *view_mode = if id == 0 {
+            HostViewMode::Grid
+        } else {
+            HostViewMode::List
+        };
     }
 
     if let Some(id) = render_popover_menu(

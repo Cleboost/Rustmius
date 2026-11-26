@@ -1,6 +1,5 @@
 use crate::i18n::Language;
 use crate::storage::Vault;
-use serde::{Deserialize, Serialize};
 use aes_gcm::{
     Aes256Gcm, Key, Nonce,
     aead::{Aead, KeyInit},
@@ -9,6 +8,7 @@ use anyhow::{Context, Result, bail};
 use argon2::Argon2;
 use directories::ProjectDirs;
 use rand::RngCore;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use zeroize::Zeroizing;
@@ -136,7 +136,9 @@ pub fn encrypt_bytes(plaintext: &[u8], password: &str) -> Result<Vec<u8>> {
 
 pub fn decrypt_bytes(data: &[u8], password: &str) -> Result<Zeroizing<Vec<u8>>> {
     let header_len = MAGIC.len() + SALT_LEN + NONCE_LEN;
-    if data.len() < header_len || (&data[..MAGIC.len()] != MAGIC && &data[..MAGIC.len()] != LEGACY_MAGIC) {
+    if data.len() < header_len
+        || (&data[..MAGIC.len()] != MAGIC && &data[..MAGIC.len()] != LEGACY_MAGIC)
+    {
         bail!("Invalid encrypted file format");
     }
 
@@ -174,7 +176,9 @@ mod tests {
     #[test]
     fn roundtrip_encrypt_decrypt() {
         let mut vault = Vault::new();
-        vault.hosts.push(Host::new("prod-web", "10.0.0.1", "ubuntu"));
+        vault
+            .hosts
+            .push(Host::new("prod-web", "10.0.0.1", "ubuntu"));
 
         let encrypted = encrypt_vault(&vault, "super-secret-password").unwrap();
         let decrypted = decrypt_vault(&encrypted, "super-secret-password").unwrap();

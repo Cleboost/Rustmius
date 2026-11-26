@@ -58,7 +58,11 @@ pub fn render_popover_menu(
             let painter = ui.painter();
 
             let shadow_c = Color32::from_black_alpha((28.0 * anim_t) as u8);
-            painter.rect_filled(rect.translate(vec2(0.0, 4.0)), CornerRadius::same(10), shadow_c);
+            painter.rect_filled(
+                rect.translate(vec2(0.0, 4.0)),
+                CornerRadius::same(10),
+                shadow_c,
+            );
             let bg = Color32::from_rgba_unmultiplied(0xF3, 0xF5, 0xF6, (248.0 * anim_t) as u8);
             painter.rect_filled(rect, CornerRadius::same(10), bg);
             painter.rect_stroke(
@@ -86,10 +90,19 @@ pub fn render_popover_menu(
                         label,
                         selected,
                     } => {
-                        let row = Rect::from_min_size(pos2(rect.left() + 6.0, y), vec2(width - 12.0, 34.0));
-                        let resp = ui.interact(row, ui.id().with((salt, idx)), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
+                        let row = Rect::from_min_size(
+                            pos2(rect.left() + 6.0, y),
+                            vec2(width - 12.0, 34.0),
+                        );
+                        let resp = ui
+                            .interact(row, ui.id().with((salt, idx)), Sense::click())
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
                         if resp.hovered() {
-                            painter.rect_filled(row, CornerRadius::same(7), theme::shade((14.0 * anim_t) as u8));
+                            painter.rect_filled(
+                                row,
+                                CornerRadius::same(7),
+                                theme::shade((14.0 * anim_t) as u8),
+                            );
                         }
 
                         let icon_c = theme::TEXT_MUTED.gamma_multiply(anim_t);
@@ -142,11 +155,14 @@ pub fn render_popover_menu(
             }
         });
 
-    if *open && ctx.input(|i| i.pointer.primary_pressed())
+    if *open
+        && ctx.input(|i| i.pointer.primary_pressed())
         && let Some(pos) = ctx.input(|i| i.pointer.interact_pos())
-            && !area_resp.response.rect.contains(pos) && !anchor.contains(pos) {
-                *open = false;
-            }
+        && !area_resp.response.rect.contains(pos)
+        && !anchor.contains(pos)
+    {
+        *open = false;
+    }
 
     clicked_id
 }

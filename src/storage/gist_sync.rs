@@ -1,6 +1,8 @@
 //! GitHub Gist E2E encrypted vault synchronization.
 
-use crate::storage::store::{decrypt_bytes, decrypt_vault, encrypt_bytes, encrypt_vault, write_secure};
+use crate::storage::store::{
+    decrypt_bytes, decrypt_vault, encrypt_bytes, encrypt_vault, write_secure,
+};
 use crate::storage::{Group, Host, Vault};
 use anyhow::{Context, Result, bail};
 use base64::Engine;
@@ -45,9 +47,7 @@ pub fn encode_encrypted_vault(vault: &Vault, password: &str) -> Result<String> {
 
 pub fn decode_encrypted_vault(encoded: &str, password: &str) -> Result<Vault> {
     let cleaned: String = encoded.chars().filter(|c| !c.is_whitespace()).collect();
-    let raw = B64
-        .decode(cleaned)
-        .context("Invalid Base64 Gist content")?;
+    let raw = B64.decode(cleaned).context("Invalid Base64 Gist content")?;
     decrypt_vault(&raw, password)
 }
 
@@ -188,10 +188,7 @@ pub async fn find_existing_vault_gist(token: &str) -> Result<Option<(String, Str
 
 pub async fn fetch_vault_gist(token: &str, gist_id: &str) -> Result<String> {
     let client = github_client(token)?;
-    let resp = client
-        .get(format!("{GITHUB_API}/{gist_id}"))
-        .send()
-        .await?;
+    let resp = client.get(format!("{GITHUB_API}/{gist_id}")).send().await?;
     if !resp.status().is_success() {
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
@@ -202,9 +199,7 @@ pub async fn fetch_vault_gist(token: &str, gist_id: &str) -> Result<String> {
         .files
         .get(GIST_FILENAME)
         .context("File rustmius-vault.enc not found in Gist")?;
-    file.content
-        .clone()
-        .context("Empty Gist content")
+    file.content.clone().context("Empty Gist content")
 }
 
 pub async fn update_vault_gist(token: &str, gist_id: &str, encrypted_b64: &str) -> Result<()> {

@@ -63,7 +63,11 @@ pub struct Host {
 }
 
 impl Host {
-    pub fn new(label: impl Into<String>, hostname: impl Into<String>, username: impl Into<String>) -> Self {
+    pub fn new(
+        label: impl Into<String>,
+        hostname: impl Into<String>,
+        username: impl Into<String>,
+    ) -> Self {
         Self {
             id: Uuid::new_v4(),
             label: label.into(),

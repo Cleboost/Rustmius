@@ -109,7 +109,8 @@ fn styled_field(
     let w = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(vec2(w, h), Sense::hover());
 
-    ui.painter().rect_filled(rect, CornerRadius::same(7), theme::light(110));
+    ui.painter()
+        .rect_filled(rect, CornerRadius::same(7), theme::light(110));
 
     let text_left = if let Some(glyph) = leading_icon {
         icons::paint(
@@ -154,15 +155,30 @@ fn styled_field(
     );
 
     if let Some(show) = show_secret {
-        let eye_r = egui::Rect::from_center_size(pos2(rect.right() - 17.0, rect.center().y), vec2(24.0, 24.0));
+        let eye_r = egui::Rect::from_center_size(
+            pos2(rect.right() - 17.0, rect.center().y),
+            vec2(24.0, 24.0),
+        );
         let eye_resp = ui
             .interact(eye_r, ui.id().with((id, "eye")), Sense::click())
             .on_hover_cursor(egui::CursorIcon::PointingHand);
         if eye_resp.hovered() {
-            ui.painter().rect_filled(eye_r, CornerRadius::same(6), theme::shade(12));
+            ui.painter()
+                .rect_filled(eye_r, CornerRadius::same(6), theme::shade(12));
         }
-        let eye_glyph = if *show { regular::EYE_SLASH } else { regular::EYE };
-        icons::paint(ui.painter(), eye_r.center(), eye_glyph, 14.5, theme::TEXT_MUTED, IconStyle::Regular);
+        let eye_glyph = if *show {
+            regular::EYE_SLASH
+        } else {
+            regular::EYE
+        };
+        icons::paint(
+            ui.painter(),
+            eye_r.center(),
+            eye_glyph,
+            14.5,
+            theme::TEXT_MUTED,
+            IconStyle::Regular,
+        );
         if eye_resp.clicked() {
             *show = !*show;
         }
@@ -189,13 +205,21 @@ fn section_card(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui)) {
         });
 }
 
-pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState, lang: Language) -> HostModalAction {
+pub fn render_host_panel(
+    ui: &mut Ui,
+    state: &mut HostModalState,
+    lang: Language,
+) -> HostModalAction {
     let s = tr(lang);
     let mut action = HostModalAction::None;
     let rect = ui.max_rect();
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, theme::light(48));
-    painter.vline(rect.left() + 0.5, rect.y_range(), Stroke::new(1.0_f32, theme::SEPARATOR));
+    painter.vline(
+        rect.left() + 0.5,
+        rect.y_range(),
+        Stroke::new(1.0_f32, theme::SEPARATOR),
+    );
 
     let inner = rect.shrink2(vec2(14.0, 12.0));
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(inner));
@@ -227,7 +251,8 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState, lang: Language
                     ui.allocate_exact_size(vec2(28.0, 28.0), Sense::click());
                 let close_resp = close_resp.on_hover_cursor(egui::CursorIcon::PointingHand);
                 if close_resp.hovered() {
-                    ui.painter().rect_filled(close_rect, CornerRadius::same(6), theme::shade(16));
+                    ui.painter()
+                        .rect_filled(close_rect, CornerRadius::same(6), theme::shade(16));
                 }
                 icons::paint(
                     ui.painter(),
@@ -261,7 +286,8 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState, lang: Language
                     );
                     ui.add_space(8.0);
                     ui.horizontal(|ui| {
-                        let (icon_rect, _) = ui.allocate_exact_size(vec2(36.0, 36.0), Sense::hover());
+                        let (icon_rect, _) =
+                            ui.allocate_exact_size(vec2(36.0, 36.0), Sense::hover());
                         ui.painter().rect_filled(
                             icon_rect,
                             CornerRadius::same(8),
@@ -297,7 +323,14 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState, lang: Language
                             .color(theme::TEXT_PRIMARY),
                     );
                     ui.add_space(8.0);
-                    styled_field(ui, "panel_label", &mut state.label, s.panel_label_hint, None, None);
+                    styled_field(
+                        ui,
+                        "panel_label",
+                        &mut state.label,
+                        s.panel_label_hint,
+                        None,
+                        None,
+                    );
                 });
 
                 ui.add_space(10.0);
@@ -310,8 +343,13 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState, lang: Language
                                 .font(theme::semibold(13.0))
                                 .color(theme::TEXT_PRIMARY),
                         );
-                        let (port_rect, _) = ui.allocate_exact_size(vec2(64.0, 28.0), Sense::hover());
-                        ui.painter().rect_filled(port_rect, CornerRadius::same(6), theme::light(110));
+                        let (port_rect, _) =
+                            ui.allocate_exact_size(vec2(64.0, 28.0), Sense::hover());
+                        ui.painter().rect_filled(
+                            port_rect,
+                            CornerRadius::same(6),
+                            theme::light(110),
+                        );
                         let p_font = theme::regular(13.0);
                         let p_row_h = ui.fonts(|f| f.row_height(&p_font));
                         let p_vpad = ((port_rect.height() - p_row_h) * 0.5).max(0.0) as i8;
@@ -329,8 +367,12 @@ pub fn render_host_panel(ui: &mut Ui, state: &mut HostModalState, lang: Language
                         } else {
                             Stroke::new(1.0_f32, theme::shade(22))
                         };
-                        ui.painter()
-                            .rect_stroke(port_rect, CornerRadius::same(6), p_stroke, StrokeKind::Inside);
+                        ui.painter().rect_stroke(
+                            port_rect,
+                            CornerRadius::same(6),
+                            p_stroke,
+                            StrokeKind::Inside,
+                        );
                         if !s.panel_port.is_empty() {
                             ui.label(
                                 RichText::new(s.panel_port)

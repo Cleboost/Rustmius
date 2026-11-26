@@ -73,14 +73,30 @@ fn ansi_to_color32(color: AnsiColor, is_fg: bool) -> Color32 {
 
 fn brighten_ansi(color: AnsiColor) -> AnsiColor {
     match color {
-        AnsiColor::Named(NamedColor::Black) | AnsiColor::Indexed(0) => AnsiColor::Named(NamedColor::BrightBlack),
-        AnsiColor::Named(NamedColor::Red) | AnsiColor::Indexed(1) => AnsiColor::Named(NamedColor::BrightRed),
-        AnsiColor::Named(NamedColor::Green) | AnsiColor::Indexed(2) => AnsiColor::Named(NamedColor::BrightGreen),
-        AnsiColor::Named(NamedColor::Yellow) | AnsiColor::Indexed(3) => AnsiColor::Named(NamedColor::BrightYellow),
-        AnsiColor::Named(NamedColor::Blue) | AnsiColor::Indexed(4) => AnsiColor::Named(NamedColor::BrightBlue),
-        AnsiColor::Named(NamedColor::Magenta) | AnsiColor::Indexed(5) => AnsiColor::Named(NamedColor::BrightMagenta),
-        AnsiColor::Named(NamedColor::Cyan) | AnsiColor::Indexed(6) => AnsiColor::Named(NamedColor::BrightCyan),
-        AnsiColor::Named(NamedColor::White) | AnsiColor::Indexed(7) => AnsiColor::Named(NamedColor::BrightWhite),
+        AnsiColor::Named(NamedColor::Black) | AnsiColor::Indexed(0) => {
+            AnsiColor::Named(NamedColor::BrightBlack)
+        }
+        AnsiColor::Named(NamedColor::Red) | AnsiColor::Indexed(1) => {
+            AnsiColor::Named(NamedColor::BrightRed)
+        }
+        AnsiColor::Named(NamedColor::Green) | AnsiColor::Indexed(2) => {
+            AnsiColor::Named(NamedColor::BrightGreen)
+        }
+        AnsiColor::Named(NamedColor::Yellow) | AnsiColor::Indexed(3) => {
+            AnsiColor::Named(NamedColor::BrightYellow)
+        }
+        AnsiColor::Named(NamedColor::Blue) | AnsiColor::Indexed(4) => {
+            AnsiColor::Named(NamedColor::BrightBlue)
+        }
+        AnsiColor::Named(NamedColor::Magenta) | AnsiColor::Indexed(5) => {
+            AnsiColor::Named(NamedColor::BrightMagenta)
+        }
+        AnsiColor::Named(NamedColor::Cyan) | AnsiColor::Indexed(6) => {
+            AnsiColor::Named(NamedColor::BrightCyan)
+        }
+        AnsiColor::Named(NamedColor::White) | AnsiColor::Indexed(7) => {
+            AnsiColor::Named(NamedColor::BrightWhite)
+        }
         other => other,
     }
 }
@@ -137,8 +153,10 @@ pub fn render_terminal(
 
     // Mouse selection
     let pos_to_cell = |pos: Pos2| -> (usize, usize) {
-        let col = (((pos.x - origin.x) / cell_w).floor().max(0.0) as usize).min(cols.saturating_sub(1));
-        let row = (((pos.y - origin.y) / cell_h).floor().max(0.0) as usize).min(rows.saturating_sub(1));
+        let col =
+            (((pos.x - origin.x) / cell_w).floor().max(0.0) as usize).min(cols.saturating_sub(1));
+        let row =
+            (((pos.y - origin.y) / cell_h).floor().max(0.0) as usize).min(rows.saturating_sub(1));
         (col, row)
     };
     if response.drag_started_by(PointerButton::Primary) {
@@ -288,7 +306,10 @@ fn paint_braille(painter: &egui::Painter, cell: Rect, ch: char, fg: Color32) {
     let r = (cell.width() * 0.14).clamp(1.0, 2.2);
     for (mask, fx, fy) in DOTS {
         if bits & mask != 0 {
-            let p = Pos2::new(cell.min.x + cell.width() * fx, cell.min.y + cell.height() * fy);
+            let p = Pos2::new(
+                cell.min.x + cell.width() * fx,
+                cell.min.y + cell.height() * fy,
+            );
             painter.circle_filled(p, r, fg);
         }
     }

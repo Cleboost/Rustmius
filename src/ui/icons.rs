@@ -22,8 +22,21 @@ pub fn font(size: f32, style: IconStyle) -> FontId {
 }
 
 /// Paints a Phosphor glyph centered on `center`.
-pub fn paint(painter: &Painter, center: Pos2, glyph: &str, size: f32, color: Color32, style: IconStyle) {
-    painter.text(center, Align2::CENTER_CENTER, glyph, font(size, style), color);
+pub fn paint(
+    painter: &Painter,
+    center: Pos2,
+    glyph: &str,
+    size: f32,
+    color: Color32,
+    style: IconStyle,
+) {
+    painter.text(
+        center,
+        Align2::CENTER_CENTER,
+        glyph,
+        font(size, style),
+        color,
+    );
 }
 
 /// Termius "Serial" icon: a DB-style comb connector (ꟺ).

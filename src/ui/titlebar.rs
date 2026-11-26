@@ -8,7 +8,8 @@ use crate::ui::popover_menu::{MenuEntry, MenuIcon, render_popover_menu};
 use crate::ui::theme;
 use egui::epaint::{Mesh, Shape};
 use egui::{
-    Align2, Color32, CornerRadius, Painter, PointerButton, Rect, Sense, Ui, ViewportCommand, pos2, vec2,
+    Align2, Color32, CornerRadius, Painter, PointerButton, Rect, Sense, Ui, ViewportCommand, pos2,
+    vec2,
 };
 use uuid::Uuid;
 
@@ -52,16 +53,35 @@ fn paint_gradient(painter: &Painter, rect: Rect) {
     painter.add(Shape::mesh(mesh));
 }
 
-fn icon_button(ui: &mut Ui, painter: &Painter, rect: Rect, id: &str, glyph: &str, size: f32, close: bool) -> bool {
+fn icon_button(
+    ui: &mut Ui,
+    painter: &Painter,
+    rect: Rect,
+    id: &str,
+    glyph: &str,
+    size: f32,
+    close: bool,
+) -> bool {
     let resp = ui.interact(rect, ui.id().with(id), Sense::click());
     let mut color = theme::TOPBAR_ICON;
     if resp.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-        let bg = if close { theme::WINDOW_CLOSE_HOVER } else { theme::TOPBAR_TAB_HOVER };
+        let bg = if close {
+            theme::WINDOW_CLOSE_HOVER
+        } else {
+            theme::TOPBAR_TAB_HOVER
+        };
         painter.rect_filled(rect, CornerRadius::same(6), bg);
         color = Color32::WHITE;
     }
-    icons::paint(painter, rect.center(), glyph, size, color, IconStyle::Regular);
+    icons::paint(
+        painter,
+        rect.center(),
+        glyph,
+        size,
+        color,
+        IconStyle::Regular,
+    );
     resp.clicked()
 }
 
@@ -118,7 +138,9 @@ pub fn render_titlebar(
 
     // Vaults tab
     let vaults = Rect::from_min_max(pos2(left + 41.0, tab_top), pos2(left + 183.0, tab_bot));
-    let vresp = ui.interact(vaults, ui.id().with("tab_vaults"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
+    let vresp = ui
+        .interact(vaults, ui.id().with("tab_vaults"), Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
     let vactive = active == ActiveTab::Vaults;
     let vfill = if vactive {
         theme::TOPBAR_TAB_ACTIVE
@@ -128,23 +150,70 @@ pub fn render_titlebar(
         theme::TOPBAR_TAB_INACTIVE
     };
     painter.rect_filled(vaults, CornerRadius::same(6), vfill);
-    let vtext = if vactive { theme::TOPBAR_TEXT } else { theme::TOPBAR_MUTED };
-    icons::paint(&painter, pos2(left + 55.5, cy), fill::VAULT, 15.0, vtext, IconStyle::Fill);
-    painter.text(pos2(left + 72.0, cy), Align2::LEFT_CENTER, s.tab_vaults, theme::medium(13.0), vtext);
-    icons::paint(&painter, pos2(left + 134.0, cy), regular::CLOUD, 14.0, theme::TOPBAR_MUTED, IconStyle::Regular);
-    icons::paint(&painter, pos2(left + 168.5, cy + 0.5), bold::CARET_DOWN, 12.0, Color32::from_rgb(0xC7, 0xC9, 0xD6), IconStyle::Bold);
+    let vtext = if vactive {
+        theme::TOPBAR_TEXT
+    } else {
+        theme::TOPBAR_MUTED
+    };
+    icons::paint(
+        &painter,
+        pos2(left + 55.5, cy),
+        fill::VAULT,
+        15.0,
+        vtext,
+        IconStyle::Fill,
+    );
+    painter.text(
+        pos2(left + 72.0, cy),
+        Align2::LEFT_CENTER,
+        s.tab_vaults,
+        theme::medium(13.0),
+        vtext,
+    );
+    icons::paint(
+        &painter,
+        pos2(left + 134.0, cy),
+        regular::CLOUD,
+        14.0,
+        theme::TOPBAR_MUTED,
+        IconStyle::Regular,
+    );
+    icons::paint(
+        &painter,
+        pos2(left + 168.5, cy + 0.5),
+        bold::CARET_DOWN,
+        12.0,
+        Color32::from_rgb(0xC7, 0xC9, 0xD6),
+        IconStyle::Bold,
+    );
     if vresp.clicked() {
         action = TitlebarAction::Select(ActiveTab::Vaults);
     }
 
     // Generic tab painter (SFTP + sessions)
     let mut x = left + 187.0;
-    let mut tab = |ui: &mut Ui, id: egui::Id, glyph: &str, os: Option<OsKind>, title: &str, is_active: bool, closable: bool| -> (bool, bool, f32) {
+    let mut tab = |ui: &mut Ui,
+                   id: egui::Id,
+                   glyph: &str,
+                   os: Option<OsKind>,
+                   title: &str,
+                   is_active: bool,
+                   closable: bool|
+     -> (bool, bool, f32) {
         let font = theme::medium(13.0);
-        let tw = painter.layout_no_wrap(title.to_owned(), font.clone(), Color32::WHITE).size().x;
-        let width = if closable { 32.0 + tw + 34.0 } else { 32.0 + tw + 15.0 };
+        let tw = painter
+            .layout_no_wrap(title.to_owned(), font.clone(), Color32::WHITE)
+            .size()
+            .x;
+        let width = if closable {
+            32.0 + tw + 34.0
+        } else {
+            32.0 + tw + 15.0
+        };
         let r = Rect::from_min_max(pos2(x, tab_top), pos2(x + width, tab_bot));
-        let resp = ui.interact(r, id, Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
+        let resp = ui
+            .interact(r, id, Sense::click())
+            .on_hover_cursor(egui::CursorIcon::PointingHand);
         let bg = if is_active {
             theme::TOPBAR_TAB_ACTIVE
         } else if resp.hovered() {
@@ -153,7 +222,11 @@ pub fn render_titlebar(
             theme::TOPBAR_TAB_INACTIVE
         };
         painter.rect_filled(r, CornerRadius::same(6), bg);
-        let fg = if is_active { theme::TOPBAR_TEXT } else { theme::TOPBAR_MUTED };
+        let fg = if is_active {
+            theme::TOPBAR_TEXT
+        } else {
+            theme::TOPBAR_MUTED
+        };
         match os {
             Some(kind) if kind != OsKind::Unknown => {
                 paint_os_mini_badge(&painter, pos2(x + 16.0, cy), kind);
@@ -164,7 +237,11 @@ pub fn render_titlebar(
                     pos2(x + 16.0, cy),
                     glyph,
                     14.0,
-                    if is_active { Color32::WHITE } else { Color32::from_rgb(0xDD, 0xE0, 0xE7) },
+                    if is_active {
+                        Color32::WHITE
+                    } else {
+                        Color32::from_rgb(0xDD, 0xE0, 0xE7)
+                    },
                     IconStyle::Fill,
                 );
             }
@@ -174,12 +251,21 @@ pub fn render_titlebar(
         let mut close_clicked = false;
         if closable {
             let cr = Rect::from_center_size(pos2(r.right() - 16.0, cy), vec2(20.0, 20.0));
-            let cresp = ui.interact(cr, id.with("close"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
+            let cresp = ui
+                .interact(cr, id.with("close"), Sense::click())
+                .on_hover_cursor(egui::CursorIcon::PointingHand);
             if cresp.hovered() {
                 painter.rect_filled(cr, CornerRadius::same(4), theme::TOPBAR_TAB_HOVER);
             }
             if resp.hovered() || is_active || cresp.hovered() {
-                icons::paint(&painter, cr.center(), regular::X, 12.0, theme::TOPBAR_TEXT, IconStyle::Regular);
+                icons::paint(
+                    &painter,
+                    cr.center(),
+                    regular::X,
+                    12.0,
+                    theme::TOPBAR_TEXT,
+                    IconStyle::Regular,
+                );
             }
             close_clicked = cresp.clicked();
         }
@@ -222,24 +308,57 @@ pub fn render_titlebar(
 
     // "+" new tab
     let plus = Rect::from_center_size(pos2(end_x - 4.0 + 23.0, cy), vec2(26.0, 26.0));
-    let presp = ui.interact(plus, ui.id().with("tb_plus"), Sense::click()).on_hover_cursor(egui::CursorIcon::PointingHand);
-    let pcol = if presp.hovered() { theme::TOPBAR_TEXT } else { Color32::from_rgb(0x67, 0x6A, 0x79) };
+    let presp = ui
+        .interact(plus, ui.id().with("tb_plus"), Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
+    let pcol = if presp.hovered() {
+        theme::TOPBAR_TEXT
+    } else {
+        Color32::from_rgb(0x67, 0x6A, 0x79)
+    };
     if presp.hovered() {
         painter.rect_filled(plus, CornerRadius::same(6), theme::TOPBAR_TAB_HOVER);
     }
-    icons::paint(&painter, plus.center(), regular::PLUS, 15.0, pcol, IconStyle::Regular);
+    icons::paint(
+        &painter,
+        plus.center(),
+        regular::PLUS,
+        15.0,
+        pcol,
+        IconStyle::Regular,
+    );
     if presp.clicked() {
         action = TitlebarAction::Select(ActiveTab::Vaults);
     }
 
     // Right side: notifications + window controls
     let btn = |dx: f32| Rect::from_center_size(pos2(right - dx, cy), vec2(32.0, 32.0));
-    icon_button(ui, &painter, btn(127.0), "tb_bell", regular::BELL, 15.0, false);
-    if icon_button(ui, &painter, btn(91.0), "tb_min", regular::MINUS, 14.0, false) {
+    icon_button(
+        ui,
+        &painter,
+        btn(127.0),
+        "tb_bell",
+        regular::BELL,
+        15.0,
+        false,
+    );
+    if icon_button(
+        ui,
+        &painter,
+        btn(91.0),
+        "tb_min",
+        regular::MINUS,
+        14.0,
+        false,
+    ) {
         ctx.send_viewport_cmd(ViewportCommand::Minimized(true));
     }
     let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-    let max_glyph = if maximized { regular::COPY } else { regular::SQUARE };
+    let max_glyph = if maximized {
+        regular::COPY
+    } else {
+        regular::SQUARE
+    };
     if icon_button(ui, &painter, btn(55.0), "tb_max", max_glyph, 13.0, false) {
         ctx.send_viewport_cmd(ViewportCommand::Maximized(!maximized));
     }

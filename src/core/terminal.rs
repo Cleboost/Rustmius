@@ -52,7 +52,10 @@ impl TerminalState {
 
     fn screen_to_point(&self, col: usize, row: usize) -> Point {
         let display_offset = self.term.grid().display_offset() as i32;
-        Point::new(Line(row as i32 - display_offset), Column(col.min(self.cols.saturating_sub(1))))
+        Point::new(
+            Line(row as i32 - display_offset),
+            Column(col.min(self.cols.saturating_sub(1))),
+        )
     }
 
     pub fn start_selection(&mut self, col: usize, row: usize) {
