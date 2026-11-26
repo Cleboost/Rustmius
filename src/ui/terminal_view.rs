@@ -71,11 +71,27 @@ fn ansi_to_color32(color: AnsiColor, is_fg: bool) -> Color32 {
     }
 }
 
+fn brighten_ansi(color: AnsiColor) -> AnsiColor {
+    match color {
+        AnsiColor::Named(NamedColor::Black) | AnsiColor::Indexed(0) => AnsiColor::Named(NamedColor::BrightBlack),
+        AnsiColor::Named(NamedColor::Red) | AnsiColor::Indexed(1) => AnsiColor::Named(NamedColor::BrightRed),
+        AnsiColor::Named(NamedColor::Green) | AnsiColor::Indexed(2) => AnsiColor::Named(NamedColor::BrightGreen),
+        AnsiColor::Named(NamedColor::Yellow) | AnsiColor::Indexed(3) => AnsiColor::Named(NamedColor::BrightYellow),
+        AnsiColor::Named(NamedColor::Blue) | AnsiColor::Indexed(4) => AnsiColor::Named(NamedColor::BrightBlue),
+        AnsiColor::Named(NamedColor::Magenta) | AnsiColor::Indexed(5) => AnsiColor::Named(NamedColor::BrightMagenta),
+        AnsiColor::Named(NamedColor::Cyan) | AnsiColor::Indexed(6) => AnsiColor::Named(NamedColor::BrightCyan),
+        AnsiColor::Named(NamedColor::White) | AnsiColor::Indexed(7) => AnsiColor::Named(NamedColor::BrightWhite),
+        other => other,
+    }
+}
+
 pub fn render_terminal(
     ui: &mut Ui,
     terminal: &mut TerminalState,
     cmd_tx: &UnboundedSender<SshCommand>,
     font_size: f32,
+    copy_on_select: bool,
+    bright_bold: bool,
 ) {
     let font_id = FontId::monospace(font_size);
     let (cell_w, cell_h) = ui.fonts(|f| {
@@ -119,7 +135,7 @@ pub fn render_terminal(
 
     let origin = Pos2::new(rect.min.x + PAD, rect.min.y + PAD);
 
-    // Sélection souris
+    // Mouse selection
     let pos_to_cell = |pos: Pos2| -> (usize, usize) {
         let col = (((pos.x - origin.x) / cell_w).floor().max(0.0) as usize).min(cols.saturating_sub(1));
         let row = (((pos.y - origin.y) / cell_h).floor().max(0.0) as usize).min(rows.saturating_sub(1));
@@ -135,11 +151,15 @@ pub fn render_terminal(
             let (col, row) = pos_to_cell(pos);
             terminal.update_selection(col, row);
         }
+    } else if response.drag_stopped_by(PointerButton::Primary) {
+        if copy_on_select && let Some(selected) = terminal.selection_text() {
+            ui.ctx().copy_text(selected);
+        }
     } else if response.clicked() {
         terminal.clear_selection();
     }
 
-    // Rendu des cellules
+    // Cell rendering
     let content = terminal.term().renderable_content();
     let display_offset = content.display_offset as i32;
     let cursor_point = content.cursor.point;
@@ -159,7 +179,12 @@ pub fn render_terminal(
         let y = origin.y + row_idx as f32 * cell_h;
         let cell_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(cell_w, cell_h));
 
-        let mut fg = ansi_to_color32(indexed.fg, true);
+        let fg_ansi = if bright_bold && indexed.flags.contains(Flags::BOLD) {
+            brighten_ansi(indexed.fg)
+        } else {
+            indexed.fg
+        };
+        let mut fg = ansi_to_color32(fg_ansi, true);
         let mut bg = ansi_to_color32(indexed.bg, false);
         if indexed.flags.contains(Flags::INVERSE) {
             std::mem::swap(&mut fg, &mut bg);
@@ -189,7 +214,7 @@ pub fn render_terminal(
         }
     }
 
-    // Curseur
+    // Cursor
     let cur_row = cursor_point.line.0 + display_offset;
     if cur_row >= 0 && cur_row < rows as i32 && cursor_point.column.0 < cols {
         let cx = origin.x + cursor_point.column.0 as f32 * cell_w;
@@ -198,7 +223,7 @@ pub fn render_terminal(
         painter.rect_filled(cur_rect, 0.0, theme::ACCENT_GREEN.linear_multiply(0.55));
     }
 
-    // Gestion clavier & scroll
+    // Keyboard & scroll input
     if response.has_focus() {
         let events = ui.input(|i| i.events.clone());
         for ev in events {
@@ -223,11 +248,11 @@ pub fn render_terminal(
                     modifiers,
                     ..
                 } => {
-                    if modifiers.ctrl {
-                        if let Some(byte) = ctrl_key_byte(key) {
-                            let _ = cmd_tx.send(SshCommand::Data(vec![byte]));
-                            continue;
-                        }
+                    if modifiers.ctrl
+                        && let Some(byte) = ctrl_key_byte(key)
+                    {
+                        let _ = cmd_tx.send(SshCommand::Data(vec![byte]));
+                        continue;
                     }
                     if let Some(seq) = special_key_bytes(key) {
                         let _ = cmd_tx.send(SshCommand::Data(seq.to_vec()));

@@ -46,14 +46,6 @@ impl TerminalState {
         self.term.scroll_display(Scroll::Delta(lines));
     }
 
-    pub fn cols(&self) -> usize {
-        self.cols
-    }
-
-    pub fn rows(&self) -> usize {
-        self.rows
-    }
-
     pub fn term(&self) -> &Term<VoidListener> {
         &self.term
     }

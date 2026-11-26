@@ -37,7 +37,7 @@ impl client::Handler for ClientHandler {
         &mut self,
         _server_public_key: &russh::keys::PublicKey,
     ) -> Result<bool, Self::Error> {
-        // TODO: vérifier ~/.ssh/known_hosts et demander confirmation TOFU
+        // TODO: verify ~/.ssh/known_hosts and prompt for TOFU confirmation
         Ok(true)
     }
 }
@@ -65,11 +65,10 @@ pub fn spawn_ssh_session(
 }
 
 fn expand_tilde(path: &str) -> PathBuf {
-    if let Some(stripped) = path.strip_prefix("~/") {
-        if let Some(dirs) = directories::UserDirs::new() {
+    if let Some(stripped) = path.strip_prefix("~/")
+        && let Some(dirs) = directories::UserDirs::new() {
             return dirs.home_dir().join(stripped);
         }
-    }
     PathBuf::from(path)
 }
 
@@ -89,11 +88,9 @@ where
         if let Ok(res) = session
             .authenticate_publickey_with(username, pubkey, hash_alg, agent)
             .await
-        {
-            if res.success() {
+            && res.success() {
                 return Ok(true);
             }
-        }
     }
     Ok(false)
 }
@@ -110,7 +107,7 @@ async fn authenticate(session: &mut Handle<ClientHandler>, host: &Host) -> Resul
         AuthMethod::PrivateKey { path } => {
             let key_path = expand_tilde(path);
             let key_pair = load_secret_key(&key_path, None)
-                .with_context(|| format!("Impossible de charger la clé privée {}", key_path.display()))?;
+                .with_context(|| format!("Failed to load private key {}", key_path.display()))?;
             let res = session
                 .authenticate_publickey(
                     &host.username,
@@ -123,27 +120,24 @@ async fn authenticate(session: &mut Handle<ClientHandler>, host: &Host) -> Resul
             Ok(res.success())
         }
         AuthMethod::Agent => {
-            // 1. Essayer l'agent SSH système (SSH_AUTH_SOCK) puis le socket Bitwarden
-            if let Ok(mut agent) = russh::keys::agent::client::AgentClient::connect_env().await {
-                if try_agent_auth(session, &host.username, &mut agent).await? {
+            // 1. Try system SSH agent (SSH_AUTH_SOCK) then Bitwarden SSH agent socket
+            if let Ok(mut agent) = russh::keys::agent::client::AgentClient::connect_env().await
+                && try_agent_auth(session, &host.username, &mut agent).await? {
                     return Ok(true);
                 }
-            }
             let bw_sock = expand_tilde("~/.bitwarden-ssh-agent.sock");
-            if bw_sock.exists() {
-                if let Ok(mut agent) = russh::keys::agent::client::AgentClient::connect_uds(&bw_sock).await {
-                    if try_agent_auth(session, &host.username, &mut agent).await? {
+            if bw_sock.exists()
+                && let Ok(mut agent) = russh::keys::agent::client::AgentClient::connect_uds(&bw_sock).await
+                    && try_agent_auth(session, &host.username, &mut agent).await? {
                         return Ok(true);
                     }
-                }
-            }
 
-            // 2. Fallback sur les clés locales ~/.ssh/
+            // 2. Fall back to local keys in ~/.ssh/
             let candidates = ["~/.ssh/id_ed25519", "~/.ssh/id_rsa", "~/.ssh/id_ecdsa"];
             for candidate in candidates {
                 let key_path = expand_tilde(candidate);
-                if key_path.exists() {
-                    if let Ok(key_pair) = load_secret_key(&key_path, None) {
+                if key_path.exists()
+                    && let Ok(key_pair) = load_secret_key(&key_path, None) {
                         let hash_alg = session.best_supported_rsa_hash().await?.flatten();
                         if let Ok(res) = session
                             .authenticate_publickey(
@@ -151,13 +145,10 @@ async fn authenticate(session: &mut Handle<ClientHandler>, host: &Host) -> Resul
                                 PrivateKeyWithHashAlg::new(Arc::new(key_pair), hash_alg),
                             )
                             .await
-                        {
-                            if res.success() {
+                            && res.success() {
                                 return Ok(true);
                             }
-                        }
                     }
-                }
             }
             if let Some(pw) = &host.password {
                 let res = session.authenticate_password(&host.username, pw).await?;
@@ -180,10 +171,10 @@ async fn run_ssh(
     let addr = format!("{}:{}", host.hostname, host.port);
     let mut session = client::connect(config, &addr, ClientHandler)
         .await
-        .with_context(|| format!("Connexion TCP impossible vers {addr}"))?;
+        .with_context(|| format!("TCP connection failed to {addr}"))?;
 
     if !authenticate(&mut session, &host).await? {
-        anyhow::bail!("Échec d'authentification SSH pour {}@{addr}", host.username);
+        anyhow::bail!("SSH authentication failed for {}@{addr}", host.username);
     }
 
     if let Some(os) = detect_remote_os(&mut session).await {
