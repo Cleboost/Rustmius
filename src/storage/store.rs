@@ -57,16 +57,35 @@ pub fn default_settings_path() -> Result<PathBuf> {
 }
 
 pub fn write_secure(path: &Path, bytes: &[u8]) -> Result<()> {
+    use std::io::Write;
+
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::write(path, bytes)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("vault");
+    let tmp_path = path.with_file_name(format!(".{file_name}.tmp.{}", std::process::id()));
+
+    let write_result = (|| -> Result<()> {
+        let mut file = fs::File::create(&tmp_path)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&tmp_path, fs::Permissions::from_mode(0o600));
+        }
+        fs::rename(&tmp_path, path)?;
+        Ok(())
+    })();
+
+    if write_result.is_err() {
+        let _ = fs::remove_file(&tmp_path);
     }
-    Ok(())
+    write_result
 }
 
 pub fn save_app_settings(path: &Path, settings: &AppSettings) -> Result<()> {
@@ -89,18 +108,142 @@ pub fn default_sync_config_path() -> Result<PathBuf> {
     Ok(data_dir.join("sync.enc"))
 }
 
+fn backup_path(path: &Path) -> PathBuf {
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("vault");
+    path.with_file_name(format!("{file_name}.bak"))
+}
+
+fn quarantine_corrupted_file(path: &Path) {
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("vault");
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let corrupted = path.with_file_name(format!("{file_name}.corrupted.{ts}"));
+    let _ = fs::rename(path, corrupted);
+}
+
+/// Best-effort recovery of complete JSON objects from a truncated array under `"<key>": [ ... ]`.
+fn recover_json_array<T: serde::de::DeserializeOwned>(data: &str, key: &str) -> Vec<T> {
+    let pattern = format!("\"{key}\"");
+    let Some(key_pos) = data.find(&pattern) else {
+        return Vec::new();
+    };
+    let after_key = &data[key_pos + pattern.len()..];
+    let Some(bracket_rel) = after_key.find('[') else {
+        return Vec::new();
+    };
+    let array_slice = &after_key[bracket_rel + 1..];
+
+    let mut items = Vec::new();
+    let mut in_string = false;
+    let mut escaped = false;
+    let mut depth = 0usize;
+    let mut obj_start: Option<usize> = None;
+
+    for (idx, ch) in array_slice.char_indices() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+
+        match ch {
+            '"' => in_string = true,
+            '{' => {
+                if depth == 0 {
+                    obj_start = Some(idx);
+                }
+                depth += 1;
+            }
+            '}' => {
+                if depth > 0 {
+                    depth -= 1;
+                    if depth == 0 {
+                        if let Some(start) = obj_start.take() {
+                            if let Ok(item) = serde_json::from_str::<T>(&array_slice[start..=idx]) {
+                                items.push(item);
+                            }
+                        }
+                    }
+                }
+            }
+            ']' if depth == 0 => break,
+            _ => {}
+        }
+    }
+
+    items
+}
+
+fn recover_truncated_plain_vault(data: &str) -> Option<Vault> {
+    let hosts = recover_json_array::<crate::storage::Host>(data, "hosts");
+    let groups = recover_json_array::<crate::storage::Group>(data, "groups");
+    if hosts.is_empty() && groups.is_empty() {
+        return None;
+    }
+    Some(Vault {
+        version: 1,
+        hosts,
+        groups,
+        deleted_hosts: std::collections::HashMap::new(),
+        known_hosts: Vec::new(),
+    })
+}
+
 pub fn save_plain_vault(path: &Path, vault: &Vault) -> Result<()> {
+    if path.exists() {
+        if let Ok(existing) = fs::read(path) {
+            let _ = write_secure(&backup_path(path), &existing);
+        }
+    }
     let json = serde_json::to_string_pretty(vault)?;
     write_secure(path, json.as_bytes())
 }
 
 pub fn load_plain_vault(path: &Path) -> Result<Vault> {
+    let bak = backup_path(path);
     if !path.exists() {
+        if bak.exists() {
+            if let Ok(bak_data) = fs::read_to_string(&bak) {
+                if let Ok(vault) = serde_json::from_str::<Vault>(&bak_data) {
+                    return Ok(vault);
+                }
+            }
+        }
         return Ok(Vault::new());
     }
+
     let data = fs::read_to_string(path)?;
-    let vault: Vault = serde_json::from_str(&data)?;
-    Ok(vault)
+    match serde_json::from_str::<Vault>(&data) {
+        Ok(vault) => Ok(vault),
+        Err(primary_err) => {
+            if bak.exists() {
+                if let Ok(bak_data) = fs::read_to_string(&bak) {
+                    if let Ok(vault) = serde_json::from_str::<Vault>(&bak_data) {
+                        quarantine_corrupted_file(path);
+                        return Ok(vault);
+                    }
+                }
+            }
+            if let Some(recovered) = recover_truncated_plain_vault(&data) {
+                quarantine_corrupted_file(path);
+                return Ok(recovered);
+            }
+            Err(primary_err.into())
+        }
+    }
 }
 
 fn derive_key(password: &str, salt: &[u8]) -> Result<Zeroizing<[u8; 32]>> {
@@ -193,5 +336,53 @@ mod tests {
         let vault = Vault::new();
         let encrypted = encrypt_vault(&vault, "correct-password").unwrap();
         assert!(decrypt_vault(&encrypted, "wrong-password").is_err());
+    }
+
+    #[test]
+    fn load_plain_vault_falls_back_to_backup_when_corrupted() {
+        let dir = std::env::temp_dir().join(format!("rustmius_test_bak_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let vault_path = dir.join("vault.json");
+
+        let mut v1 = Vault::new();
+        v1.hosts.push(Host::new("host-1", "10.0.0.1", "root"));
+        save_plain_vault(&vault_path, &v1).unwrap();
+
+        let mut v2 = v1.clone();
+        v2.hosts.push(Host::new("host-2", "10.0.0.2", "ubuntu"));
+        save_plain_vault(&vault_path, &v2).unwrap();
+
+        // Corrupt the primary vault file
+        fs::write(&vault_path, "{ truncated garbage").unwrap();
+
+        let loaded = load_plain_vault(&vault_path).unwrap();
+        assert_eq!(loaded.hosts.len(), 1);
+        assert_eq!(loaded.hosts[0].label, "host-1");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_plain_vault_recovers_hosts_from_truncated_json() {
+        let dir = std::env::temp_dir().join(format!("rustmius_test_trunc_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let vault_path = dir.join("vault.json");
+
+        let mut vault = Vault::new();
+        vault.hosts.push(Host::new("alpha", "10.0.0.1", "root"));
+        vault.hosts.push(Host::new("beta", "10.0.0.2", "admin"));
+        let json = serde_json::to_string_pretty(&vault).unwrap();
+
+        // Truncate inside the second host
+        let cut = json.rfind("\"beta\"").unwrap() + 10;
+        fs::write(&vault_path, &json[..cut]).unwrap();
+
+        let recovered = load_plain_vault(&vault_path).unwrap();
+        assert_eq!(recovered.hosts.len(), 1);
+        assert_eq!(recovered.hosts[0].label, "alpha");
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }
