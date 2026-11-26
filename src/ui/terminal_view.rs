@@ -277,7 +277,6 @@ pub fn render_terminal(
     } else if response.clicked_by(PointerButton::Secondary) {
         if copy_on_select {
             response.request_focus();
-            ui.data_mut(|d| d.insert_temp(response.id.with("pending_paste"), true));
             ui.ctx()
                 .send_viewport_cmd(egui::ViewportCommand::RequestPaste);
         }
@@ -487,21 +486,13 @@ pub fn render_terminal(
                     link_state.popover_open = false;
                 }
                 Event::Paste(text) if has_focus => {
-                    let pending_paste_id = response.id.with("pending_paste");
-                    let pending_paste =
-                        ui.data(|d| d.get_temp::<bool>(pending_paste_id).unwrap_or(false));
-                    if pending_paste {
-                        ui.data_mut(|d| d.insert_temp(pending_paste_id, false));
-                        let bytes = if terminal.is_bracketed_paste() {
-                            let sanitized = text.replace("\x1b[200~", "").replace("\x1b[201~", "");
-                            format!("\x1b[200~{sanitized}\x1b[201~").into_bytes()
-                        } else {
-                            text.into_bytes()
-                        };
-                        let _ = cmd_tx.send(SshCommand::Data(bytes));
+                    let bytes = if terminal.is_bracketed_paste() {
+                        let sanitized = text.replace("\x1b[200~", "").replace("\x1b[201~", "");
+                        format!("\x1b[200~{sanitized}\x1b[201~").into_bytes()
                     } else {
-                        let _ = cmd_tx.send(SshCommand::Data(vec![0x16]));
-                    }
+                        text.into_bytes()
+                    };
+                    let _ = cmd_tx.send(SshCommand::Data(bytes));
                     link_state.popover_open = false;
                 }
                 Event::Text(text) if has_focus => {
@@ -524,9 +515,6 @@ pub fn render_terminal(
                                 continue;
                             }
                             Key::V => {
-                                ui.data_mut(|d| {
-                                    d.insert_temp(response.id.with("pending_paste"), true);
-                                });
                                 ui.ctx()
                                     .send_viewport_cmd(egui::ViewportCommand::RequestPaste);
                                 continue;
