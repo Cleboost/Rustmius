@@ -21,6 +21,47 @@
 
 ---
 
+## 📦 Installation
+
+### Arch Linux (AUR)
+
+Install the pre-built binary package from the AUR:
+
+```bash
+yay -S rustmius-bin
+# or
+paru -S rustmius-bin
+```
+
+### Nix / NixOS (Flakes)
+
+Run directly without installing:
+
+```bash
+nix run github:Cleboost/Rustmius/cachix
+```
+
+Or add it to your NixOS / Home Manager `flake.nix` (using the `cachix` branch ensures the latest commit is already built and cached on Cachix):
+
+```nix
+inputs.rustmius.url = "github:Cleboost/Rustmius/cachix";
+# Or pin a specific release tag:
+# inputs.rustmius.url = "github:Cleboost/Rustmius/v3.1.0";
+```
+
+Then add `inputs.rustmius.packages.${pkgs.system}.default` to `environment.systemPackages` (NixOS) or `home.packages` (Home Manager).
+
+### Standalone Binary
+
+Download the latest Linux binary from [GitHub Releases](https://github.com/Cleboost/Rustmius/releases), make it executable, and run it:
+
+```bash
+chmod +x rustmius
+./rustmius
+```
+
+---
+
 ## 🚀 Building from Source
 
 ### NixOS / Nix Flakes (recommended)
