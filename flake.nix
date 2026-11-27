@@ -38,7 +38,7 @@
               makeWrapper
             ];
 
-            buildInputs = libs ++ [ pkgs.openssl ];
+            buildInputs = libs ++ (with pkgs; [ openssl aws-lc ]);
 
             postInstall = ''
               wrapProgram $out/bin/rustmius \
@@ -92,7 +92,7 @@
               pkg-config
             ];
 
-            buildInputs = libs ++ [ pkgs.openssl ];
+            buildInputs = libs ++ (with pkgs; [ openssl aws-lc ]);
 
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath libs;
           };
